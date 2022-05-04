@@ -1,0 +1,10 @@
+Package: GhostBASIL
+Title: GhostKnockoff + BASIL Framework
+Version: 0.0.0.9000
+Authors@R: 
+    person("James", "Yang", , "jy2816@stanford.com", role = c("aut", "cre"))
+Description: TODO.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.2
