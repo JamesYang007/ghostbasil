@@ -4,12 +4,20 @@ This is a repository for experimental code using GhostKnockoff and BASIL framewo
 for fast and efficient LASSO fitting on high-dimensional data.
 Specifically, this library is created with the intention of applying it on GWAS summary statistics.
 
+## Dependencies
+
+- [Bazel](https://docs.bazel.build/versions/main/install.html)
+
 ## Developer Installation
 
 Run the following command to generate machine-specific `.bazelrc`:
 ```
 ./generate_bazelrc
 ```
+
+See the following for installations of each of the sub-packages:
+- [R README](R/README.md)
+- [C++ README](ghostbasil/README.md)
 
 ## References
 
