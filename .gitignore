@@ -1,6 +1,6 @@
-bazel-GhostBASIL/
-bazel-bin/
-bazel-out/
-bazel-testlogs/
+bazel-GhostBASIL
+bazel-bin
+bazel-out
+bazel-testlogs
 
 .bazelrc
