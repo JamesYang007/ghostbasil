@@ -9,7 +9,7 @@ cc_library(
     ]),
     includes = ["."],
     deps = [
-        "//src/ghostbasil:ghostbasil",
+        "//ghostbasil:ghostbasil",
     ],
 )
 
@@ -19,11 +19,11 @@ cc_library(
     defines = ["EIGEN_INITIALIZE_MATRICES_BY_NAN"],
     deps = [
         ":testutil",
-        "//src/ghostbasil:ghostbasil",
+        "//ghostbasil:ghostbasil",
         "@com_google_googletest//:gtest_main",
         "@bazel_tools//tools/cpp/runfiles",
     ],
-    data = ["//src/ghostbasil/test/reference/data:test_data"],
+    data = ["//ghostbasil/test/reference/data:test_data"],
 ) for type_ in [
     "fit_lasso_unittest",
     "fit_basil_unittest",

@@ -4,6 +4,10 @@ This is a repository for experimental code using GhostKnockoff and BASIL framewo
 for fast and efficient LASSO fitting on high-dimensional data.
 Specifically, this library is created with the intention of applying it on GWAS summary statistics.
 
+## Developer Installation
+
+
+
 ## References
 
 - [Summary statistics knockoff inference empowers identification of putative causal variants in genome-wide association studies](https://www.biorxiv.org/content/10.1101/2021.12.06.471440v1)

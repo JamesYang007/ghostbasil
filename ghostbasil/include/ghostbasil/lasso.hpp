@@ -11,7 +11,8 @@
 namespace ghostbasil {
 
 template <class ValueType, class LmdasType>
-inline void next_lambdas(
+GHOSTBASIL_STRONG_INLINE
+void next_lambdas(
         size_t idx,
         ValueType factor,
         LmdasType& lmdas_curr,
@@ -46,7 +47,8 @@ inline void next_lambdas(
 
 template <class AType, class YType, class ValueType, 
           class LmdasType, class BetasType, class ISType, class GradType>
-inline auto check_kkt(
+GHOSTBASIL_STRONG_INLINE 
+auto check_kkt(
     const AType& A, 
     const YType& y,
     ValueType s,
@@ -98,7 +100,8 @@ inline auto check_kkt(
  * Returns the maximum absolute value.
  */
 template <class GradType, class OutType>
-inline auto initial_screen(
+GHOSTBASIL_STRONG_INLINE 
+auto initial_screen(
         const GradType& grad,
         size_t max_size,
         OutType& out)
@@ -117,7 +120,8 @@ inline auto initial_screen(
 }
 
 template <class GradType, class IAType, class OutType>
-inline auto screen(
+GHOSTBASIL_STRONG_INLINE 
+auto screen(
         const GradType& grad,
         const IAType& is_active,
         size_t max_size,
@@ -146,7 +150,8 @@ inline auto screen(
 }
 
 template <class AType, class RType, class ValueType, class BetaType>
-inline auto objective(
+GHOSTBASIL_STRONG_INLINE 
+auto objective(
         const AType& A,
         const RType& r,
         ValueType s,
@@ -164,7 +169,8 @@ template <class AType
         , class IAType
         , class BetaType
         , class SGType>
-inline void fit_lasso_active(
+GHOSTBASIL_STRONG_INLINE 
+void fit_lasso_active(
     const AType& A,
     ValueType s,
     const SSType& strong_set,
@@ -252,7 +258,7 @@ template <class AType, class ValueType,
           class SSType, class LmdasType, class WarmStartType,
           class BetasType, class StrongGradType,
           class ASType, class AHSType, class IAType>
-void fit_lasso(
+inline void fit_lasso(
     const AType& A, 
     ValueType s, 
     const SSType& strong_set, 

@@ -6,6 +6,8 @@
 
 namespace ghostbasil {
 
+static constexpr const char* DATA_PATH = "ghostbasil/test/reference/data/";
+
 Eigen::MatrixXd load_csv_direct(const std::string& path) 
 {
     using namespace Eigen;
