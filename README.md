@@ -6,7 +6,10 @@ Specifically, this library is created with the intention of applying it on GWAS 
 
 ## Developer Installation
 
-
+Run the following command to generate machine-specific `.bazelrc`:
+```
+./generate_bazelrc
+```
 
 ## References
 
