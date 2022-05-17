@@ -8,3 +8,9 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.2
+Depends: R (>= 3.6.0), Matrix (>= 1.0-6)
+LinkingTo: 
+    Rcpp,
+    RcppEigen
+Imports: 
+    Rcpp
