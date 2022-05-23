@@ -8,6 +8,14 @@ http_archive(
     urls = ["https://github.com/google/googletest/archive/13a433a94dd9c7e55907d7a9b75f44ff82f309eb.zip"],
 )
 
+# Google benchmark
+http_archive(
+    name = "com_github_google_benchmark",
+    sha256 = "59f918c8ccd4d74b6ac43484467b500f1d64b40cc1010daa055375b322a43ba3",
+    strip_prefix = "benchmark-16703ff83c1ae6d53e5155df3bb3ab0bc96083be",
+    urls = ["https://github.com/google/benchmark/archive/16703ff83c1ae6d53e5155df3bb3ab0bc96083be.zip"],
+)
+
 # Rules CC
 http_archive(
     name = "rules_cc",

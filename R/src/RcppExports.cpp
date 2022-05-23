@@ -12,33 +12,65 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // fit_basil__
-List fit_basil__(const Eigen::Map<Eigen::MatrixXd> A, const Eigen::Map<Eigen::VectorXd> y, double s, size_t n_knockoffs, size_t n_lambdas, size_t n_lambdas_iter, size_t strong_size, size_t delta_strong_size, size_t n_iters, size_t max_cds, double thr);
-RcppExport SEXP _GhostBASIL_fit_basil__(SEXP ASEXP, SEXP ySEXP, SEXP sSEXP, SEXP n_knockoffsSEXP, SEXP n_lambdasSEXP, SEXP n_lambdas_iterSEXP, SEXP strong_sizeSEXP, SEXP delta_strong_sizeSEXP, SEXP n_itersSEXP, SEXP max_cdsSEXP, SEXP thrSEXP) {
+List fit_basil__(const Eigen::Map<Eigen::MatrixXd> A, const Eigen::Map<Eigen::VectorXd> y, double s, const Eigen::Map<Eigen::VectorXd> user_lmdas, size_t max_n_lambdas, size_t n_lambdas_iter, size_t strong_size, size_t delta_strong_size, size_t max_strong_size, size_t max_n_cds, double thr);
+RcppExport SEXP _ghostbasil_fit_basil__(SEXP ASEXP, SEXP ySEXP, SEXP sSEXP, SEXP user_lmdasSEXP, SEXP max_n_lambdasSEXP, SEXP n_lambdas_iterSEXP, SEXP strong_sizeSEXP, SEXP delta_strong_sizeSEXP, SEXP max_strong_sizeSEXP, SEXP max_n_cdsSEXP, SEXP thrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type A(ASEXP);
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
     Rcpp::traits::input_parameter< double >::type s(sSEXP);
-    Rcpp::traits::input_parameter< size_t >::type n_knockoffs(n_knockoffsSEXP);
-    Rcpp::traits::input_parameter< size_t >::type n_lambdas(n_lambdasSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type user_lmdas(user_lmdasSEXP);
+    Rcpp::traits::input_parameter< size_t >::type max_n_lambdas(max_n_lambdasSEXP);
     Rcpp::traits::input_parameter< size_t >::type n_lambdas_iter(n_lambdas_iterSEXP);
     Rcpp::traits::input_parameter< size_t >::type strong_size(strong_sizeSEXP);
     Rcpp::traits::input_parameter< size_t >::type delta_strong_size(delta_strong_sizeSEXP);
-    Rcpp::traits::input_parameter< size_t >::type n_iters(n_itersSEXP);
-    Rcpp::traits::input_parameter< size_t >::type max_cds(max_cdsSEXP);
+    Rcpp::traits::input_parameter< size_t >::type max_strong_size(max_strong_sizeSEXP);
+    Rcpp::traits::input_parameter< size_t >::type max_n_cds(max_n_cdsSEXP);
     Rcpp::traits::input_parameter< double >::type thr(thrSEXP);
-    rcpp_result_gen = Rcpp::wrap(fit_basil__(A, y, s, n_knockoffs, n_lambdas, n_lambdas_iter, strong_size, delta_strong_size, n_iters, max_cds, thr));
+    rcpp_result_gen = Rcpp::wrap(fit_basil__(A, y, s, user_lmdas, max_n_lambdas, n_lambdas_iter, strong_size, delta_strong_size, max_strong_size, max_n_cds, thr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// objective_sparse__
+List objective_sparse__(const Eigen::Map<Eigen::MatrixXd> A, const Eigen::Map<Eigen::VectorXd> r, double s, double lmda, const Eigen::Map<Eigen::SparseMatrix<double>> beta);
+RcppExport SEXP _ghostbasil_objective_sparse__(SEXP ASEXP, SEXP rSEXP, SEXP sSEXP, SEXP lmdaSEXP, SEXP betaSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type A(ASEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type r(rSEXP);
+    Rcpp::traits::input_parameter< double >::type s(sSEXP);
+    Rcpp::traits::input_parameter< double >::type lmda(lmdaSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::SparseMatrix<double>> >::type beta(betaSEXP);
+    rcpp_result_gen = Rcpp::wrap(objective_sparse__(A, r, s, lmda, beta));
+    return rcpp_result_gen;
+END_RCPP
+}
+// objective_dense__
+List objective_dense__(const Eigen::Map<Eigen::MatrixXd> A, const Eigen::Map<Eigen::VectorXd> r, double s, double lmda, const Eigen::Map<Eigen::VectorXd> beta);
+RcppExport SEXP _ghostbasil_objective_dense__(SEXP ASEXP, SEXP rSEXP, SEXP sSEXP, SEXP lmdaSEXP, SEXP betaSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type A(ASEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type r(rSEXP);
+    Rcpp::traits::input_parameter< double >::type s(sSEXP);
+    Rcpp::traits::input_parameter< double >::type lmda(lmdaSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type beta(betaSEXP);
+    rcpp_result_gen = Rcpp::wrap(objective_dense__(A, r, s, lmda, beta));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_GhostBASIL_fit_basil__", (DL_FUNC) &_GhostBASIL_fit_basil__, 11},
+    {"_ghostbasil_fit_basil__", (DL_FUNC) &_ghostbasil_fit_basil__, 11},
+    {"_ghostbasil_objective_sparse__", (DL_FUNC) &_ghostbasil_objective_sparse__, 5},
+    {"_ghostbasil_objective_dense__", (DL_FUNC) &_ghostbasil_objective_dense__, 5},
     {NULL, NULL, 0}
 };
 
-RcppExport void R_init_GhostBASIL(DllInfo *dll) {
+RcppExport void R_init_ghostbasil(DllInfo *dll) {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
     R_useDynamicSymbols(dll, FALSE);
 }

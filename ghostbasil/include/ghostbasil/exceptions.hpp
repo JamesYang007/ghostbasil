@@ -4,24 +4,41 @@
 
 namespace ghostbasil {
 
-class max_cds_error : std::exception
+class ghostbasil_error: public std::exception {};
+
+class max_cds_error : public ghostbasil_error
 {
-    int lmda_idx_;
+    std::string msg_;
 
 public:
     max_cds_error(int lmda_idx)
-        : lmda_idx_(lmda_idx)
+        : msg_{"Basil max coordinate descents reached at lambda index: " + std::to_string(lmda_idx) + "."}
     {}
 
-    int error_code() const { return -lmda_idx_-1; }
+    const char* what() const noexcept override {
+        return msg_.data();
+    }
 };
 
-class max_basil_iters_error : std::exception
+class max_basil_strong_set : public ghostbasil_error
 {
     std::string msg_;
 public:
-    max_basil_iters_error(int n_iters): 
-        msg_{"Basil max iterations " + std::to_string(n_iters) + " reached."}
+    max_basil_strong_set(): 
+        msg_{"Basil maximum strong set size reached."}
+    {}
+
+    const char* what() const noexcept override {
+        return msg_.data();
+    }
+};
+
+class lasso_finished_early_error : public ghostbasil_error
+{
+    std::string msg_;
+public:
+    lasso_finished_early_error(): 
+        msg_{"Lasso fitting on strong set finished early in the lambda sequence due to minimal change in R^2."}
     {}
 
     const char* what() const noexcept override {

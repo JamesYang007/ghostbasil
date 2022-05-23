@@ -25,23 +25,15 @@ To install the package locally:
 
 ```
 library(devtools)
-check()
 install()
 ```
 
 ## Usage
 
 To use the package after installation, 
-simply load the library and call `fit_basil`:
-```
-fit_basil(...)
-```
+simply load the library and call `ghostbasil` 
+(see `?ghostbasil` for the full documentation).
 
 Note that if the package was installed using `load_all`,
 the library is already loaded.
-Otherwise, the package must be loaded by running `library(GhostBASIL)`.
-
-To view the documentation in the `R` interpreter:
-```
-?fit_basil
-```
+Otherwise, the package must be loaded by running `library(ghostbasil)`.

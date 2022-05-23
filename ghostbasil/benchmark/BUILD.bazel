@@ -1,0 +1,10 @@
+[cc_binary(
+    name = type_,
+    srcs = ["{}.cpp".format(type_)],
+    deps = [
+        "//ghostbasil",
+        "@com_github_google_benchmark//:benchmark_main",
+    ],
+) for type_ in [
+    "fit_lasso_bench",
+]]

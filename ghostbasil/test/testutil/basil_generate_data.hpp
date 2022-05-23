@@ -27,8 +27,9 @@ namespace ghostbasil {
  * \]
  */
 
-GENERATE_DATASET_F(1);
+GENERATE_DATASET_F(1); 
 GENERATE_DATASET_F(2);
+GENERATE_DATASET_F(3);
 
 } // namespace ghostbasil
 

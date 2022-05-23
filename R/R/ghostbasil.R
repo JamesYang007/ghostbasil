@@ -2,29 +2,57 @@
 #' @param   A   data covariance matrix (currently must be a dense matrix).
 #' @param   y   response vector.
 #' @param   s   regularization to shrink A towards identity ((1-s) * A + s * I).
-#' @param   n_knockoffs     number of knockoffs used to construct A and y (default: 0).
-#' @param   n_lambdas       number of lambdas to compute solutions for. Currently there is no early-stopping rule.
-#' @param   n_lambdas_iter  maximum number of lambdas to compute strong set solutions for at each iteration of the BASIL algorithm.
-#' @param   strong_size     maximum number of strong set variables to append at each iteration of the BASIL algorithm.
-#' @param   delta_strong_size   number of strong set variables to increase strong_size at KKT failure of first lambda.
-#' @param   n_iters         maximum number of iterations of BASIL. 
-#' @param   max_cds         maximum number of total coordinate descents.
-#' @param   thr             convergence threshold.
+#' @param   user.lambdas    user-specified sequence of lambdas. Will be sorted in decreasing order if not sorted already.
+#' @param   max.lambdas     maximum number of lambdas to compute solutions for. 
+#' @param   lambdas.iter    number of lambdas to compute strong set solutions for at each iteration of the BASIL algorithm.
+#'                          Internally, capped at max.lambdas.
+#' @param   strong.size     initial number of strong set variables to include.
+#'                          Internally, capped at max.strong.size.
+#' @param   delta.strong.size   number of strong set variables to include at every iteration of the BASIL algorithm.
+#'                              Internally, capped at number of non-strong variables at every iteration of BASIL.
+#' @param   max.strong.size     maximum number of strong set size. 
+#'                              Internally, capped at number of features.
+#' @param   max.cds         maximum number of coordinate descents per BASIL iteration.
+#' @param   thr             coordinate descent convergence threshold.
 #' @export
-fit_basil <- function(A, y, s, n_knockoffs=0, n_lambdas=100, 
-                      n_lambdas_iter=10, strong_size=1000, 
-                      delta_strong_size=100, n_iters=100, max_cds=1000, thr=1e-14) 
+ghostbasil <- function(A, y, s, 
+                      user.lambdas=c(), 
+                      max.lambdas=100,
+                      lambdas.iter=10, 
+                      strong.size=1000, 
+                      delta.strong.size=100, 
+                      max.strong.size=10000, 
+                      max.cds=100000, 
+                      thr=1e-7) 
 {
+    user.lambdas <- as.numeric(user.lambdas)
+    if (length(user.lambdas) != 0) {
+        user.lambdas <- sort(user.lambdas, decreasing=T)
+    }
+
     out <- fit_basil__(
-                A,y,s,n_knockoffs,n_lambdas,n_lambdas_iter,
-                strong_size, delta_strong_size, n_iters,
-                max_cds, thr)
+                A=A,
+                y=y,
+                s=s,
+                user_lmdas=user.lambdas,
+                max_n_lambdas=max.lambdas,
+                n_lambdas_iter=lambdas.iter,
+                strong_size=strong.size, 
+                delta_strong_size=delta.strong.size, 
+                max_strong_size=max.strong.size,
+                max_n_cds=max.cds, 
+                thr=thr)
+
     if (length(out$betas) == 0) return(out)
 
     betas <- Matrix(nrow=nrow(out$betas[[1]]), ncol=0, sparse=T)
     for (b in out$betas) { betas <- cbind(betas, b) }
     lmdas <- c()
     for (l in out$lmdas) { lmdas <- c(lmdas, l) }
+
+    if (out$error != "") {
+        warning(out$error)
+    }
     
-    list(betas=betas, lmdas=lmdas)
+    list(betas=betas, lmdas=lmdas, error=out$error)
 }

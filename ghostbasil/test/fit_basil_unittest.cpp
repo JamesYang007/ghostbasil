@@ -5,9 +5,14 @@
 namespace ghostbasil {
 namespace {
     
-constexpr double tol = 1e-8;
-constexpr double thr = 1e-16;
-constexpr size_t max_cds = 1000;
+static constexpr double tol = 2e-8;
+static constexpr double thr = 1e-16;
+static constexpr size_t max_cds = 10000;
+static constexpr size_t max_n_lambdas = 3;
+static constexpr size_t n_lambdas_iter = 2;
+static size_t max_strong_size = 100;
+static size_t strong_size = 1;
+static size_t delta_strong_size = 1;
 
 auto make_basil_output()
 {
@@ -18,7 +23,8 @@ auto make_basil_output()
 
 template <class GenerateFType>
 void test_fit_basil(
-        GenerateFType generate_dataset)
+        GenerateFType generate_dataset,
+        bool do_user = false)
 {
     auto dataset = generate_dataset();
     auto& A = std::get<0>(dataset);
@@ -28,30 +34,41 @@ void test_fit_basil(
     auto& expected_betas = std::get<4>(dataset);
     auto& expected_objs = std::get<5>(dataset);
 
+    std::vector<double> user_lmdas;
+    size_t max_strong_size_local = max_strong_size;
+    if (do_user) {
+        user_lmdas.resize(expected_lmdas.size());
+        Eigen::Map<Eigen::VectorXd>(user_lmdas.data(), user_lmdas.size())
+            = expected_lmdas;
+        max_strong_size_local = r.size(); // force full strong set
+    }
+
     auto output = make_basil_output();
     auto& betas = std::get<0>(output);
     auto& lmdas = std::get<1>(output);
 
-    size_t n_knockoffs = 0;
-    size_t n_lambdas = 3;
-    size_t n_lambdas_iter = 2;
-    size_t strong_size = 1;
-    size_t delta_strong_size = 1;
-    size_t n_iters = 1000;
-
     try {
-        fit_basil(A, r, s, n_knockoffs, n_lambdas, n_lambdas_iter,
-                  strong_size, delta_strong_size, n_iters, max_cds, thr,
+        fit_basil(A, r, s, user_lmdas, max_n_lambdas, n_lambdas_iter,
+                  strong_size, delta_strong_size, max_strong_size_local, max_cds, thr,
                   betas, lmdas);
 #ifdef MAKE_LMDAS
         for (size_t i = 0; i < lmdas.size(); ++i) {
             PRINT(lmdas[i]);
         }
+        return;
 #endif
     }
-    catch (const max_basil_iters_error& e) {
+    catch (const max_cds_error& e) {
         std::cerr << e.what() << std::endl;
+        return;
     }
+    catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        return;
+    }
+
+    EXPECT_EQ(expected_lmdas.size(), expected_objs.size());
+    EXPECT_EQ(betas.size(), lmdas.size());
 
     size_t pos = 0;
     size_t n_lmdas_total = 0;
@@ -64,6 +81,8 @@ void test_fit_basil(
         EXPECT_EQ(betas_i.cols(), lmdas_i.size());
 
         for (size_t j = 0; j < lmdas_i.size(); ++j, ++pos) {
+            EXPECT_LT(pos, expected_lmdas.size());
+            EXPECT_LT(pos, expected_betas.cols());
             EXPECT_DOUBLE_EQ(lmdas_i[j], expected_lmdas[pos]);
 
             auto actual = betas_i.col(j);
@@ -90,6 +109,14 @@ TEST(FitBasil, fit_basil_n_ge_p)
 TEST(FitBasil, fit_basil_n_le_p)
 {
     test_fit_basil(generate_dataset_2);
+}
+
+TEST(FitBasil, fit_basil_p_large)
+{
+    max_strong_size = 1000;
+    strong_size = 100;
+    delta_strong_size = 50;
+    test_fit_basil(generate_dataset_3);
 }
     
 } // namespace

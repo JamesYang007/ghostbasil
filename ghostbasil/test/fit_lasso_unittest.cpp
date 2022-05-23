@@ -25,9 +25,10 @@ auto make_lasso_output(
     std::vector<bool> is_active(strong_set.size(), false);
     std::unordered_set<uint32_t> active_hashset;
     size_t n_cds = 0;
+    size_t n_lmdas = 0;
     return std::make_tuple(
             warm_start, betas, strong_grad, active_set,
-            active_hashset, is_active, n_cds);
+            active_hashset, is_active, n_cds, n_lmdas);
 }
 
 template <class GenerateFType>
@@ -47,12 +48,12 @@ void test_fit_lasso(GenerateFType generate_dataset)
     auto& betas = std::get<1>(output);
     auto& strong_grad = std::get<2>(output);
     auto& active_set = std::get<3>(output);
-    auto& active_hashset = std::get<4>(output);
     auto& is_active = std::get<5>(output);
     auto& n_cds = std::get<6>(output);
+    auto& n_lmdas = std::get<7>(output);
 
     fit_lasso(A, s, strong_set, lmdas, max_cds, thr, warm_start, 
-                betas, strong_grad, active_set, active_hashset, is_active, n_cds);
+                betas, strong_grad, active_set, is_active, n_cds, n_lmdas);
 
     EXPECT_LE(n_cds, max_cds);
 
@@ -90,6 +91,11 @@ TEST(FitLasso, fit_lasso_n_le_p_full)
 TEST(FitLasso, fit_lasso_n_le_p_partial)
 {
     test_fit_lasso(generate_dataset_4);
+}
+
+TEST(FitLasso, fit_lasso_p_large)
+{
+    test_fit_lasso(generate_dataset_5);
 }
 
 }
