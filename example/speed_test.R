@@ -118,7 +118,8 @@ solve.BASIL<-function(A,r,s=0.5,M=100,dM=50,maxiter=1000,cbound=10000){
   #lambdapath
   
   refpanel<-chol(A[include.index,include.index,drop=F])
-  fit.lassosum<-elnetR(lambda1=lambdapath,lambda2=s,X=refpanel,b=r[include.index],maxiter=maxiter)
+  fit.lassosum<-elnetR(lambda1=lambdapath/(1-s),lambda2=s/(1-s),X=refpanel,b=r[include.index]/(1-s),maxiter=maxiter)
+  fit.lassosum$lambda1 <- lambdapath
   
   fit.lassosum$lambda1
   fit.lassosum$beta
@@ -150,7 +151,8 @@ solve.BASIL<-function(A,r,s=0.5,M=100,dM=50,maxiter=1000,cbound=10000){
       #lambdapath
       
       refpanel<-chol(A[include.index,include.index,drop=F])
-      fit.lassosum<-try(elnetR(lambda1=lambdapath,lambda2=s,X=refpanel,b=r[include.index],maxiter=maxiter),silent=T)
+      fit.lassosum<-try(elnetR(lambda1=lambdapath/(1-s),lambda2=s/(1-s),X=refpanel,b=r[include.index]/(1-s),maxiter=maxiter),silent=T)
+      fit.lassosum$lambda1 <- lambdapath
       if(class(fit.lassosum)=='try-error'){break}
       #fit.lassosum$lambda1
       #fit.lassosum$beta
@@ -211,7 +213,8 @@ solve.BASIL.PV<-function(A,r,n,s=0.5,M=100,dM=50,maxiter=1000,cbound=10000){
   #lambdapath
   
   refpanel<-chol(A[include.index,include.index,drop=F])
-  fit.lassosum<-elnetR(lambda1=lambdapath,lambda2=s,X=refpanel,b=r[include.index],maxiter=maxiter)
+  fit.lassosum<-elnetR(lambda1=lambdapath/(1-s),lambda2=s/(1-s),X=refpanel,b=r[include.index]/(1-s),maxiter=maxiter)
+  fit.lassosum$lambda1 <- lambdapath
   
   #fit.lassosum$lambda1
   #fit.lassosum$beta
@@ -250,7 +253,8 @@ solve.BASIL.PV<-function(A,r,n,s=0.5,M=100,dM=50,maxiter=1000,cbound=10000){
       #lambdapath
       
       refpanel<-chol(A[include.index,include.index,drop=F])
-      fit.lassosum<-try(elnetR(lambda1=lambdapath,lambda2=s,X=refpanel,b=r[include.index],maxiter=maxiter),silent=T)
+      fit.lassosum<-try(elnetR(lambda1=lambdapath/(1-s),lambda2=s/(1-s),X=refpanel,b=r[include.index]/(1-s),maxiter=maxiter),silent=T)
+      fit.lassosum$lambda1 <- lambdapath
       if(class(fit.lassosum)=='try-error'){break}
       #fit.lassosum$lambda1
       #fit.lassosum$beta
@@ -429,7 +433,8 @@ speed.test <- function(ps=seq(1000, 3000, by=1000),
       #verify results
       t1<-proc.time()
       temp.X<-chol(A)
-      fit.lassosum<-elnetR(lambda1=fit.BASIL$lambda,lambda2=s,X=temp.X,b=r,maxiter=1000)
+      fit.lassosum<-elnetR(lambda1=fit.BASIL$lambda/(1-s),lambda2=s/(1-s),X=temp.X,b=r/(1-s),maxiter=1000)
+      fit.lassosum$lambda1 <- fit.BASIL$lambda
       t2<-proc.time()
       temp.time<-c(temp.time,t2[3]-t1[3])
       

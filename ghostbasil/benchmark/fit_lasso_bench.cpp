@@ -14,8 +14,12 @@ static inline auto make_input(
     std::normal_distribution<> norm(0., 1.);
     Eigen::MatrixXd X = Eigen::MatrixXd::NullaryExpr(n, p,
             [&](auto, auto) { return norm(gen); });
-    Eigen::VectorXd beta = Eigen::VectorXd::NullaryExpr(p,
-            [&](auto) { return norm(gen); });
+    Eigen::VectorXd beta(p); 
+    beta.setZero();
+    std::uniform_int_distribution<> unif(0, p-1);
+    for (size_t k = 0; k < 10; ++k) {
+        beta[unif(gen)] = norm(gen);
+    }
     Eigen::VectorXd y = X * beta + Eigen::VectorXd::NullaryExpr(n,
             [&](auto) { return norm(gen); });
     Eigen::MatrixXd A = X.transpose() * X / n;
@@ -89,6 +93,8 @@ static void BM_fit_lasso(benchmark::State& state)
                   strong_grad, active_set, is_active, 
                   n_cds, n_lmdas);
     }
+
+    state.counters["n_cds"] = n_cds;
 }
 
 BENCHMARK(BM_fit_lasso)
