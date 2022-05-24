@@ -67,8 +67,7 @@ static void BM_fit_lasso(benchmark::State& state)
     std::vector<uint32_t> strong_set(p);
     std::iota(strong_set.begin(), strong_set.end(), 0);
 
-    Eigen::VectorXd strong_beta(strong_set.size()); strong_beta.setZero();
-    Eigen::VectorXd strong_beta_diff(strong_set.size());
+    Eigen::SparseVector<double> strong_beta(p);
     Eigen::SparseMatrix<double> betas(p, lmdas.size());
     std::vector<double> strong_grad(strong_set.size());
     for (size_t i = 0; i < strong_grad.size(); ++i) {
@@ -86,8 +85,8 @@ static void BM_fit_lasso(benchmark::State& state)
         reset(orig_strong_grad, strong_beta, betas, strong_grad, active_set,
               is_active, n_cds, n_lmdas);
         state.ResumeTiming();
-        fit_lasso(A, s, strong_set, lmdas, max_cds, thr, strong_beta, strong_beta_diff,
-                  strong_grad, active_set, is_active, betas, 
+        fit_lasso(A, s, strong_set, lmdas, max_cds, thr, strong_beta, betas, 
+                  strong_grad, active_set, is_active, 
                   n_cds, n_lmdas);
     }
 }
