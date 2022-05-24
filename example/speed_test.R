@@ -2,8 +2,31 @@ library(devtools)
 library(lassosum)
 library(fdrtool)
 
+# get path of current file
+# https://stackoverflow.com/a/61739930/9936090
+stub <- function() {}
+thisPath <- function() {
+  cmdArgs <- commandArgs(trailingOnly = FALSE)
+  if (length(grep("^-f$", cmdArgs)) > 0) {
+    # R console option
+    normalizePath(dirname(cmdArgs[grep("^-f", cmdArgs) + 1]))[1]
+  } else if (length(grep("^--file=", cmdArgs)) > 0) {
+    # Rscript/R console option
+    scriptPath <- normalizePath(dirname(sub("^--file=", "", cmdArgs[grep("^--file=", cmdArgs)])))[1]
+  } else if (Sys.getenv("RSTUDIO") == "1") {
+    # RStudio
+    dirname(rstudioapi::getSourceEditorContext()$path)
+  } else if (is.null(attr(stub, "srcref")) == FALSE) {
+    # 'source'd via R console
+    dirname(normalizePath(attr(attr(stub, "srcref"), "srcfile")$filename))
+  } else {
+    stop("Cannot find file path")
+  }
+}
+
 # Load GhostBASIL
-load_all('../R')
+GhostBASIL.path <- paste(thisPath(), '/../R', sep='')
+load_all(GhostBASIL.path)
 
 set.seed(1234)
 
@@ -166,7 +189,7 @@ solve.BASIL<-function(A,r,s=0.5,M=100,dM=50,maxiter=1000,cbound=10000){
 
 
 
-solve.BASIL.PV<-function(A,r,s=0.5,M=100,dM=50,maxiter=1000,cbound=10000){
+solve.BASIL.PV<-function(A,r,n,s=0.5,M=100,dM=50,maxiter=1000,cbound=10000){
   p<-length(r)
   epsilon <- .0001
   K <- 100
@@ -283,69 +306,6 @@ solve.BASIL.PV<-function(A,r,s=0.5,M=100,dM=50,maxiter=1000,cbound=10000){
   return(list(lambda=lambda,beta=beta,f.lambda=f.lambda,beta.final=beta.final,lambda.final=lambda.final))
 }
 
-speed.test <- function(ps=seq(1000, 3000, by=1000),
-                       n=10000, # number of observations
-                       k=10,# number of variables with nonzero coefficients
-                       amplitude=7.5,# signal amplitude (for noise level = 1)
-                       rho=0.1,
-                       s=0.5)
-{
-    fits <- list()
-    cpu.time<-c()
-    for (p in ps) {
-      print(p)
-      
-      # Generate the variables from a multivariate normal distribution
-      mu = rep(0,p)
-      Sigma = toeplitz(rho^(0:(p-1)))
-      X = matrix(rnorm(n*p),n) %*% chol(Sigma)
-      
-      # Generate the response from a logistic model and encode it as a factor.
-      nonzero = sample(p, k)
-      beta = amplitude * (1:p %in% nonzero) / sqrt(n)
-      y<-X%*%beta+rnorm(n)
-      
-      A<-t(X)%*%X/n; r<-cor(X,y);
-      
-      t1<-proc.time()
-      fit.BASIL<-solve.BASIL(A,r,s=s,M=500,dM=200,maxiter=1000,cbound=1000)
-      t2<-proc.time()
-      temp.time<-t2[3]-t1[3]
-      
-      #verify results
-      t1<-proc.time()
-      temp.X<-chol(A)
-      fit.lassosum<-elnetR(lambda1=fit.BASIL$lambda,lambda2=s,X=temp.X,b=r,maxiter=1000)
-      t2<-proc.time()
-      temp.time<-c(temp.time,t2[3]-t1[3])
-      
-      t1<-proc.time()
-      fit.BASIL.PV<-solve.BASIL.PV(A,r,s=s,M=500,dM=200,maxiter=1000,cbound=1000)
-      t2<-proc.time()
-      temp.time<-c(temp.time,t2[3]-t1[3])
-      
-      t1<-proc.time()
-      fit.ghostbasil <- ghostbasil(A,r,s,
-                                   user.lambdas=fit.BASIL$lambda,
-                                   lambdas.iter=10,
-                                   strong.size=500,
-                                   delta.strong.size=200,
-                                   max.strong.size=p,
-                                   max.cds=1000)
-      t2<-proc.time()
-      temp.time<-c(temp.time,t2[3]-t1[3])
-      
-      cpu.time<-rbind(cpu.time,temp.time)
-      fit <- list(A=A, r=r, s=s, BASIL=fit.BASIL, CD=fit.lassosum, BASIL.PV=fit.BASIL.PV, ghostbasil=fit.ghostbasil)
-      fits <- append(fits, list(fit))
-      print(cpu.time)
-    }
-    result<-cbind(ps, cpu.time)
-    colnames(result)<-c('p','BASIL','CoordinateDescent','BASIL-PV','ghostbasil')
-    rownames(result)<-NULL
-    list(times=result, fits=fits)
-}
-
 # Computes objective value for BASIL and ghostbasil methods
 # at the same lambda value at index idx.test.
 # We want ghostbasil objective to be <= BASIL objective.
@@ -363,23 +323,22 @@ obj.test <- function(fit, idx.test=1)
     fit.ghostbasil <- fit[['ghostbasil']]
 
     ghostbasil.lmda.test <- fit.ghostbasil$lmdas[idx.test]
-
-    if ((ghostbasil.lmda.test != fit.BASIL$lambda[idx.test]) |
-        (ghostbasil.lmda.test != fit.lassosum$lambda1[idx.test]) |
-        (ghostbasil.lmda.test != fit.BASIL.PV$lambda[idx.test])) {
+    
+    if (((length(fit.BASIL$lambda) >= idx.test) & (ghostbasil.lmda.test != fit.BASIL$lambda[idx.test])) |
+        ((length(fit.lassosum$lambda1) >= idx.test) & (ghostbasil.lmda.test != fit.lassosum$lambda1[idx.test])) |
+        ((length(fit.BASIL.PV$lambda) >= idx.test) & (ghostbasil.lmda.test != fit.BASIL.PV$lambda[min(idx.test)])) ) {
         stop("Lambda values do not match.")
     }
 
-    BASIL.beta.test <- fit.BASIL$beta[,idx.test,drop=F]
-    cd.beta.test <- fit.lassosum$beta[,idx.test,drop=F]
-    BASIL.PV.beta.test <- fit.BASIL.PV$beta[,idx.test,drop=F]
-    ghostbasil.beta.test <- fit.ghostbasil$betas[,idx.test,drop=F]
+    BASIL.beta.test <- if (ncol(fit.BASIL$beta) < idx.test) NA else fit.BASIL$beta[,idx.test,drop=F]
+    cd.beta.test <- if (ncol(fit.lassosum$beta) < idx.test) NA else fit.lassosum$beta[,idx.test,drop=F]
+    BASIL.PV.beta.test <- if (ncol(fit.BASIL.PV$beta) < idx.test) NA else fit.BASIL.PV$beta[,idx.test,drop=F]
+    ghostbasil.beta.test <- if (ncol(fit.ghostbasil$beta) < idx.test) NA else fit.ghostbasil$betas[,idx.test,drop=F]
 
-    print(any(class(BASIL.beta.test) == 'dgCMatrix'))
-    BASIL.objective <- objective(A, r, s, ghostbasil.lmda.test, BASIL.beta.test)
-    cd.objective <- objective(A, r, s, ghostbasil.lmda.test, cd.beta.test)
-    BASIL.PV.objective <- objective(A, r, s, ghostbasil.lmda.test, BASIL.PV.beta.test)
-    ghostbasil.objective <- objective(A, r, s, ghostbasil.lmda.test, ghostbasil.beta.test)
+    BASIL.objective <- if (any(is.na(ghostbasil.beta.test))) NA else objective(A, r, s, ghostbasil.lmda.test, BASIL.beta.test)
+    cd.objective <- if (any(is.na(cd.beta.test))) NA else objective(A, r, s, ghostbasil.lmda.test, cd.beta.test)
+    BASIL.PV.objective <- if (any(is.na(BASIL.PV.beta.test))) NA else objective(A, r, s, ghostbasil.lmda.test, BASIL.PV.beta.test)
+    ghostbasil.objective <- if (any(is.na(ghostbasil.beta.test))) NA else objective(A, r, s, ghostbasil.lmda.test, ghostbasil.beta.test)
 
     objs <- c(BASIL=BASIL.objective, 
               CoordinateDescent=cd.objective,
@@ -408,25 +367,26 @@ kkt.test <- function(fit, idx.test=1, eps=1e-5)
     fit.ghostbasil <- fit[['ghostbasil']]
 
     ghostbasil.lmda.test <- fit.ghostbasil$lmdas[idx.test]
-    if ((ghostbasil.lmda.test != fit.BASIL$lambda[idx.test]) |
-        (ghostbasil.lmda.test != fit.lassosum$lambda1[idx.test]) |
-        (ghostbasil.lmda.test != fit.BASIL.PV$lambda[idx.test])) {
+
+    if (((length(fit.BASIL$lambda) >= idx.test) & (ghostbasil.lmda.test != fit.BASIL$lambda[idx.test])) |
+        ((length(fit.lassosum$lambda1) >= idx.test) & (ghostbasil.lmda.test != fit.lassosum$lambda1[idx.test])) |
+        ((length(fit.BASIL.PV$lambda) >= idx.test) & (ghostbasil.lmda.test != fit.BASIL.PV$lambda[min(idx.test)])) ) {
         stop("Lambda values do not match.")
     }
-    
-    BASIL.beta.test <- fit.BASIL$beta[,idx.test,drop=F]
-    cd.beta.test <- fit.lassosum$beta[,idx.test,drop=F]
-    BASIL.PV.beta.test <- fit.BASIL.PV$beta[,idx.test,drop=F]
-    ghostbasil.beta.test <- fit.ghostbasil$betas[,idx.test,drop=F]
 
-    check.kkt <- function(A, r, s, lmda, beta, eps=1e-5) {
+    BASIL.beta.test <- if (ncol(fit.BASIL$beta) < idx.test) NA else fit.BASIL$beta[,idx.test,drop=F]
+    cd.beta.test <- if (ncol(fit.lassosum$beta) < idx.test) NA else fit.lassosum$beta[,idx.test,drop=F]
+    BASIL.PV.beta.test <- if (ncol(fit.BASIL.PV$beta) < idx.test) NA else fit.BASIL.PV$beta[,idx.test,drop=F]
+    ghostbasil.beta.test <- if (ncol(fit.ghostbasil$beta) < idx.test) NA else fit.ghostbasil$betas[,idx.test,drop=F]
+
+    check.kkt <- function(A, r, s, lmda, beta) {
         sum(abs((1-s) * (A %*% beta) - r + s * beta) > lmda+eps) == 0
     }
 
-    BASIL.check.kkt <- check.kkt(A, r, s, ghostbasil.lmda.test, BASIL.beta.test)
-    cd.check.kkt <- check.kkt(A, r, s, ghostbasil.lmda.test, cd.beta.test)
-    BASIL.PV.check.kkt <- check.kkt(A, r, s, ghostbasil.lmda.test, BASIL.PV.beta.test)
-    ghostbasil.check.kkt <- check.kkt(A, r, s, ghostbasil.lmda.test, ghostbasil.beta.test)
+    BASIL.check.kkt <- if (any(is.na(ghostbasil.beta.test))) NA else check.kkt(A, r, s, ghostbasil.lmda.test, BASIL.beta.test)
+    cd.check.kkt <- if (any(is.na(cd.beta.test))) NA else check.kkt(A, r, s, ghostbasil.lmda.test, cd.beta.test)
+    BASIL.PV.check.kkt <- if (any(is.na(BASIL.PV.beta.test))) NA else check.kkt(A, r, s, ghostbasil.lmda.test, BASIL.PV.beta.test)
+    ghostbasil.check.kkt <- if (any(is.na(ghostbasil.beta.test))) NA else check.kkt(A, r, s, ghostbasil.lmda.test, ghostbasil.beta.test)
 
     out <- c(BASIL=BASIL.check.kkt, 
               CoordinateDescent=cd.check.kkt,
@@ -434,3 +394,74 @@ kkt.test <- function(fit, idx.test=1, eps=1e-5)
               ghostbasil=ghostbasil.check.kkt)
     out
 }
+
+speed.test <- function(ps=seq(1000, 3000, by=1000),
+                       n=10000, # number of observations
+                       k=10,# number of variables with nonzero coefficients
+                       amplitude=7.5,# signal amplitude (for noise level = 1)
+                       rho=0.1,
+                       s=0.5)
+{
+    objectives <- list()
+    kkts <- list()
+    cpu.time<-c()
+
+    for (p in ps) {
+      print(p)
+      
+      # Generate the variables from a multivariate normal distribution
+      mu = rep(0,p)
+      Sigma = toeplitz(rho^(0:(p-1)))
+      X = matrix(rnorm(n*p),n) %*% chol(Sigma)
+      
+      # Generate the response from a logistic model and encode it as a factor.
+      nonzero = sample(p, k)
+      beta = amplitude * (1:p %in% nonzero) / sqrt(n)
+      y<-X%*%beta+rnorm(n)
+      
+      A<-t(X)%*%X/n; r<-cor(X,y);
+      
+      t1<-proc.time()
+      fit.BASIL<-solve.BASIL(A,r,s=s,M=500,dM=200,maxiter=1000,cbound=1000)
+      t2<-proc.time()
+      temp.time<-t2[3]-t1[3]
+      
+      #verify results
+      t1<-proc.time()
+      temp.X<-chol(A)
+      fit.lassosum<-elnetR(lambda1=fit.BASIL$lambda,lambda2=s,X=temp.X,b=r,maxiter=1000)
+      t2<-proc.time()
+      temp.time<-c(temp.time,t2[3]-t1[3])
+      
+      t1<-proc.time()
+      fit.BASIL.PV<-solve.BASIL.PV(A,r,n=n,s=s,M=500,dM=200,maxiter=1000,cbound=1000)
+      t2<-proc.time()
+      temp.time<-c(temp.time,t2[3]-t1[3])
+      
+      t1<-proc.time()
+      fit.ghostbasil <- ghostbasil(A,r,s,
+                                   user.lambdas=fit.BASIL$lambda,
+                                   lambdas.iter=10,
+                                   strong.size=500,
+                                   delta.strong.size=200,
+                                   max.strong.size=p,
+                                   max.cds=1000)
+      t2<-proc.time()
+      temp.time<-c(temp.time,t2[3]-t1[3])
+      
+      cpu.time<-rbind(cpu.time,temp.time)
+      fit <- list(A=A, r=r, s=s, BASIL=fit.BASIL, CD=fit.lassosum, BASIL.PV=fit.BASIL.PV, ghostbasil=fit.ghostbasil)
+      fit.objective <- do.call(rbind, lapply(1:length(fit.BASIL$lambda), function(i) t(data.frame(obj.test(fit, i)))))
+      fit.kkt <- do.call(rbind, lapply(1:length(fit.BASIL$lambda), function(i) t(data.frame(kkt.test(fit, i)))))
+      rownames(fit.objective) <- NULL
+      rownames(fit.kkt) <- NULL
+      objectives <- append(objectives, list(fit.objective))
+      kkts <- append(kkts, list(fit.kkt))
+      print(cpu.time)
+    }
+    result<-cbind(ps, cpu.time)
+    colnames(result)<-c('p','BASIL','CoordinateDescent','BASIL-PV','ghostbasil')
+    rownames(result)<-NULL
+    list(times=result, objectives=objectives, kkts=kkts)
+}
+
