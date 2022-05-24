@@ -1,6 +1,7 @@
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <ghostbasil/lasso.hpp>
+#include <thread>
 
 using namespace Rcpp;
 
@@ -16,16 +17,21 @@ List fit_basil__(
         size_t delta_strong_size,
         size_t max_strong_size,
         size_t max_n_cds,
-        double thr)
+        double thr,
+        size_t n_threads)
 {
     std::vector<Eigen::SparseMatrix<double>> betas;
     std::vector<Eigen::VectorXd> lmdas;
     std::string error;
 
+    if (n_threads == -1) {
+        n_threads = std::thread::hardware_concurrency();
+    }
+
     try {
         ghostbasil::fit_basil(
                 A, y, s, user_lmdas, max_n_lambdas, n_lambdas_iter,
-                strong_size, delta_strong_size, max_strong_size, max_n_cds, thr,
+                strong_size, delta_strong_size, max_strong_size, max_n_cds, thr, n_threads,
                 betas, lmdas);
     }
     catch (const std::exception& e) {

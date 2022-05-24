@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <ghostbasil/lasso.hpp>
 #include <testutil/basil_generate_data.hpp>
+#include <thread>
 
 namespace ghostbasil {
 namespace {
@@ -33,6 +34,7 @@ void test_fit_basil(
     auto& expected_lmdas = std::get<3>(dataset);
     auto& expected_betas = std::get<4>(dataset);
     auto& expected_objs = std::get<5>(dataset);
+    size_t n_threads = std::thread::hardware_concurrency();
 
     std::vector<double> user_lmdas;
     size_t max_strong_size_local = max_strong_size;
@@ -49,7 +51,7 @@ void test_fit_basil(
 
     try {
         fit_basil(A, r, s, user_lmdas, max_n_lambdas, n_lambdas_iter,
-                  strong_size, delta_strong_size, max_strong_size_local, max_cds, thr,
+                  strong_size, delta_strong_size, max_strong_size_local, max_cds, thr, n_threads,
                   betas, lmdas);
 #ifdef MAKE_LMDAS
         for (size_t i = 0; i < lmdas.size(); ++i) {

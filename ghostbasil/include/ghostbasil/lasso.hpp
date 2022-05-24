@@ -12,7 +12,6 @@
 
 namespace ghostbasil {
 
-// TODO: find starting value and then factor down from there
 template <class ValueType, class LmdasType>
 GHOSTBASIL_STRONG_INLINE
 void next_lambdas(
@@ -37,6 +36,7 @@ auto check_kkt(
     const LmdasType& lmdas, 
     const BetasType& betas,
     const ISType& is_strong,
+    size_t n_threads,
     GradType& grad)
 {
     assert(y.size() == grad.size());
@@ -48,29 +48,33 @@ auto check_kkt(
     Eigen::Matrix<ValueType, Eigen::Dynamic, 1> grad_tmp(grad.size());
 
     size_t i = 0;
-    for (; i < lmdas.size(); ++i) {
-        auto beta_i = betas.col(i);
-        auto lmda = lmdas[i];
+#pragma omp parallel num_threads(n_threads)
+    {
+#pragma omp single
+        for (; i < lmdas.size(); ++i) {
+            auto beta_i = betas.col(i);
+            auto lmda = lmdas[i];
 
-        std::atomic<bool> kkt_fail(false);
+            std::atomic<bool> kkt_fail(false);
 
 #pragma omp parallel for schedule(static)
-        for (size_t k = 0; k < y.size(); ++k) {
-            // we still need to save the gradients including strong variables
-            auto gk = -sc * beta_i.dot(A.row(k)) + y[k] - s * beta_i.coeff(k);
-            grad_tmp[k] = gk;
+            for (size_t k = 0; k < y.size(); ++k) {
+                // we still need to save the gradients including strong variables
+                auto gk = -sc * beta_i.dot(A.col(k)) + y[k] - s * beta_i.coeff(k);
+                grad_tmp[k] = gk;
 
-            // just omit the KKT check for strong variables though.
-            // if KKT failed previously, just do a no-op until loop finishes.
-            // This is because OpenMP doesn't allow break statements.
-            if (is_strong(k) || kkt_fail) continue;
-            if (std::abs(gk) >= lmda /* TODO: numerical prec window? */) {
-                kkt_fail = true;
+                // just omit the KKT check for strong variables though.
+                // if KKT failed previously, just do a no-op until loop finishes.
+                // This is because OpenMP doesn't allow break statements.
+                if (is_strong(k) || kkt_fail) continue;
+                if (std::abs(gk) >= lmda /* TODO: numerical prec window? */) {
+                    kkt_fail = true;
+                }
             }
-        }
 
-        if (kkt_fail) break; 
-        else grad.swap(grad_tmp);
+            if (kkt_fail) break; 
+            else grad.swap(grad_tmp);
+        }
     }
 
     return i;
@@ -188,7 +192,7 @@ void fit_lasso_active(
     // update gradient in non-active positions
     for (size_t kk = 0; kk < strong_set.size(); ++kk) {
         if (is_active[kk]) continue;
-        strong_grad[kk] -= sc * beta_diff.dot(A.row(strong_set[kk]));
+        strong_grad[kk] -= sc * beta_diff.dot(A.col(strong_set[kk]));
     }
 }
 
@@ -370,6 +374,7 @@ inline void fit_basil(
         size_t max_strong_size,
         size_t max_n_cds,
         ValueType thr,
+        size_t n_threads,
         BetaMatType& betas,
         LmdasType& lmdas)
 {
@@ -485,7 +490,7 @@ inline void fit_basil(
         // In any case, grad corresponds to the first smallest lambda where KKT check passes.
         size_t idx = check_kkt(
                 A, y, s, lmdas_curr.head(n_lmdas), betas_curr.block(0,0,betas_curr.rows(),n_lmdas), 
-                is_strong, grad);
+                is_strong, n_threads, grad);
 
         /* Save output and check for any early stopping */
 

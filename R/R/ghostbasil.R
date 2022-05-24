@@ -23,7 +23,8 @@ ghostbasil <- function(A, y, s,
                       delta.strong.size=100, 
                       max.strong.size=10000, 
                       max.cds=100000, 
-                      thr=1e-7) 
+                      thr=1e-7,
+                      n.threads=-1) 
 {
     user.lambdas <- as.numeric(user.lambdas)
     if (length(user.lambdas) != 0) {
@@ -41,7 +42,8 @@ ghostbasil <- function(A, y, s,
                 delta_strong_size=delta.strong.size, 
                 max_strong_size=max.strong.size,
                 max_n_cds=max.cds, 
-                thr=thr)
+                thr=thr,
+                n_threads=n.threads)
 
     if (length(out$betas) == 0) return(out)
 
