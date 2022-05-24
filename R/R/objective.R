@@ -11,7 +11,7 @@
 objective <- function(A, r, s, lmda, beta)
 {
     out <- NA
-    if (class(beta) == 'dgCMatrix') {
+    if (any(class(beta) == 'dgCMatrix')) {
         out <- objective_sparse__(A, r, s, lmda, beta)
     } else {
         beta <- as.numeric(beta)

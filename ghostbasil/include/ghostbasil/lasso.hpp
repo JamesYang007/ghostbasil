@@ -2,6 +2,7 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 #include <atomic>
+#include <cassert>
 #include <vector>
 #include <unordered_set>
 #include <type_traits>
@@ -119,7 +120,7 @@ template <class AType
         , class SSType
         , class ASType
         , class IAType
-        , class BetaType
+        , class StrongBetaType
         , class SGType>
 GHOSTBASIL_STRONG_INLINE 
 void fit_lasso_active(
@@ -132,17 +133,23 @@ void fit_lasso_active(
     ValueType lmda,
     size_t max_cds,
     ValueType thr,
-    BetaType& beta,
+    StrongBetaType& strong_beta,
+    StrongBetaType& strong_beta_diff,
     SGType& strong_grad,
     ValueType& rsq,
     bool& iz,
     size_t& n_cds)
 {
     using value_t = ValueType;
+    using vec_map_t = Eigen::Map<Eigen::Matrix<value_t, Eigen::Dynamic, 1>>;
+
     auto sc = 1-s;
     iz = true;
 
-    auto beta_diff = beta;
+    vec_map_t sbd_map(strong_beta_diff.data(), strong_beta_diff.size());
+    vec_map_t sb_map(strong_beta.data(), strong_beta.size());
+
+    sbd_map = sb_map;
 
     while (1) {
         ++n_cds;
@@ -150,7 +157,7 @@ void fit_lasso_active(
         for (size_t l = 0; l < active_set.size(); ++l) {
             auto kk = active_set[l]; // index to strong set
             auto k = strong_set[kk]; // actual feature
-            auto ak = beta.coeff(k);
+            auto ak = strong_beta[kk]; // coefficient
             auto gk = strong_grad[kk]; // corresponding gradient
             auto denom = sc * A.coeff(k,k) + s;
             auto u = gk + ak * denom;
@@ -160,7 +167,7 @@ void fit_lasso_active(
 
             if (new_ak == ak) continue;
 
-            beta.coeffRef(k) = new_ak;
+            strong_beta[kk] = new_ak;
             auto del = new_ak - ak;
 
             // get next measure of prediction difference
@@ -183,12 +190,18 @@ void fit_lasso_active(
         if (n_cds >= max_cds) throw max_cds_error(lmda_idx);
     }
 
-    beta_diff = beta - beta_diff;
+    sbd_map = sb_map - sbd_map;
 
     // update gradient in non-active positions
+    assert(sbd_map.size() == strong_set.size());
     for (size_t kk = 0; kk < strong_set.size(); ++kk) {
         if (is_active[kk]) continue;
-        strong_grad[kk] -= sc * beta_diff.dot(A.row(strong_set[kk]));
+        auto k = strong_set[kk];
+        value_t grad_update = 0;
+        for (size_t jj = 0; jj < sbd_map.size(); ++jj) {
+            grad_update += A.coeff(strong_set[jj], k) * sbd_map[jj];
+        }
+        strong_grad[kk] -= sc * grad_update;
     }
 }
 
@@ -204,10 +217,13 @@ void fit_lasso_active(
  * @param   s   regularization parameter of objective.
  * @param   strong_set  vector of indices representing features in the strong set.
  * @param   lmdas       regularization parameter lambda sequence.
- * @param   warm_start  sparse vector of coefficients as warm start.
+ * @param   strong_beta vector of coefficients as warm start.
+ *                      strong_beta[i] is coefficient of feature strong_set[i].
+ *                      Must be of the same size as strong_set.
  * @param   betas       output coefficient sparse matrix.
  *                      betas(i,j) = ith coefficient for jth lambda.
  * @param   strong_grad gradient buffer just for strong variables.
+ *                      Must be the gradient corresponding to strong_beta.
  * @param   active_set  vector of indices representing features in the active set. 
  * @param   is_active   is_active[k] = true if strong_set[k] is active.
  *                      Note that only features in strong_set are allowed to be active.
@@ -215,7 +231,7 @@ void fit_lasso_active(
  *                      only strong_set.size() number of elements will be used.
  */
 template <class AType, class ValueType,
-          class SSType, class LmdasType, class WarmStartType,
+          class SSType, class LmdasType, class StrongBetaType,
           class BetasType, class StrongGradType,
           class ASType, class IAType>
 inline void fit_lasso(
@@ -225,15 +241,18 @@ inline void fit_lasso(
     const LmdasType& lmdas, 
     size_t max_cds,
     ValueType thr,
-    WarmStartType& warm_start, 
-    BetasType& betas, 
+    StrongBetaType& strong_beta, 
+    StrongBetaType& strong_beta_diff,
     StrongGradType& strong_grad,
     ASType& active_set,
     IAType& is_active,
+    BetasType& betas, 
     size_t& n_cds,
     size_t& n_lmdas)
 {
     assert(strong_grad.size() == strong_set.size());
+    assert(strong_beta.size() == strong_set.size());
+    assert(strong_beta_diff.size() == strong_set.size());
     assert(betas.cols() == lmdas.size());
 
     using value_t = ValueType;
@@ -250,7 +269,7 @@ inline void fit_lasso(
         if (iz) {
             fit_lasso_active(
                     A, s, strong_set, active_set, is_active, l, lmda, max_cds,
-                    thr, warm_start, strong_grad, rsq, iz, n_cds);
+                    thr, strong_beta, strong_beta_diff, strong_grad, rsq, iz, n_cds);
         }
 
         while (1) {
@@ -259,7 +278,7 @@ inline void fit_lasso(
             value_t dlx = 0.0;
             for (size_t kk = 0; kk < strong_set.size(); ++kk) {
                 auto k = strong_set[kk];
-                auto ak = warm_start.coeff(k);
+                auto ak = strong_beta[kk];
                 auto gk = strong_grad[kk];
                 auto denom = sc * A.coeff(k,k) + s;
                 auto u = gk + ak * denom;
@@ -268,7 +287,7 @@ inline void fit_lasso(
 
                 if (new_ak == ak) continue;
 
-                warm_start.coeffRef(k) = new_ak;
+                strong_beta[kk] = new_ak;
 
                 if (!is_active[kk]) {
                     is_active[kk] = true;
@@ -294,16 +313,22 @@ inline void fit_lasso(
                 dlx = std::max(dlx_curr, dlx);
             }
 
+            // TODO: experiment with active_set sort?
+
             if (dlx < thr) break;
 
             if (n_cds >= max_cds) throw max_cds_error(l);
 
             fit_lasso_active(
                     A, s, strong_set, active_set, is_active, l, lmda, max_cds,
-                    thr, warm_start, strong_grad, rsq, iz, n_cds);
+                    thr, strong_beta, strong_beta_diff, strong_grad, rsq, iz, n_cds);
         }
 
-        betas.col(l) = warm_start;
+        // copy current beta solution to output
+        for (size_t r = 0; r < strong_set.size(); ++r) {
+            betas.coeffRef(strong_set[r], l) = strong_beta[r];
+        }
+
         ++n_lmdas;
 
         if (l == 0) continue;
@@ -350,9 +375,6 @@ inline void fit_lasso(
  * TODO:
  * The algorithm stops at a $\lambda$ value where the 
  * pseudo-validation loss stops decreasing.
- * For now, we return a vector of vector of lambdas, 
- * and vector of coefficient (sparse) matrices 
- * corresponding to each vector of lambdas.
  */
 
 template <class AType, class YType, class ValueType,
@@ -376,7 +398,6 @@ inline void fit_basil(
     using value_t = ValueType;
     using vec_t = Eigen::Matrix<value_t, Eigen::Dynamic, 1>;
     using sp_mat_t = Eigen::SparseMatrix<value_t>;
-    using sp_vec_t = Eigen::SparseVector<value_t>;
 
     //size_t n_blocks = (n_knockoffs + 1);
     //size_t p = y.size() / n_blocks;
@@ -434,10 +455,21 @@ inline void fit_basil(
     }
     n_lambdas_rem -= lmdas_curr.size(); // remaining lambdas
 
-    // coefficient outputs
-    sp_vec_t beta_prev_valid(n_features); // previously valid beta
-    sp_vec_t beta_warm_start(n_features); // warm start (initialized to 0)
-    sp_mat_t betas_curr(n_features, lmdas_curr.size()); // matrix of solutions
+    // coefficient output matrix
+    sp_mat_t betas_curr(n_features, lmdas_curr.size());
+
+    // coefficient and the difference buffer for strong variables
+    // Invariant: must have the same size as strong_set,
+    // strong_beta[i] = coefficient for strong_set[i].
+    std::vector<value_t> strong_beta;
+    std::vector<value_t> strong_beta_diff;
+    strong_beta.reserve(initial_size);
+    strong_beta.resize(strong_set.size(), 0);
+    strong_beta_diff.reserve(initial_size);
+    strong_beta_diff.resize(strong_set.size());
+
+    // previously valid strong beta
+    std::vector<value_t> strong_beta_prev_valid = strong_beta;
 
     // (negative) gradient only on strong set variables.
     // For the warm-start value of 0, gradient is just y.
@@ -473,8 +505,8 @@ inline void fit_basil(
         size_t n_lmdas = 0;
         size_t n_cds = 0;
         fit_lasso(A, s, strong_set, lmdas_curr, max_n_cds, thr,
-                    beta_warm_start, betas_curr, strong_grad, 
-                    active_set, is_active, n_cds, n_lmdas);
+                    strong_beta, strong_beta_diff, strong_grad, 
+                    active_set, is_active, betas_curr, n_cds, n_lmdas);
         bool fit_lasso_finished_early = n_lmdas < lmdas_curr.size();
 
         /* Checking KKT */
@@ -492,6 +524,7 @@ inline void fit_basil(
         // if first failure is not at the first lambda, save all previous solutions.
         if (idx) {
             betas.emplace_back(betas_curr.block(0,0,betas_curr.rows(),idx));
+            betas.back().prune([](const auto&, const auto&, const auto& v) { return v != 0; });
             lmdas.emplace_back(lmdas_curr.head(idx));
         }
 
@@ -529,11 +562,21 @@ inline void fit_basil(
         if (idx == 0) {
             // warm-start using previously valid solution.
             // Note: this is crucial for correctness in grad update step below.
-            beta_warm_start = beta_prev_valid;
+            // we must augment the size to strong_set.size() and warm-starting with values of 0.
+            strong_beta = strong_beta_prev_valid;
+            strong_beta.resize(strong_set.size(), 0);
+            strong_beta_diff.resize(strong_set.size());
         }
         else {
             // save last valid solution as warm-start
-            beta_prev_valid = beta_warm_start = betas_curr.col(idx-1); 
+            strong_beta.resize(strong_set.size());
+            strong_beta_diff.resize(strong_set.size());
+            strong_beta_prev_valid.resize(strong_set.size());
+            for (size_t i = 0; i < strong_beta.size(); ++i) {
+                strong_beta[i] = 
+                    strong_beta_prev_valid[i] = 
+                    betas_curr.coeff(strong_set[i], idx-1);
+            } 
 
             // update max number of lambdas left to process.
             // since only idx number of lambdas have full solutions,

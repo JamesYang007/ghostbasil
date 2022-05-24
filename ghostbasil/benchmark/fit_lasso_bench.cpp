@@ -23,24 +23,22 @@ static inline auto make_input(
     return std::make_tuple(A, r);
 }
 
-template <class SGType, class WarmStartType, class BetasType,
-          class ASType, class AHSType, class IAType>
+template <class SGType, class StrongBetaType, class BetasType,
+          class ASType, class IAType>
 static inline void reset(
         const SGType& orig_strong_grad,
-        WarmStartType& warm_start,
+        StrongBetaType& strong_beta,
         BetasType& betas,
         SGType& strong_grad,
         ASType& active_set,
-        AHSType& active_hashset,
         IAType& is_active,
         size_t& n_cds,
         size_t& n_lmdas)
 {
-    warm_start.setZero();
+    strong_beta.setZero();
     betas.setZero();
     strong_grad = orig_strong_grad;
     active_set.clear();
-    active_hashset.clear();
     std::fill(is_active.begin(), is_active.end(), false);
     n_cds = 0;
     n_lmdas = 0;
@@ -69,7 +67,8 @@ static void BM_fit_lasso(benchmark::State& state)
     std::vector<uint32_t> strong_set(p);
     std::iota(strong_set.begin(), strong_set.end(), 0);
 
-    Eigen::SparseVector<double> warm_start(p); warm_start.setZero();
+    Eigen::VectorXd strong_beta(strong_set.size()); strong_beta.setZero();
+    Eigen::VectorXd strong_beta_diff(strong_set.size());
     Eigen::SparseMatrix<double> betas(p, lmdas.size());
     std::vector<double> strong_grad(strong_set.size());
     for (size_t i = 0; i < strong_grad.size(); ++i) {
@@ -77,7 +76,6 @@ static void BM_fit_lasso(benchmark::State& state)
     }
     auto orig_strong_grad = strong_grad;
     std::vector<uint32_t> active_set;
-    std::unordered_set<uint32_t> active_hashset;
     std::vector<bool> is_active(strong_set.size(), false);
 
     size_t n_cds = 0;
@@ -85,11 +83,11 @@ static void BM_fit_lasso(benchmark::State& state)
         
     for (auto _ : state) {
         state.PauseTiming();
-        reset(orig_strong_grad, warm_start, betas, strong_grad, active_set,
-              active_hashset, is_active, n_cds, n_lmdas);
+        reset(orig_strong_grad, strong_beta, betas, strong_grad, active_set,
+              is_active, n_cds, n_lmdas);
         state.ResumeTiming();
-        fit_lasso(A, s, strong_set, lmdas, max_cds, thr, warm_start,
-                  betas, strong_grad, active_set, active_hashset, is_active,
+        fit_lasso(A, s, strong_set, lmdas, max_cds, thr, strong_beta, strong_beta_diff,
+                  strong_grad, active_set, is_active, betas, 
                   n_cds, n_lmdas);
     }
 }

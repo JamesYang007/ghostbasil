@@ -15,7 +15,9 @@ auto make_lasso_output(
         const RType& r)
 {
     size_t p = r.size();
-    Eigen::SparseVector<double> warm_start(p);
+    Eigen::VectorXd strong_beta(strong_set.size());
+    strong_beta.setZero();
+    Eigen::VectorXd strong_beta_diff(strong_set.size());
     Eigen::SparseMatrix<double> betas(p, 1);
     std::vector<double> strong_grad(strong_set.size());
     for (size_t i = 0; i < strong_grad.size(); ++i) {
@@ -23,12 +25,11 @@ auto make_lasso_output(
     }
     std::vector<uint32_t> active_set;
     std::vector<bool> is_active(strong_set.size(), false);
-    std::unordered_set<uint32_t> active_hashset;
     size_t n_cds = 0;
     size_t n_lmdas = 0;
     return std::make_tuple(
-            warm_start, betas, strong_grad, active_set,
-            active_hashset, is_active, n_cds, n_lmdas);
+            strong_beta, strong_beta_diff, betas, strong_grad, active_set,
+            is_active, n_cds, n_lmdas);
 }
 
 template <class GenerateFType>
@@ -44,16 +45,17 @@ void test_fit_lasso(GenerateFType generate_dataset)
     auto& expected_objs = std::get<6>(dataset);
 
     auto output = make_lasso_output(strong_set, r);
-    auto& warm_start = std::get<0>(output);
-    auto& betas = std::get<1>(output);
-    auto& strong_grad = std::get<2>(output);
-    auto& active_set = std::get<3>(output);
+    auto& strong_beta = std::get<0>(output);
+    auto& strong_beta_diff = std::get<1>(output);
+    auto& betas = std::get<2>(output);
+    auto& strong_grad = std::get<3>(output);
+    auto& active_set = std::get<4>(output);
     auto& is_active = std::get<5>(output);
     auto& n_cds = std::get<6>(output);
     auto& n_lmdas = std::get<7>(output);
 
-    fit_lasso(A, s, strong_set, lmdas, max_cds, thr, warm_start, 
-                betas, strong_grad, active_set, is_active, n_cds, n_lmdas);
+    fit_lasso(A, s, strong_set, lmdas, max_cds, thr, strong_beta, strong_beta_diff,
+                strong_grad, active_set, is_active, betas, n_cds, n_lmdas);
 
     EXPECT_LE(n_cds, max_cds);
 
