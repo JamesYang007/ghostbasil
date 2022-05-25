@@ -1,34 +1,15 @@
 #include <gtest/gtest.h>
 #include <ghostbasil/lasso.hpp>
-#include <testutil/lasso_generate_data.hpp>
+#include <testutil/fit_lasso_util.hpp>
 
 namespace ghostbasil {
 namespace {
 
-constexpr double tol = 1e-8;
-constexpr double thr = 1e-16;
-constexpr size_t max_cds = 1000;
+using namespace fit_lasso_util;
 
-template <class SSType, class RType>
-auto make_lasso_output(
-        const SSType& strong_set,
-        const RType& r)
-{
-    size_t p = r.size();
-    Eigen::SparseVector<double> warm_start(p);
-    Eigen::SparseMatrix<double> betas(p, 1);
-    std::vector<double> strong_grad(strong_set.size());
-    for (size_t i = 0; i < strong_grad.size(); ++i) {
-        strong_grad[i] = r[strong_set[i]];
-    }
-    std::vector<uint32_t> active_set;
-    std::vector<bool> is_active(strong_set.size(), false);
-    size_t n_cds = 0;
-    size_t n_lmdas = 0;
-    return std::make_tuple(
-            warm_start, betas, strong_grad, active_set,
-            is_active, n_cds, n_lmdas);
-}
+static constexpr double tol = 1e-8;
+static constexpr double thr = 1e-16;
+static constexpr size_t max_cds = 1000;
 
 template <class GenerateFType>
 void test_fit_lasso(GenerateFType generate_dataset)

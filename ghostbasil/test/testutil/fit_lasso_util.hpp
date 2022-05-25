@@ -1,5 +1,6 @@
 #pragma once
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
 #include <vector>
 #include <ghostbasil/macros.hpp>
 #include <testutil/data_util.hpp>
@@ -20,6 +21,7 @@
 #endif
 
 namespace ghostbasil {
+namespace fit_lasso_util {
 
 /*
  * Generate data and expected output for optimizing:
@@ -35,6 +37,28 @@ GENERATE_DATASET_F(3);
 GENERATE_DATASET_F(4);
 GENERATE_DATASET_F(5);
 
+template <class SSType, class RType>
+auto make_lasso_output(
+        const SSType& strong_set,
+        const RType& r)
+{
+    size_t p = r.size();
+    Eigen::SparseVector<double> warm_start(p);
+    Eigen::SparseMatrix<double> betas(p, 1);
+    std::vector<double> strong_grad(strong_set.size());
+    for (size_t i = 0; i < strong_grad.size(); ++i) {
+        strong_grad[i] = r[strong_set[i]];
+    }
+    std::vector<uint32_t> active_set;
+    std::vector<bool> is_active(strong_set.size(), false);
+    size_t n_cds = 0;
+    size_t n_lmdas = 0;
+    return std::make_tuple(
+            warm_start, betas, strong_grad, active_set,
+            is_active, n_cds, n_lmdas);
+}
+
+} // namespace fit_lasso_util
 } // namespace ghostbasil
 
 #undef GENERATE_DATASET_F

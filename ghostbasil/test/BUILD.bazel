@@ -9,8 +9,9 @@ cc_library(
     ]),
     includes = ["."],
     deps = [
-        "//ghostbasil:ghostbasil",
+        "//ghostbasil",
     ],
+    visibility = ["//visibility:public"],
 )
 
 [cc_test(
@@ -19,13 +20,13 @@ cc_library(
     defines = ["EIGEN_INITIALIZE_MATRICES_BY_NAN"],
     deps = [
         ":testutil",
-        "//ghostbasil:ghostbasil",
         "@com_google_googletest//:gtest_main",
         "@bazel_tools//tools/cpp/runfiles",
     ],
     data = ["//ghostbasil/test/reference/data:test_data"],
 ) for type_ in [
     "algorithm_unittest",
+    "inv_quad_form_unittest",
     "ghost_matrix_unittest",
     "fit_lasso_unittest",
     "fit_basil_unittest",

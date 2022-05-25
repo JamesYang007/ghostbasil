@@ -1,30 +1,25 @@
 #include <gtest/gtest.h>
 #include <ghostbasil/lasso.hpp>
-#include <testutil/basil_generate_data.hpp>
+#include <testutil/fit_basil_util.hpp>
 #include <thread>
 
 namespace ghostbasil {
 namespace {
+
+using namespace fit_basil_util;
     
 static constexpr double tol = 2e-8;
 static constexpr double thr = 1e-16;
 static constexpr size_t max_cds = 10000;
 static constexpr size_t max_n_lambdas = 3;
 static constexpr size_t n_lambdas_iter = 2;
-static size_t max_strong_size = 100;
-static size_t strong_size = 1;
-static size_t delta_strong_size = 1;
-
-auto make_basil_output()
-{
-    return std::make_tuple(
-            std::vector<Eigen::SparseMatrix<double>>(),
-            std::vector<Eigen::VectorXd>());
-}
 
 template <class GenerateFType>
 void test_fit_basil(
         GenerateFType generate_dataset,
+        size_t max_strong_size = 100,
+        size_t strong_size = 1,
+        size_t delta_strong_size = 1,
         bool do_user = false)
 {
     auto dataset = generate_dataset();
@@ -115,10 +110,13 @@ TEST(FitBasil, fit_basil_n_le_p)
 
 TEST(FitBasil, fit_basil_p_large)
 {
-    max_strong_size = 1000;
-    strong_size = 100;
-    delta_strong_size = 50;
-    test_fit_basil(generate_dataset_3);
+    size_t max_strong_size = 1000;
+    size_t strong_size = 100;
+    size_t delta_strong_size = 50;
+    test_fit_basil(generate_dataset_3,
+            max_strong_size,
+            strong_size,
+            delta_strong_size);
 }
     
 } // namespace

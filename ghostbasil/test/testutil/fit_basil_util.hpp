@@ -1,5 +1,6 @@
 #pragma once
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
 #include <vector>
 #include <ghostbasil/macros.hpp>
 #include <testutil/data_util.hpp>
@@ -19,6 +20,7 @@
 #endif
 
 namespace ghostbasil {
+namespace fit_basil_util {
 
 /*
  * Generate data and expected output for optimizing:
@@ -31,6 +33,14 @@ GENERATE_DATASET_F(1);
 GENERATE_DATASET_F(2);
 GENERATE_DATASET_F(3);
 
+auto make_basil_output()
+{
+    return std::make_tuple(
+            std::vector<Eigen::SparseMatrix<double>>(),
+            std::vector<Eigen::VectorXd>());
+}
+
+} // namespace fit_basil_util
 } // namespace ghostbasil
 
 #undef GENERATE_DATASET_F

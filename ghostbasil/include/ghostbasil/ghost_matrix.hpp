@@ -8,6 +8,9 @@
 
 namespace ghostbasil {
 
+/*
+ * This class represents a matrix of the form:
+ */
 template <class MatrixType, class VectorType>
 class GhostMatrix
 {
