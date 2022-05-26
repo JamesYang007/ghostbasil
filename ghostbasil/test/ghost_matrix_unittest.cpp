@@ -12,56 +12,40 @@ static constexpr double tol = 1e-14;
 // TEST Constructor
 // ========================================================
 
-TEST(GhostMatrixTest, ctor_empty_list)
+TEST(GhostMatrixTest, ctor_empty)
 {
-    mat_list_t ml;
-    vec_list_t vl;
-    EXPECT_THROW(gmat_t m(ml, vl, 1), std::runtime_error); 
+    mat_t m;
+    vec_t v;
+    EXPECT_THROW(gmat_t gm(m, v, 2), std::runtime_error); 
 }
 
-TEST(GhostMatrixTest, ctor_diff_list_size)
+TEST(GhostMatrixTest, ctor_less_than_2_groups)
 {
-    mat_t B(1,1);
-    vec_t D(1);
-    mat_list_t ml(2, B);
-    vec_list_t vl(3, D);
-    EXPECT_THROW(gmat_t m(ml, vl, 1), std::runtime_error); 
+    mat_t m(1,1);
+    vec_t v(1);
+    EXPECT_THROW(gmat_t gm(m, v, 0), std::runtime_error); 
+    EXPECT_THROW(gmat_t gm(m, v, 1), std::runtime_error); 
 }
 
-TEST(GhostMatrixTest, ctor_no_knockoff)
+TEST(GhostMatrixTest, ctor_diff_matrix_vector_size)
 {
-    mat_t B(1,1);
-    vec_t D(1);
-    mat_list_t ml(2, B);
-    vec_list_t vl(2, D);
-    EXPECT_THROW(gmat_t m(ml, vl, 0), std::runtime_error); 
-}
-
-TEST(GhostMatrixTest, ctor_diff_B_D_size)
-{
-    mat_t B(2,2);
-    vec_t D(1);
-    mat_list_t ml(2, B);
-    vec_list_t vl(2, D);
-    EXPECT_THROW(gmat_t m(ml, vl, 0), std::runtime_error); 
+    mat_t m(2,2);
+    vec_t v(1);
+    EXPECT_THROW(gmat_t gm(m, v, 2), std::runtime_error); 
 }
 
 TEST(GhostMatrixTest, ctor_B_not_square)
 {
-    mat_t B(2,3);
-    vec_t D(2);
-    mat_list_t ml(2, B);
-    vec_list_t vl(2, D);
-    EXPECT_THROW(gmat_t m(ml, vl, 0), std::runtime_error); 
+    mat_t m(2,3);
+    vec_t v(2);
+    EXPECT_THROW(gmat_t gm(m, v, 2), std::runtime_error); 
 }
 
 TEST(GhostMatrixTest, ctor_valid)
 {
-    mat_t B(2,2);
-    vec_t D(2);
-    mat_list_t ml(2, B);
-    vec_list_t vl(2, D);
-    EXPECT_NO_THROW(gmat_t m(ml, vl, 1)); 
+    mat_t m(3,3);
+    vec_t v(3);
+    EXPECT_NO_THROW(gmat_t gm(m, v, 2)); 
 }
 
 // ========================================================
@@ -71,7 +55,7 @@ TEST(GhostMatrixTest, ctor_valid)
 struct GhostMatrixColDotFixture
     : testing::Test,
       testing::WithParamInterface<
-        std::tuple<size_t, size_t, size_t, size_t> >
+        std::tuple<size_t, size_t, size_t> >
 {};
 
 template <class VecType>
@@ -91,18 +75,17 @@ TEST_P(GhostMatrixColDotFixture, col_dot)
 {
     auto param = GetParam();
     size_t seed = std::get<0>(param);
-    size_t L = std::get<1>(param);
-    size_t p = std::get<2>(param);
-    size_t n_knockoffs = std::get<3>(param);
+    size_t p = std::get<1>(param);
+    size_t n_groups = std::get<2>(param);
 
-    auto out = generate_data(seed, L, p, n_knockoffs);
-    auto& ml = std::get<0>(out);
-    auto& vl = std::get<1>(out);
+    auto out = generate_data(seed, p, n_groups);
+    auto& S = std::get<0>(out);
+    auto& D = std::get<1>(out);
     auto& v = std::get<2>(out);
     auto& vs = std::get<3>(out);
     auto& dense = std::get<4>(out);
 
-    gmat_t gmat(ml, vl, n_knockoffs);
+    gmat_t gmat(S, D, n_groups);
 
     test_col_dot(gmat, dense, v);
     test_col_dot(gmat, dense, vs);
@@ -112,10 +95,10 @@ INSTANTIATE_TEST_SUITE_P(
         GhostMatrixColDotSuite,
         GhostMatrixColDotFixture,
         testing::Values(
-            std::make_tuple(0, 1, 4, 1),
-            std::make_tuple(124, 2, 3, 2),
-            std::make_tuple(321, 5, 1, 1),
-            std::make_tuple(9382, 3, 9, 2))
+            std::make_tuple(0, 4, 2),
+            std::make_tuple(124, 3, 3),
+            std::make_tuple(321, 1, 3),
+            std::make_tuple(9382, 9, 2))
     );
 
 // ========================================================
@@ -125,7 +108,7 @@ INSTANTIATE_TEST_SUITE_P(
 struct GhostMatrixQuadFormFixture
     : testing::Test,
       testing::WithParamInterface<
-        std::tuple<size_t, size_t, size_t, size_t> >
+        std::tuple<size_t, size_t, size_t> >
 {};
 
 template <class VecType>
@@ -143,18 +126,17 @@ TEST_P(GhostMatrixQuadFormFixture, quad_form)
 {
     auto param = GetParam();
     size_t seed = std::get<0>(param);
-    size_t L = std::get<1>(param);
-    size_t p = std::get<2>(param);
-    size_t n_knockoffs = std::get<3>(param);
+    size_t p = std::get<1>(param);
+    size_t n_groups = std::get<2>(param);
 
-    auto out = generate_data(seed, L, p, n_knockoffs);
-    auto& ml = std::get<0>(out);
-    auto& vl = std::get<1>(out);
+    auto out = generate_data(seed, p, n_groups);
+    auto& S= std::get<0>(out);
+    auto& D = std::get<1>(out);
     auto& v = std::get<2>(out);
     auto& vs = std::get<3>(out);
     auto& dense = std::get<4>(out);
 
-    gmat_t gmat(ml, vl, n_knockoffs);
+    gmat_t gmat(S, D, n_groups);
 
     test_quad_form(gmat, dense, v);
     test_quad_form(gmat, dense, vs);
@@ -164,10 +146,10 @@ INSTANTIATE_TEST_SUITE_P(
         GhostMatrixQuadFormSuite,
         GhostMatrixQuadFormFixture,
         testing::Values(
-            std::make_tuple(0, 1, 4, 1),
-            std::make_tuple(124, 2, 3, 2),
-            std::make_tuple(321, 5, 1, 1),
-            std::make_tuple(9382, 3, 9, 2))
+            std::make_tuple(0, 4, 2),
+            std::make_tuple(124, 3, 2),
+            std::make_tuple(321, 1, 3),
+            std::make_tuple(9382, 9, 2))
     );
 
 // ========================================================
@@ -177,7 +159,7 @@ INSTANTIATE_TEST_SUITE_P(
 struct GhostMatrixInvQuadFormFixture
     : testing::Test,
       testing::WithParamInterface<
-        std::tuple<size_t, size_t, size_t, size_t, double> >
+        std::tuple<size_t, size_t, size_t, double> >
 {};
 
 template <class VecType>
@@ -208,7 +190,7 @@ static inline void test_inv_quad_form(
     if (expected == std::numeric_limits<double>::infinity()) {
         EXPECT_EQ(actual, expected);
     } else {
-        EXPECT_NEAR(actual, expected, tol * expected);
+        EXPECT_NEAR(actual, expected, std::abs(tol * expected));
     }
 }
 
@@ -216,19 +198,18 @@ TEST_P(GhostMatrixInvQuadFormFixture, inv_quad_form)
 {
     auto param = GetParam();
     size_t seed = std::get<0>(param);
-    size_t L = std::get<1>(param);
-    size_t p = std::get<2>(param);
-    size_t n_knockoffs = std::get<3>(param);
-    double s = std::get<4>(param);
+    size_t p = std::get<1>(param);
+    size_t n_groups = std::get<2>(param);
+    double s = std::get<3>(param);
 
-    auto out = generate_data(seed, L, p, n_knockoffs);
-    auto& ml = std::get<0>(out);
-    auto& vl = std::get<1>(out);
+    auto out = generate_data(seed, p, n_groups);
+    auto& S = std::get<0>(out);
+    auto& D = std::get<1>(out);
     auto& v = std::get<2>(out);
     auto& vs = std::get<3>(out);
     auto& dense = std::get<4>(out);
 
-    gmat_t gmat(ml, vl, n_knockoffs);
+    gmat_t gmat(S, D, n_groups);
 
     test_inv_quad_form(gmat, dense, s, v);
     test_inv_quad_form(gmat, dense, s, vs);
@@ -238,13 +219,13 @@ INSTANTIATE_TEST_SUITE_P(
         GhostMatrixInvQuadFormSuite,
         GhostMatrixInvQuadFormFixture,
         testing::Values(
-            std::make_tuple(0, 1, 2, 1, 0.5),
-            std::make_tuple(124, 1, 3, 1, 0.3),
-            std::make_tuple(321, 1, 4, 1, 0.9),
-            std::make_tuple(9382, 1, 5, 1, 0.01),
-            std::make_tuple(9382, 1, 5, 1, 0),
-            std::make_tuple(3213, 1, 5, 1, 0),
-            std::make_tuple(341111, 3, 9, 2, 0.2)
+            std::make_tuple(0, 2, 2, 0.5),
+            std::make_tuple(124, 3, 2, 0.3),
+            std::make_tuple(321, 4, 3, 0.9),
+            std::make_tuple(9382, 5, 2, 0.01),
+            std::make_tuple(9382, 5, 3, 0),
+            std::make_tuple(3213, 5, 4, 0),
+            std::make_tuple(341111, 9, 2, 0.2)
             )
     );
 

@@ -10,6 +10,19 @@ namespace ghostbasil {
 
 /*
  * This class represents a matrix of the form:
+ *
+ *      S   S-D ... S-D
+ *      S-D S   .   .
+ *      .   .   S   .
+ *      S-D .   ... S
+ *
+ * which is the typical form for the Gaussian covariance matrix
+ * under multiple knockoffs framework.
+ * We say that a GhostMatrix has n groups if it is of size
+ * (n*p) x (n*p) where S and D are p x p.
+ *
+ * @tparam  MatrixType  type of matrix that represents S.
+ * @tparam  VectorType  type of vector that represents the diagonal of D.
  */
 template <class MatrixType, class VectorType>
 class GhostMatrix
@@ -25,120 +38,107 @@ class GhostMatrix
         "Matrix and vector underlying value type must be the same."
     );
 
-    const mat_t* mat_list_;
-    const vec_t* vec_list_;
-    size_t n_;
-    size_t n_multiplier_;
-    std::vector<uint32_t> n_cum_sum_; // [n_cum_sum_[i], n_cum_sum_[i+1])
-                                      // is the range of features for block i.
+    const mat_t* mat_ptr_;  // ptr to matrix S
+    const vec_t* vec_ptr_;  // ptr to diagonal vector D
+    size_t n_groups_;       // number of groups
+    Eigen::Index rows_;
 
     GHOSTBASIL_STRONG_INLINE
-    auto n_features() const { return n_cum_sum_.back(); }
-    GHOSTBASIL_STRONG_INLINE
-    auto n_orig_features(size_t i) const { return mat_list_[i].cols(); }
+    auto compute_group_size() const { return rows_ / n_groups_; }
 
-    template <class XType, class BType, class DType,
-              class BufferType, class TType, class SType>
+    template <class XType, class SType, class DType,
+              class BufferType, class TType, class QType>
     GHOSTBASIL_STRONG_INLINE
-    void compute_TS(
+    void compute_TQ(
             const XType& x,
-            const BType& B,
+            const SType& S,
             const DType& D,
             BufferType& buffer,
             TType& T,
-            SType& S) const
+            QType& Q) const
     {
-        assert(T.size() == S.rows());
-        assert(S.cols() == n_multiplier_);
+        assert(T.size() == Q.rows());
+        assert(Q.cols() == n_groups_);
         size_t group_size = T.size();
         size_t x_k_begin = 0;
-        for (size_t k = 0; k < n_multiplier_; ++k, x_k_begin += group_size) {
+        for (size_t k = 0; k < n_groups_; ++k, x_k_begin += group_size) {
             const auto x_k = x.segment(x_k_begin, group_size);
-            const auto R_k = B * x_k;
-            const auto S_k = x_k.cwiseProduct(D);
+            const auto R_k = S * x_k;
+            const auto Q_k = x_k.cwiseProduct(D);
             buffer = R_k; // load into common buffer to avoid memory alloc underneath.
                           // helps in sparse x_k case also so that the next step is vectorized.
-            S.col(k) = S_k; // save S_k for later
+            Q.col(k) = Q_k; // save S_k for later
             T += buffer;
-            T -= S.col(k);
+            T -= Q.col(k);
         }
     }
 
-    template <class XType, class TType, class SType>
+    template <class XType, class TType, class QType>
     GHOSTBASIL_STRONG_INLINE
     value_t compute_quadform(
             const XType& x, 
             const TType& T,
-            const SType& S) const
+            const QType& Q) const
     {
-        assert(T.size() == S.rows());
+        assert(T.size() == Q.rows());
         size_t group_size = T.size();
         size_t x_k_begin = 0;
         value_t quadform = 0;
-        for (size_t k = 0; k < n_multiplier_; ++k, x_k_begin += group_size) {
+        for (size_t k = 0; k < n_groups_; ++k, x_k_begin += group_size) {
             const auto x_k = x.segment(x_k_begin, group_size);
-            quadform += x_k.dot(T + S.col(k));
+            quadform += x_k.dot(T + Q.col(k));
         }
         return quadform;
     }
 
 public:
-    template <class MatrixListType,
-              class VectorListType>
-    GhostMatrix(const MatrixListType& matrix_list,
-                const VectorListType& vector_list,
-                size_t n_knockoffs)
-        : mat_list_(matrix_list.data()),
-          vec_list_(vector_list.data()),
-          n_(matrix_list.size()),
-          n_multiplier_(n_knockoffs + 1)
+    using Scalar = value_t;
+    using Index = Eigen::Index;
+    
+    GhostMatrix(const mat_t& mat,
+                const vec_t& vec,
+                size_t n_groups)
+        : mat_ptr_(&mat),
+          vec_ptr_(&vec),
+          n_groups_(n_groups),
+          rows_(mat.cols() * n_groups)
     {
-        // Check that number of knockoffs is at least 1.
-        if (n_knockoffs < 1) {
+        // Check that number of groups is at least 2.
+        if (n_groups_ < 2) {
             throw std::runtime_error(
-                "Number of knockoffs must be at least 1. "
-                "If number of knockoffs is 0, use BlockMatrix instead.");
+                "Number of groups must be at least 2. "
+                "If number of groups <= 1, use Eigen::Matrix instead, "
+                "since GhostMatrix degenerates to the top-left corner matrix. ");
         }
 
-        // Check that matrix list and vector list is the same length.
-        if ((matrix_list.size() == 0) ||
-            (matrix_list.size() != vector_list.size())) {
-            throw std::runtime_error(
-                "List of matrix and list of vectors must have the same length and nonzero. ");
+        // Check that the matrix is square and non-empty.
+        const auto& B = matrix();
+        if (B.rows() != B.cols()) {
+            throw std::runtime_error("Matrix is not square.");
+        }
+        if (B.rows() <= 0) {
+            throw std::runtime_error("Matrix and vector must have dimension/length > 0.");
         }
 
-        // Check that each matrix, vector pair have the same dimensions
-        // and the matrix is square.
-        for (size_t i = 0; i < n_; ++i) {
-            const auto& B = mat_list_[i];
-            const auto& D = vec_list_[i];
-            if (B.rows() != B.cols()) {
-                std::string error = "Matrix at index " + std::to_string(i) + " is not square.";
-                throw std::runtime_error(error);
-            }
-            if (B.rows() != D.size()) {
-                std::string error = 
-                    "Matrix and vector pair at index " + std::to_string(i) + 
-                    " do not have same dimensions. " +
-                    "Matrix has dimensions " + std::to_string(B.rows()) + " x " + std::to_string(B.cols()) + " and " +
-                    "vector has length " + std::to_string(D.size()) + ". ";
-                throw std::runtime_error(error);
-            }
-            if (B.rows() <= 0) {
-                std::string error =
-                    "Matrix and vector pair at index " + std::to_string(i) +
-                    " must have dimension/length > 0.";
-                throw std::runtime_error(error);
-            }
-        }
-
-        // Compute the cumulative number of features.
-        n_cum_sum_.resize(n_+1);
-        n_cum_sum_[0] = 0;
-        for (size_t i = 0; i < n_; ++i) {
-            n_cum_sum_[i+1] = n_cum_sum_[i] + mat_list_[i].cols() * n_multiplier_;
+        // Check that the matrix and vector agree in size.
+        const auto& D = vector();
+        if (B.rows() != D.size()) {
+            std::string error = 
+                "Matrix and vector do not have same dimensions. "                
+                "Matrix has dimensions " + std::to_string(B.rows()) + " x " + std::to_string(B.cols()) + " and " +
+                "vector has length " + std::to_string(D.size()) + ". ";
+            throw std::runtime_error(error);
         }
     }
+
+    GHOSTBASIL_STRONG_INLINE Index rows() const { return rows_; }
+    GHOSTBASIL_STRONG_INLINE Index cols() const { return rows(); }
+    GHOSTBASIL_STRONG_INLINE
+    const auto& matrix() const { return *mat_ptr_; }
+    GHOSTBASIL_STRONG_INLINE
+    const auto& vector() const { return *vec_ptr_; }
+    GHOSTBASIL_STRONG_INLINE
+    auto n_groups() const { return n_groups_; }
 
     /*
      * Computes the dot product between kth column of the matrix with v: 
@@ -147,47 +147,30 @@ public:
     template <class VecType>
     value_t col_dot(size_t k, const VecType& v) const
     {
-        assert(k < n_features());
+        assert(k < cols());
 
-        // Find the i(k) which is the closest index to k:
-        // n_cum_sum_[i(k)] <= k < n_cum_sum_[i(k)+1]
-        const auto ik_end = std::upper_bound(
-                n_cum_sum_.begin(),
-                n_cum_sum_.end(),
-                k);
-        const auto ik_begin = std::next(ik_end, -1);
-        const auto ik = std::distance(n_cum_sum_.begin(), ik_begin);  
-        assert((ik+1) < n_cum_sum_.size());
+        const size_t group_size = compute_group_size();
+        const auto& S = matrix();
+        const auto& D = vector();
 
-        // Find i(k)th block matrix, diagonal matrix, and size.
-        const auto& B = mat_list_[ik];
-        const auto& D = vec_list_[ik];
-        const size_t group_size = n_orig_features(ik);
+        // Find the index to block of K features containing k.
+        const size_t k_block_begin = (k / group_size) * group_size;
 
-        // Find v_{i(k)}, i(k)th block of vector. 
-        const auto vi = v.segment(n_cum_sum_[ik], n_cum_sum_[ik+1]-n_cum_sum_[ik]);
-
-        // Find the shifted k relative to A_{i(k)}).
-        const size_t k_shifted = k - n_cum_sum_[ik];
-
-        // Find the index to block of K features relative to A_{i(k)} containing k_shifted.
-        const size_t k_shifted_block_begin = (k_shifted / group_size) * group_size;
-
-        // Find the relative k to 
-        const size_t k_shifted_block = k_shifted - k_shifted_block_begin;
+        // Find the index relative to k_block_begin.
+        const size_t k_block = k - k_block_begin;
 
         // Get quantities for reuse.
-        value_t D_kk = D[k_shifted_block];
+        value_t D_kk = D[k_block];
 
         // Compute the dot product.
         value_t dp = 0;
-        size_t vi_j_begin = 0;
-        for (size_t j = 0; j < n_multiplier_; ++j, vi_j_begin += group_size) {
-            const auto vi_j = vi.segment(vi_j_begin, group_size);
-            const auto B_k = B.col(k_shifted_block);
-            dp += vi_j.dot(B_k) - D_kk * vi_j.coeff(k_shifted_block);
+        size_t v_j_begin = 0;
+        for (size_t j = 0; j < n_groups_; ++j, v_j_begin += group_size) {
+            const auto v_j = v.segment(v_j_begin, group_size);
+            const auto S_k = S.col(k_block);
+            dp += v_j.dot(S_k) - D_kk * v_j.coeff(k_block);
         }
-        dp += D_kk * vi.coeff(k_shifted);
+        dp += D_kk * v.coeff(k);
 
         return dp;
     }
@@ -200,40 +183,33 @@ public:
     value_t quad_form(const VecType& v) const
     {   
         // Notation:
-        // K = n_multiplier_
-        // B = a block matrix
-        // D = corresponding diagonal matrix
-        // x = subvector corresponding to B and D
-        // x_k = kth block vector corresponding to a group
-        // R_k = B x_k (columns of R)
-        // S_k = D x_k (columns of S)
-        // T = \sum\limits_{k=1}^K R_k - \sum\limits_{k=1}^K S_k
+        // K = n_groups_
+        // S = top-left corner matrix
+        // D = S's corresponding diagonal matrix
+        // v_k = kth subset of v (of length group_size)
+        // R_k = S v_k (columns of R)
+        // Q_k = D v_k (columns of Q)
+        // T = \sum\limits_{k=1}^K R_k - \sum\limits_{k=1}^K Q_k
 
-        // Choose type of S based on whether v is dense or sparse.
-        using S_t = std::conditional_t<
+        // Choose type of Q based on whether v is dense or sparse.
+        using Q_t = std::conditional_t<
             std::is_base_of<Eigen::DenseBase<VecType>, VecType>::value,
             mat_t, sp_mat_t>;
 
+        const auto& S = matrix();
+        const auto& D = vector();
+        const size_t group_size = compute_group_size();
+
         colvec_t buffer;
-        colvec_t T; 
-        S_t S;
-        value_t quadform = 0;
-        
-        for (size_t i = 0; i < n_; ++i) {
-            const auto& B = mat_list_[i];
-            const auto& D = vec_list_[i];
-            const auto x = v.segment(n_cum_sum_[i], n_cum_sum_[i+1]-n_cum_sum_[i]);
-            const size_t group_size = n_orig_features(i);
+        colvec_t T(group_size); 
+        T.setZero();
+        Q_t Q(group_size, n_groups_);
 
-            T.setZero(group_size);
-            S.resize(group_size, n_multiplier_);
+        // Compute T and S
+        compute_TQ(v, S, D, buffer, T, Q);
 
-            // Compute T and S
-            compute_TS(x, B, D, buffer, T, S);
-
-            // Compute quadratic form of current block
-            quadform += compute_quadform(x, T, S);
-        }
+        // Compute quadratic form of current block
+        value_t quadform = compute_quadform(v, T, Q);
 
         return quadform;
     }
@@ -255,45 +231,41 @@ public:
     template <class VecType>
     value_t inv_quad_form(value_t s, const VecType& v) const
     {
-        // Compute ||v||^6
+        // Compute ||v||^6.
         const auto v_norm_sq = v.squaredNorm();
 
         assert(0 <= s && s <= 1);
 
         if (v_norm_sq <= 0) return 0;
 
-        // Choose type of S based on whether v is dense or sparse.
-        using S_t = std::conditional_t<
+        // Choose type of Q based on whether v is dense or sparse.
+        using Q_t = std::conditional_t<
             std::is_base_of<Eigen::DenseBase<VecType>, VecType>::value,
             mat_t, sp_mat_t>;
 
+        const auto& S = matrix();
+        const auto& D = vector();
+        const size_t group_size = compute_group_size();
+
         colvec_t buffer; 
-        colvec_t T; 
-        S_t S;
+        colvec_t T(group_size); 
+        T.setZero();
+        Q_t Q(group_size, n_groups_);
         value_t Av_norm_sq = 0;
         value_t vTAv = 0;
 
-        for (size_t i = 0; i < n_; ++i) {
-            const auto& B = mat_list_[i];
-            const auto& D = vec_list_[i];
-            const auto x = v.segment(n_cum_sum_[i], n_cum_sum_[i+1]-n_cum_sum_[i]);
-            const size_t group_size = n_orig_features(i);
+        // Compute T and Q.
+        compute_TQ(v, S, D, buffer, T, Q);
 
-            T.setZero(group_size);
-            S.resize(group_size, n_multiplier_);
-
-            // Compute T and S
-            compute_TS(x, B, D, buffer, T, S);
-
-            // Compute Av_norm_sq
-            for (size_t l = 0; l < n_multiplier_; ++l) {
-                Av_norm_sq += (T + S.col(l)).squaredNorm();
-            }
-
-            // Compute quadratic form of current block
-            vTAv += compute_quadform(x, T, S);
+        // Compute Av_norm_sq.
+        for (size_t l = 0; l < n_groups_; ++l) {
+            Av_norm_sq += (T + Q.col(l)).squaredNorm();
         }
 
+        // Compute quadratic form of current block.
+        vTAv += compute_quadform(v, T, Q);
+
+        // Compute the inverse quadratic form estimate.
         const auto sc = 1-s;
         const auto s_sq = s * s;
         const auto sc_sq = sc * sc;
@@ -303,6 +275,7 @@ public:
         const auto factor_pow3 = factor * factor * factor;
         value_t inv_quad_form = 
             factor_pow3 * (sc_sq * Av_norm_sq + 2*s*denom - s_sq*v_norm_sq);
+
         return inv_quad_form;
     }
 };

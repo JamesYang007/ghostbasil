@@ -3,6 +3,7 @@ cc_library(
     hdrs = glob(["include/**"]),
     includes = ["include"],
     visibility = ["//visibility:public"],
+    defines = ["EIGEN_MATRIXBASE_PLUGIN=\\\"ghostbasil/eigen_plugins.hpp\\\""],
     deps = [
         "@eigen",
     ],
