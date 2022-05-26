@@ -98,6 +98,9 @@ BENCHMARK(BM_ghost_matrix_col_dot)
     -> Args({9, 100, 20, 2})
     -> Args({9, 100, 30, 2})
     -> Args({9, 100, 50, 2})
+    -> Args({9, 100, 100, 2})
+    -> Args({9, 100, 500, 2})
+    -> Args({9, 100, 1000, 2})
     ;
 
 static void BM_matrix_col_dot(benchmark::State& state) 
@@ -147,6 +150,55 @@ BENCHMARK(BM_matrix_col_dot)
     -> Args({9, 100, 20, 2})
     -> Args({9, 100, 30, 2})
     -> Args({9, 100, 50, 2})
+    ;
+
+static void BM_block_matrix_col_dot(benchmark::State& state) 
+{
+    size_t seed = state.range(0);
+    size_t L = state.range(1);
+    size_t p = state.range(2);
+    size_t n_groups = state.range(3);
+    double density = 0.1;
+
+    auto input = generate_data(seed, L, p, n_groups, density);
+    auto& ml = std::get<0>(input);
+    auto& vl = std::get<1>(input);
+    auto& vs = std::get<2>(input);
+
+    mat_list_t gmat_dense_list(ml.size());
+    for (size_t i = 0; i < gmat_dense_list.size(); ++i) {
+        gmat_dense_list[i] = gutil::make_dense(ml[i], vl[i], n_groups);
+    }
+
+    BlockMatrix<mat_t> bmat(gmat_dense_list);
+
+    value_t res = 0;
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(
+            res = bmat.col_dot(p/2, vs)
+        );
+    }
+}
+
+BENCHMARK(BM_block_matrix_col_dot)
+    // p large (large blocks)
+    -> Args({0, 10, 10, 2})
+    -> Args({0, 10, 20, 2})
+    -> Args({0, 10, 30, 2})
+    -> Args({0, 10, 50, 2})
+    -> Args({0, 10, 80, 2})
+    -> Args({0, 10, 100, 2})
+    -> Args({0, 10, 200, 2})
+    -> Args({0, 10, 300, 2})
+
+    // L large (many blocks)
+    -> Args({9, 100, 10, 2})
+    -> Args({9, 100, 20, 2})
+    -> Args({9, 100, 30, 2})
+    -> Args({9, 100, 50, 2})
+    -> Args({9, 100, 100, 2})
+    -> Args({9, 100, 500, 2})
+    -> Args({9, 100, 1000, 2})
     ;
 
 }

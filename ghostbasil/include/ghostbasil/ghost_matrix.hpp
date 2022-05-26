@@ -161,13 +161,13 @@ public:
 
         // Get quantities for reuse.
         value_t D_kk = D[k_block];
+        const auto S_k = S.col(k_block);
 
         // Compute the dot product.
         value_t dp = 0;
         size_t v_j_begin = 0;
         for (size_t j = 0; j < n_groups_; ++j, v_j_begin += group_size) {
             const auto v_j = v.segment(v_j_begin, group_size);
-            const auto S_k = S.col(k_block);
             dp += v_j.dot(S_k) - D_kk * v_j.coeff(k_block);
         }
         dp += D_kk * v.coeff(k);
