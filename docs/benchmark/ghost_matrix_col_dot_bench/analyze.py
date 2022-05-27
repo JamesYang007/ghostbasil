@@ -30,6 +30,10 @@ block_times = np.array([
     10, 10, 12, 15, 24, 24, 47, 69
 ])
 plot_test(ax[0,0], L, n_groups, p, ghost_times, naive_times, "ghost_matrix", "dense_matrix")
+
+p = np.concatenate([p, np.array([500, 1000, 2000])])
+ghost_times = np.concatenate([ghost_times, np.array([213, 399, 698])])
+block_times = np.concatenate([block_times, np.array([136, 258, 494])])
 plot_test(ax[0,1], L, n_groups, p, ghost_times, block_times, "ghost_matrix", "block_matrix")
 
 # Test 2

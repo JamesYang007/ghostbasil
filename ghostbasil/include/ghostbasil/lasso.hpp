@@ -151,6 +151,9 @@ void fit_lasso_active(
     while (1) {
         ++n_cds;
         auto dlx = 0.0;
+        // TODO: change to loop over inner/value of beta
+        // TODO: save vector of A diagonal along strong variables.
+        // TODO: How to remove complexity of A.coeff(j,k)?
         for (size_t l = 0; l < active_set.size(); ++l) {
             auto kk = active_set[l]; // index to strong set
             auto k = strong_set[kk]; // actual feature
