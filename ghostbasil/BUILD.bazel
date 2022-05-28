@@ -4,7 +4,7 @@ cc_library(
     includes = ["include"],
     visibility = ["//visibility:public"],
     defines = [
-        "EIGEN_MATRIXBASE_PLUGIN=\\\"ghostbasil/eigen_matrixbase_plugin.hpp\\\"",
+        "EIGEN_MATRIXBASE_PLUGIN=\\\"ghostbasil/util/eigen/matrixbase_plugin.hpp\\\"",
     ],
     deps = [
         "@eigen",
