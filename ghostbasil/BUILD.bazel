@@ -1,3 +1,4 @@
+# Add main header-only library
 cc_library(
     name = "ghostbasil",
     hdrs = glob(["include/**"]),
@@ -9,4 +10,21 @@ cc_library(
     deps = [
         "@eigen",
     ],
+)
+
+# Add common, library-agnostic tools
+cc_library(
+    name = "tools",
+    srcs = glob([
+        "src/tools/**/*.hpp",
+        "src/tools/**/*.cpp",
+    ]),
+    hdrs = glob(["src/tools/**/*.hpp"]),
+    includes = ["src"],
+    data = ["//ghostbasil/reference/data:data"],
+    deps = [
+        "@eigen",
+        "@bazel_tools//tools/cpp/runfiles",
+    ],
+    visibility = ["//visibility:public"],
 )

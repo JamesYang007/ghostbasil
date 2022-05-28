@@ -3,11 +3,11 @@
     srcs = ["{}.cpp".format(type_)],
     deps = [
         "//ghostbasil",
-        "//ghostbasil/test:testutil",
+        "//ghostbasil:tools",
         "@com_github_google_benchmark//:benchmark_main",
     ],
 ) for type_ in [
     "matmulvec_bench",
     "ghost_matrix_col_dot_bench",
-    "fit_lasso_bench",
+    "lasso_bench",
 ]]

@@ -1,25 +1,31 @@
 #include <gtest/gtest.h>
-#include <matrix/ghost_matrix_util.hpp>
+#include <ghostbasil/matrix/ghost_matrix.hpp>
+#include <tools/matrix/ghost_matrix.hpp>
 
 namespace ghostbasil {
 namespace {
 
-using namespace ghost_matrix_util;
-
 static constexpr double tol = 1e-14; 
+
+struct GhostMatrixFixture
+    : ::testing::Test,
+      tools::GhostMatrixUtil
+{
+    using gmat_t = GhostMatrix<mat_t, vec_t>;
+};
 
 // ========================================================
 // TEST Constructor
 // ========================================================
 
-TEST(GhostMatrixTest, ctor_empty)
+TEST_F(GhostMatrixFixture, ctor_empty)
 {
     mat_t m;
     vec_t v;
     EXPECT_THROW(gmat_t gm(m, v, 2), std::runtime_error); 
 }
 
-TEST(GhostMatrixTest, ctor_less_than_2_groups)
+TEST_F(GhostMatrixFixture, ctor_less_than_2_groups)
 {
     mat_t m(1,1);
     vec_t v(1);
@@ -27,21 +33,21 @@ TEST(GhostMatrixTest, ctor_less_than_2_groups)
     EXPECT_THROW(gmat_t gm(m, v, 1), std::runtime_error); 
 }
 
-TEST(GhostMatrixTest, ctor_diff_matrix_vector_size)
+TEST_F(GhostMatrixFixture, ctor_diff_matrix_vector_size)
 {
     mat_t m(2,2);
     vec_t v(1);
     EXPECT_THROW(gmat_t gm(m, v, 2), std::runtime_error); 
 }
 
-TEST(GhostMatrixTest, ctor_B_not_square)
+TEST_F(GhostMatrixFixture, ctor_B_not_square)
 {
     mat_t m(2,3);
     vec_t v(2);
     EXPECT_THROW(gmat_t gm(m, v, 2), std::runtime_error); 
 }
 
-TEST(GhostMatrixTest, ctor_valid)
+TEST_F(GhostMatrixFixture, ctor_valid)
 {
     mat_t m(3,3);
     vec_t v(3);
@@ -53,23 +59,23 @@ TEST(GhostMatrixTest, ctor_valid)
 // ========================================================
 
 struct GhostMatrixColDotFixture
-    : testing::Test,
+    : GhostMatrixFixture,
       testing::WithParamInterface<
         std::tuple<size_t, size_t, size_t> >
-{};
-
-template <class VecType>
-static inline void test_col_dot(
-        const gmat_t& gmat,
-        const mat_t& dense,
-        const VecType& v)
 {
-    for (size_t i = 0; i < dense.cols(); ++i) {
-        auto actual = gmat.col_dot(i, v);
-        auto expected = v.dot(dense.col(i));
-        EXPECT_NEAR(actual, expected, tol);
+    template <class VecType>
+    void test(
+            const gmat_t& gmat,
+            const mat_t& dense,
+            const VecType& v)
+    {
+        for (size_t i = 0; i < dense.cols(); ++i) {
+            auto actual = gmat.col_dot(i, v);
+            auto expected = v.dot(dense.col(i));
+            EXPECT_NEAR(actual, expected, tol);
+        }
     }
-}
+};
 
 TEST_P(GhostMatrixColDotFixture, col_dot)
 {
@@ -87,8 +93,8 @@ TEST_P(GhostMatrixColDotFixture, col_dot)
 
     gmat_t gmat(S, D, n_groups);
 
-    test_col_dot(gmat, dense, v);
-    test_col_dot(gmat, dense, vs);
+    test(gmat, dense, v);
+    test(gmat, dense, vs);
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -106,21 +112,21 @@ INSTANTIATE_TEST_SUITE_P(
 // ========================================================
 
 struct GhostMatrixQuadFormFixture
-    : testing::Test,
+    : GhostMatrixFixture,
       testing::WithParamInterface<
         std::tuple<size_t, size_t, size_t> >
-{};
-
-template <class VecType>
-static inline void test_quad_form(
-        const gmat_t& gmat,
-        const mat_t& dense,
-        const VecType& v)
 {
-    auto actual = gmat.quad_form(v);
-    auto expected = v.dot(dense * v);
-    EXPECT_NEAR(actual, expected, tol);
-}
+    template <class VecType>
+    void test(
+            const gmat_t& gmat,
+            const mat_t& dense,
+            const VecType& v)
+    {
+        auto actual = gmat.quad_form(v);
+        auto expected = v.dot(dense * v);
+        EXPECT_NEAR(actual, expected, tol);
+    }
+};
 
 TEST_P(GhostMatrixQuadFormFixture, quad_form)
 {
@@ -138,8 +144,8 @@ TEST_P(GhostMatrixQuadFormFixture, quad_form)
 
     gmat_t gmat(S, D, n_groups);
 
-    test_quad_form(gmat, dense, v);
-    test_quad_form(gmat, dense, vs);
+    test(gmat, dense, v);
+    test(gmat, dense, vs);
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -157,42 +163,42 @@ INSTANTIATE_TEST_SUITE_P(
 // ========================================================
 
 struct GhostMatrixInvQuadFormFixture
-    : testing::Test,
+    : GhostMatrixFixture,
       testing::WithParamInterface<
         std::tuple<size_t, size_t, size_t, double> >
-{};
-
-template <class VecType>
-static inline void test_inv_quad_form(
-        const gmat_t& gmat,
-        const mat_t& dense,
-        double s,
-        const VecType& v)
 {
-    auto actual = gmat.inv_quad_form(s, v);
-    mat_t T = (1-s) * dense;
-    T.diagonal().array() += s;
+    template <class VecType>
+    void test(
+            const gmat_t& gmat,
+            const mat_t& dense,
+            double s,
+            const VecType& v)
+    {
+        auto actual = gmat.inv_quad_form(s, v);
+        mat_t T = (1-s) * dense;
+        T.diagonal().array() += s;
 
-    auto v_norm_sq = v.squaredNorm();
-    vec_t Tv = T * v;
-    auto Tv_norm_sq = Tv.squaredNorm();
-    auto vTTv = v.dot(Tv);
-    double expected = 0;
-    if (v_norm_sq > 0) {
-        if (vTTv <= 0) expected = std::numeric_limits<double>::infinity();
-        else {
-            auto v_norm_sq_div_vTTv = v_norm_sq / vTTv;
-            auto v_norm_sq_div_vTTv_pow3 = 
-                v_norm_sq_div_vTTv * v_norm_sq_div_vTTv * v_norm_sq_div_vTTv;
-            expected = v_norm_sq_div_vTTv_pow3 * Tv_norm_sq;
+        auto v_norm_sq = v.squaredNorm();
+        vec_t Tv = T * v;
+        auto Tv_norm_sq = Tv.squaredNorm();
+        auto vTTv = v.dot(Tv);
+        double expected = 0;
+        if (v_norm_sq > 0) {
+            if (vTTv <= 0) expected = std::numeric_limits<double>::infinity();
+            else {
+                auto v_norm_sq_div_vTTv = v_norm_sq / vTTv;
+                auto v_norm_sq_div_vTTv_pow3 = 
+                    v_norm_sq_div_vTTv * v_norm_sq_div_vTTv * v_norm_sq_div_vTTv;
+                expected = v_norm_sq_div_vTTv_pow3 * Tv_norm_sq;
+            }
+        }
+        if (expected == std::numeric_limits<double>::infinity()) {
+            EXPECT_EQ(actual, expected);
+        } else {
+            EXPECT_NEAR(actual, expected, std::abs(tol * expected));
         }
     }
-    if (expected == std::numeric_limits<double>::infinity()) {
-        EXPECT_EQ(actual, expected);
-    } else {
-        EXPECT_NEAR(actual, expected, std::abs(tol * expected));
-    }
-}
+};
 
 TEST_P(GhostMatrixInvQuadFormFixture, inv_quad_form)
 {
@@ -211,8 +217,8 @@ TEST_P(GhostMatrixInvQuadFormFixture, inv_quad_form)
 
     gmat_t gmat(S, D, n_groups);
 
-    test_inv_quad_form(gmat, dense, s, v);
-    test_inv_quad_form(gmat, dense, s, vs);
+    test(gmat, dense, s, v);
+    test(gmat, dense, s, vs);
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -234,26 +240,26 @@ INSTANTIATE_TEST_SUITE_P(
 // ========================================================
 
 struct GhostMatrixCoeffFixture
-    : testing::Test,
+    : GhostMatrixFixture,
       testing::WithParamInterface<
         std::tuple<size_t, size_t, size_t> >
-{};
-
-static inline void test_coeff(
-        const gmat_t& gmat,
-        const mat_t& dense)
 {
-    EXPECT_EQ(gmat.rows(), dense.rows());
-    EXPECT_EQ(gmat.cols(), dense.cols());
+    void test(
+            const gmat_t& gmat,
+            const mat_t& dense)
+    {
+        EXPECT_EQ(gmat.rows(), dense.rows());
+        EXPECT_EQ(gmat.cols(), dense.cols());
 
-    for (size_t j = 0; j < gmat.cols(); ++j) {
-        for (size_t i = 0; i < gmat.rows(); ++i) {
-            auto actual = gmat.coeff(i, j);
-            auto expected = dense.coeff(i, j);
-            EXPECT_DOUBLE_EQ(actual, expected);
+        for (size_t j = 0; j < gmat.cols(); ++j) {
+            for (size_t i = 0; i < gmat.rows(); ++i) {
+                auto actual = gmat.coeff(i, j);
+                auto expected = dense.coeff(i, j);
+                EXPECT_DOUBLE_EQ(actual, expected);
+            }
         }
     }
-}
+};
 
 TEST_P(GhostMatrixCoeffFixture, coeff)
 {
@@ -269,8 +275,8 @@ TEST_P(GhostMatrixCoeffFixture, coeff)
 
     gmat_t gmat(S, D, n_groups);
 
-    test_coeff(gmat, dense);
-    test_coeff(gmat, dense);
+    test(gmat, dense);
+    test(gmat, dense);
 }
 
 INSTANTIATE_TEST_SUITE_P(

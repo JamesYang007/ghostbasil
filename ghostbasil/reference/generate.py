@@ -17,6 +17,7 @@ parser.add_argument(
 args = parser.parse_args()
 suffix = args.suffix
 
+
 def get_input(suffix):
     n = np.loadtxt(os.path.join(prefix, f"n_{suffix}.csv"), delimiter=',', dtype=int)
     p = np.loadtxt(os.path.join(prefix, f"p_{suffix}.csv"), delimiter=',', dtype=int)
@@ -26,13 +27,6 @@ def get_input(suffix):
     strong_set = np.loadtxt(os.path.join(prefix, f"strong_set_{suffix}.csv"), delimiter=',', dtype=int)
     if strong_set.size == 0:
         strong_set = np.arange(0, p, 1)
-
-    print(f'n: {n}')
-    print(f'p: {p}')
-    print(f's: {s}')
-    print(f'lmdas: {lmdas}')
-    print(f'strong_set: {strong_set}')
-    print(f'suffix: {suffix}')
 
     return n, p, s, lmdas, strong_set
 
@@ -81,6 +75,12 @@ def save_solution(A, r, strong_set, objs, betas, suffix=''):
 
 if __name__ == '__main__':
     n, p, s, lmdas, strong_set = get_input(suffix)
+    print(f'n: {n}')
+    print(f'p: {p}')
+    print(f's: {s}')
+    print(f'lmdas: {lmdas}')
+    print(f'strong_set: {strong_set}')
+    print(f'suffix: {suffix}')
     A, r = generate_data(n, p)
     objs = np.zeros(lmdas.size)
     betas = np.zeros((p, lmdas.size))

@@ -1,31 +1,79 @@
 #include <gtest/gtest.h>
-#include <matrix/block_matrix_util.hpp>
+#include <Eigen/Dense>
+#include <Eigen/Sparse>
+#include <ghostbasil/matrix/block_matrix.hpp>
+#include <tools/matrix/block_matrix.hpp>
+#include <random>
 
 namespace ghostbasil {
 namespace {
 
-using namespace block_matrix_util;
-
 static constexpr double tol = 1e-14; 
+
+struct BlockMatrixFixture
+    : ::testing::Test,
+      tools::BlockMatrixUtil
+{
+    using util_t = tools::BlockMatrixUtil;
+
+    using vec_t = Eigen::VectorXd;
+    using sp_vec_t = Eigen::SparseVector<value_t>;
+    using bmat_t = BlockMatrix<mat_t>;
+    using mat_list_t = std::vector<mat_t>;
+
+    auto generate_data(
+            size_t seed,
+            size_t L,
+            size_t p,
+            double density = 0.5,
+            bool do_dense = true,
+            bool do_v = true)
+    {
+        srand(seed);
+        mat_list_t mat_list(L);
+        for (size_t l = 0; l < L; ++l) {
+            mat_list[l].setRandom(p, p);
+            mat_list[l] = (mat_list[l] + mat_list[l].transpose()) / 2;
+        }
+        mat_t dense;
+        if (do_dense) {
+            dense = util_t::make_dense(mat_list);
+        }
+
+        vec_t v;
+        sp_vec_t vs;
+        if (do_v) {
+            v.setRandom(dense.cols());
+            vs.resize(v.size());
+            std::bernoulli_distribution bern(density);
+            std::mt19937 gen(seed);
+            for (size_t i = 0; i < vs.size(); ++i) {
+                if (bern(gen)) vs.coeffRef(i) = v[i];
+            }
+        }
+
+        return std::make_tuple(mat_list, v, vs, dense);
+    }
+};
 
 // ========================================================
 // TEST Constructor
 // ========================================================
 
-TEST(BlockMatrixTest, ctor_empty_list)
+TEST_F(BlockMatrixFixture, ctor_empty_list)
 {
     mat_list_t ml;
     EXPECT_NO_THROW(bmat_t m(ml)); 
 }
 
-TEST(BlockMatrixTest, ctor_m_not_square)
+TEST_F(BlockMatrixFixture, ctor_m_not_square)
 {
     mat_t m(2,3);
     mat_list_t ml(2, m);
     EXPECT_THROW(bmat_t m(ml), std::runtime_error); 
 }
 
-TEST(BlockMatrixTest, ctor_valid)
+TEST_F(BlockMatrixFixture, ctor_valid)
 {
     mat_t m(2,2);
     mat_list_t ml(2, m);
@@ -37,23 +85,23 @@ TEST(BlockMatrixTest, ctor_valid)
 // ========================================================
 
 struct BlockMatrixColDotFixture
-    : testing::Test,
+    : BlockMatrixFixture,
       testing::WithParamInterface<
         std::tuple<size_t, size_t, size_t> >
-{};
-
-template <class VecType>
-static inline void test_col_dot(
-        const bmat_t& bmat,
-        const mat_t& dense,
-        const VecType& v)
 {
-    for (size_t i = 0; i < dense.cols(); ++i) {
-        auto actual = bmat.col_dot(i, v);
-        auto expected = v.dot(dense.col(i));
-        EXPECT_NEAR(actual, expected, tol);
+    template <class VecType>
+    void test(
+            const bmat_t& bmat,
+            const mat_t& dense,
+            const VecType& v)
+    {
+        for (size_t i = 0; i < dense.cols(); ++i) {
+            auto actual = bmat.col_dot(i, v);
+            auto expected = v.dot(dense.col(i));
+            EXPECT_NEAR(actual, expected, tol);
+        }
     }
-}
+};
 
 TEST_P(BlockMatrixColDotFixture, col_dot)
 {
@@ -70,8 +118,8 @@ TEST_P(BlockMatrixColDotFixture, col_dot)
 
     bmat_t bmat(ml);
 
-    test_col_dot(bmat, dense, v);
-    test_col_dot(bmat, dense, vs);
+    test(bmat, dense, v);
+    test(bmat, dense, vs);
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -89,21 +137,21 @@ INSTANTIATE_TEST_SUITE_P(
 // ========================================================
 
 struct BlockMatrixQuadFormFixture
-    : testing::Test,
+    : BlockMatrixFixture,
       testing::WithParamInterface<
         std::tuple<size_t, size_t, size_t> >
-{};
-
-template <class VecType>
-static inline void test_quad_form(
-        const bmat_t& bmat,
-        const mat_t& dense,
-        const VecType& v)
 {
-    auto actual = bmat.quad_form(v);
-    auto expected = v.dot(dense * v);
-    EXPECT_NEAR(actual, expected, tol);
-}
+    template <class VecType>
+    void test(
+            const bmat_t& bmat,
+            const mat_t& dense,
+            const VecType& v)
+    {
+        auto actual = bmat.quad_form(v);
+        auto expected = v.dot(dense * v);
+        EXPECT_NEAR(actual, expected, tol);
+    }
+};
 
 TEST_P(BlockMatrixQuadFormFixture, quad_form)
 {
@@ -120,8 +168,8 @@ TEST_P(BlockMatrixQuadFormFixture, quad_form)
 
     bmat_t bmat(ml);
 
-    test_quad_form(bmat, dense, v);
-    test_quad_form(bmat, dense, vs);
+    test(bmat, dense, v);
+    test(bmat, dense, vs);
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -139,26 +187,26 @@ INSTANTIATE_TEST_SUITE_P(
 // ========================================================
 
 struct BlockMatrixInvQuadFormFixture
-    : testing::Test,
+    : BlockMatrixFixture,
       testing::WithParamInterface<
         std::tuple<size_t, size_t, size_t, double> >
-{};
-
-template <class VecType>
-static inline void test_inv_quad_form(
-        const bmat_t& bmat,
-        const mat_t& dense,
-        double s,
-        const VecType& v)
 {
-    auto actual = bmat.inv_quad_form(s, v);
-    mat_t T = (1-s) * dense;
-    T.diagonal().array() += s;
-    Eigen::FullPivLU<mat_t> lu(T);
-    vec_t vd = v;
-    auto expected = v.dot(lu.solve(vd));
-    EXPECT_NEAR(actual, expected, std::abs(expected * tol));
-}
+    template <class VecType>
+    void test(
+            const bmat_t& bmat,
+            const mat_t& dense,
+            double s,
+            const VecType& v)
+    {
+        auto actual = bmat.inv_quad_form(s, v);
+        mat_t T = (1-s) * dense;
+        T.diagonal().array() += s;
+        Eigen::FullPivLU<mat_t> lu(T);
+        vec_t vd = v;
+        auto expected = v.dot(lu.solve(vd));
+        EXPECT_NEAR(actual, expected, std::abs(expected * tol));
+    }
+};
 
 TEST_P(BlockMatrixInvQuadFormFixture, inv_quad_form)
 {
@@ -176,8 +224,8 @@ TEST_P(BlockMatrixInvQuadFormFixture, inv_quad_form)
 
     bmat_t bmat(ml);
 
-    test_inv_quad_form(bmat, dense, s, v);
-    test_inv_quad_form(bmat, dense, s, vs);
+    test(bmat, dense, s, v);
+    test(bmat, dense, s, vs);
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -197,45 +245,45 @@ INSTANTIATE_TEST_SUITE_P(
 // ========================================================
 
 struct BlockMatrixConstBlockIteratorFormFixture
-    : testing::Test,
+    : BlockMatrixFixture,
       testing::WithParamInterface<
         std::tuple<size_t, size_t, size_t> >
-{};
-
-static inline void test_const_block_iterator(
-        const bmat_t& bmat,
-        const mat_t& dense)
 {
-    const auto it = bmat.block_begin();
+    void test(
+            const bmat_t& bmat,
+            const mat_t& dense)
     {
-        auto expected = it;
-        auto actual = it;
-        actual.advance_at(0);
-        EXPECT_EQ(actual, expected);
+        const auto it = bmat.block_begin();
+        {
+            auto expected = it;
+            auto actual = it;
+            actual.advance_at(0);
+            EXPECT_EQ(actual, expected);
+        }
+        {
+            auto next_idx = dense.cols() / 2; 
+            auto expected = it;
+            const auto& strides = bmat.strides();
+            auto stride_it = std::upper_bound(strides.begin(), strides.end(), next_idx);
+            auto to_iterate = std::distance(strides.begin(), stride_it)-1;
+            for (size_t i = 0; i < to_iterate; ++expected, ++i);
+            auto actual = it;
+            actual.advance_at(next_idx);
+            EXPECT_EQ(actual, expected);
+        }
+        {
+            auto next_idx = dense.cols() / 2 + dense.cols() / 4; 
+            auto expected = it;
+            const auto& strides = bmat.strides();
+            auto stride_it = std::upper_bound(strides.begin(), strides.end(), next_idx);
+            auto to_iterate = std::distance(strides.begin(), stride_it)-1;
+            for (size_t i = 0; i < to_iterate; ++expected, ++i);
+            auto actual = it;
+            actual.advance_at(next_idx);
+            EXPECT_EQ(actual, expected);
+        }
     }
-    {
-        auto next_idx = dense.cols() / 2; 
-        auto expected = it;
-        const auto& strides = bmat.strides();
-        auto stride_it = std::upper_bound(strides.begin(), strides.end(), next_idx);
-        auto to_iterate = std::distance(strides.begin(), stride_it)-1;
-        for (size_t i = 0; i < to_iterate; ++expected, ++i);
-        auto actual = it;
-        actual.advance_at(next_idx);
-        EXPECT_EQ(actual, expected);
-    }
-    {
-        auto next_idx = dense.cols() / 2 + dense.cols() / 4; 
-        auto expected = it;
-        const auto& strides = bmat.strides();
-        auto stride_it = std::upper_bound(strides.begin(), strides.end(), next_idx);
-        auto to_iterate = std::distance(strides.begin(), stride_it)-1;
-        for (size_t i = 0; i < to_iterate; ++expected, ++i);
-        auto actual = it;
-        actual.advance_at(next_idx);
-        EXPECT_EQ(actual, expected);
-    }
-}
+};
 
 TEST_P(BlockMatrixConstBlockIteratorFormFixture, const_block_iterator)
 {
@@ -250,8 +298,8 @@ TEST_P(BlockMatrixConstBlockIteratorFormFixture, const_block_iterator)
 
     bmat_t bmat(ml);
 
-    test_const_block_iterator(bmat, dense);
-    test_const_block_iterator(bmat, dense);
+    test(bmat, dense);
+    test(bmat, dense);
 }
 
 INSTANTIATE_TEST_SUITE_P(

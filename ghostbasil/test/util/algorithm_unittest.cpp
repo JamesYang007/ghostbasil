@@ -6,21 +6,25 @@ namespace ghostbasil {
 namespace util {
 namespace {
 
-template <class VType>
-static inline void test_k_imax(
-        VType actual,
-        size_t s,
-        VType expected)
+struct KImaxFixture
+    : ::testing::Test
 {
-    std::sort(expected.begin(), expected.end());
-    std::sort(actual.begin(), std::next(actual.begin(), s));
-    
-    for (size_t i = 0; i < expected.size(); ++i) {
-        EXPECT_EQ(expected[i], actual[i]);
+    template <class VType>
+    void test(
+            VType actual,
+            size_t s,
+            VType expected)
+    {
+        std::sort(expected.begin(), expected.end());
+        std::sort(actual.begin(), std::next(actual.begin(), s));
+        
+        for (size_t i = 0; i < expected.size(); ++i) {
+            EXPECT_EQ(expected[i], actual[i]);
+        }
     }
-}
+};
 
-TEST(AlgorithmTest, k_imax_less_than_k)
+TEST_F(KImaxFixture, k_imax_less_than_k)
 {
     size_t k = 6;
     auto skip = [&](auto i) {
@@ -35,10 +39,10 @@ TEST(AlgorithmTest, k_imax_less_than_k)
     expected[0] = 1;
     expected[1] = 3;
     
-    test_k_imax(actual, s, expected);
+    test(actual, s, expected);
 }
 
-TEST(AlgorithmTest, k_imax_eq_k)
+TEST_F(KImaxFixture, k_imax_eq_k)
 {
     size_t k = 2;
     auto skip = [&](auto i) {
@@ -53,10 +57,10 @@ TEST(AlgorithmTest, k_imax_eq_k)
     expected[0] = 1;
     expected[1] = 3;
     
-    test_k_imax(actual, s, expected);
+    test(actual, s, expected);
 }
 
-TEST(AlgorithmTest, k_imax_ge_k)
+TEST_F(KImaxFixture, k_imax_ge_k)
 {
     size_t k = 3;
     auto skip = [&](auto i) {
@@ -72,11 +76,11 @@ TEST(AlgorithmTest, k_imax_ge_k)
     expected[1] = 1;
     expected[2] = 5;
     
-    test_k_imax(actual, s, expected);
+    test(actual, s, expected);
 }
 
 
-TEST(AlgorithmTest, k_imax_ge_k_larger)
+TEST_F(KImaxFixture, k_imax_ge_k_larger)
 {
     size_t k = 4;
     auto skip = [&](auto i) {
@@ -93,7 +97,7 @@ TEST(AlgorithmTest, k_imax_ge_k_larger)
     expected[2] = 1;
     expected[3] = v.size()-2;
     
-    test_k_imax(actual, s, expected);
+    test(actual, s, expected);
 }
 
 }

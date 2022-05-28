@@ -39,8 +39,8 @@ class GhostMatrix
         "Matrix and vector underlying value type must be the same."
     );
 
-    const mat_t* mat_ptr_;  // ptr to matrix S
-    const vec_t* vec_ptr_;  // ptr to diagonal vector D
+    Eigen::Map<const mat_t> mat_;  // matrix S
+    Eigen::Map<const vec_t> vec_;  // diagonal vector D
     size_t n_groups_;       // number of groups
     Eigen::Index rows_;
 
@@ -99,8 +99,8 @@ public:
     GhostMatrix(const mat_t& mat,
                 const vec_t& vec,
                 size_t n_groups)
-        : mat_ptr_(&mat),
-          vec_ptr_(&vec),
+        : mat_(mat.data(), mat.rows(), mat.cols()),
+          vec_(vec.data(), vec.size()),
           n_groups_(n_groups),
           rows_(mat.cols() * n_groups)
     {
@@ -135,9 +135,9 @@ public:
     GHOSTBASIL_STRONG_INLINE Index rows() const { return rows_; }
     GHOSTBASIL_STRONG_INLINE Index cols() const { return rows(); }
     GHOSTBASIL_STRONG_INLINE
-    const auto& matrix() const { return *mat_ptr_; }
+    const auto& matrix() const { return mat_; }
     GHOSTBASIL_STRONG_INLINE
-    const auto& vector() const { return *vec_ptr_; }
+    const auto& vector() const { return vec_; }
     GHOSTBASIL_STRONG_INLINE
     auto n_groups() const { return n_groups_; }
 
@@ -149,6 +149,7 @@ public:
     value_t col_dot(size_t k, const VecType& v) const
     {
         assert(k < cols());
+        assert(cols() == v.size());
 
         const size_t group_size = compute_group_size();
         const auto& S = matrix();

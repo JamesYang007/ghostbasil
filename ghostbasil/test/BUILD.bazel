@@ -1,18 +1,3 @@
-# Add common, library-agnostic tools
-cc_library(
-    name = "testutil",
-    srcs = glob([
-        "testutil/**/*.hpp",
-        "testutil/**/*.cpp",
-    ]),
-    hdrs = glob([
-        "testutil/**/*.hpp",
-    ]),
-    includes = ["."],
-    data = ["//ghostbasil/test/testutil/reference/data:test_data"],
-    deps = ["@bazel_tools//tools/cpp/runfiles"],
-)
-
 # Add sub-package tests
 [cc_test(
     name = type_,
@@ -20,10 +5,11 @@ cc_library(
         "{}/**/*.cpp".format(type_), 
         "{}/**/*.hpp".format(type_),
     ]),
+    includes = ['.'],
     defines = ["EIGEN_INITIALIZE_MATRICES_BY_NAN"],
     deps = [
         "//ghostbasil",
-        ":testutil",
+        "//ghostbasil:tools",
         "@com_google_googletest//:gtest_main",
     ],
 ) for type_ in [
