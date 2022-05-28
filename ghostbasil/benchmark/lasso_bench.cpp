@@ -67,6 +67,9 @@ BENCHMARK_DEFINE_F(LassoFixture, lasso_bench)(benchmark::State& state)
     auto& A = std::get<0>(input);
     auto& r = std::get<1>(input);
 
+    PRINT(A.block(0,0,3,3));
+    PRINT(r.head(5));
+
     std::vector<double> lmdas(100);
     double factor = std::pow(1e-6, 1./(lmdas.size()-1));
     lmdas[0] = r.array().abs().maxCoeff();
