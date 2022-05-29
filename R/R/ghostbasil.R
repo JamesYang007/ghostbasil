@@ -1,6 +1,6 @@
 #' Fits PGR objective with BASIL framework.
 #' @param   A   data covariance matrix (currently must be a dense matrix).
-#' @param   y   response vector.
+#' @param   r   correlation vector.
 #' @param   s   regularization to shrink A towards identity ((1-s) * A + s * I).
 #' @param   user.lambdas    user-specified sequence of lambdas. Will be sorted in decreasing order if not sorted already.
 #' @param   max.lambdas     maximum number of lambdas to compute solutions for. 
@@ -15,7 +15,7 @@
 #' @param   max.cds         maximum number of coordinate descents per BASIL iteration.
 #' @param   thr             coordinate descent convergence threshold.
 #' @export
-ghostbasil <- function(A, y, s, 
+ghostbasil <- function(A, r, s, 
                       user.lambdas=c(), 
                       max.lambdas=100,
                       lambdas.iter=10, 
@@ -31,9 +31,9 @@ ghostbasil <- function(A, y, s,
         user.lambdas <- sort(user.lambdas, decreasing=T)
     }
 
-    out <- fit_basil__(
+    out <- basil__(
                 A=A,
-                y=y,
+                r=r,
                 s=s,
                 user_lmdas=user.lambdas,
                 max_n_lambdas=max.lambdas,
@@ -45,16 +45,9 @@ ghostbasil <- function(A, y, s,
                 thr=thr,
                 n_threads=n.threads)
 
-    if (length(out$betas) == 0) return(out)
-
-    betas <- Matrix(nrow=nrow(out$betas[[1]]), ncol=0, sparse=T)
-    for (b in out$betas) { betas <- cbind(betas, b) }
-    lmdas <- c()
-    for (l in out$lmdas) { lmdas <- c(lmdas, l) }
-
     if (out$error != "") {
         warning(out$error)
     }
     
-    list(betas=betas, lmdas=lmdas, error=out$error)
+    out
 }

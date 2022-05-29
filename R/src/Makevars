@@ -1,2 +1,4 @@
 CXX_STD = CXX14
-PKG_CXXFLAGS=-Ighostbasil/include 
+PKG_CXXFLAGS=\
+    -Ighostbasil/include \
+    -DEIGEN_MATRIXBASE_PLUGIN=\"ghostbasil/util/eigen/matrixbase_plugin.hpp\" \

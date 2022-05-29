@@ -1,14 +1,15 @@
 #include <Rcpp.h>
 #include <RcppEigen.h>
-#include <ghostbasil/lasso.hpp>
+#include <ghostbasil/optimization/lasso.hpp>
+#include <ghostbasil/optimization/basil.hpp>
 #include <thread>
 
 using namespace Rcpp;
 
 // [[Rcpp::export]]
-List fit_basil__(
+List basil__(
         const Eigen::Map<Eigen::MatrixXd> A, // TODO: change type of A?
-        const Eigen::Map<Eigen::VectorXd> y,
+        const Eigen::Map<Eigen::VectorXd> r,
         double s,
         const Eigen::Map<Eigen::VectorXd> user_lmdas,
         size_t max_n_lambdas,
@@ -20,8 +21,16 @@ List fit_basil__(
         double thr,
         size_t n_threads)
 {
-    std::vector<Eigen::SparseMatrix<double>> betas;
-    std::vector<Eigen::VectorXd> lmdas;
+    std::vector<Eigen::SparseVector<double>> betas;
+    std::vector<double> lmdas;
+    std::vector<double> rsqs;
+
+    // slight optimization: reserve spaces ahead of time
+    constexpr size_t capacity = 100;
+    betas.reserve(capacity);
+    lmdas.reserve(capacity);
+    rsqs.reserve(capacity);
+
     std::string error;
 
     if (n_threads == -1) {
@@ -29,18 +38,29 @@ List fit_basil__(
     }
 
     try {
-        ghostbasil::fit_basil(
-                A, y, s, user_lmdas, max_n_lambdas, n_lambdas_iter,
+        ghostbasil::basil(
+                A, r, s, user_lmdas, max_n_lambdas, n_lambdas_iter,
                 strong_size, delta_strong_size, max_strong_size, max_n_cds, thr, n_threads,
-                betas, lmdas);
+                betas, lmdas, rsqs);
     }
     catch (const std::exception& e) {
         error = e.what();
     }
 
+    // convert the list of sparse vectors into a sparse matrix
+    Eigen::SparseMatrix<double> mat_betas;
+    if (betas.size()) {
+        auto p = betas[0].size();
+        mat_betas.resize(p, betas.size());
+        for (size_t i = 0; i < betas.size(); ++i) {
+            mat_betas.col(i) = betas[i];
+        }
+    }
+
     return List::create(
-            Named("betas")=std::move(betas),
+            Named("betas")=std::move(mat_betas),
             Named("lmdas")=std::move(lmdas),
+            Named("rsqs")=std::move(rsqs),
             Named("error")=std::move(error));
 }
 

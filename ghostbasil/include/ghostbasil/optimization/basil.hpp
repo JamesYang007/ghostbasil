@@ -589,7 +589,7 @@ inline void basil(
                 strong_grad[i] = grad[strong_set[i]];
             }
         }
- 
+
         // At this point, strong_set is ordered for all old variables
         // and unordered for the last few (new variables).
         // But all referencing quantities (strong_beta, strong_grad, is_active, strong_A_diag)

@@ -6,7 +6,7 @@
 \usage{
 ghostbasil(
   A,
-  y,
+  r,
   s,
   user.lambdas = c(),
   max.lambdas = 100,
@@ -15,13 +15,14 @@ ghostbasil(
   delta.strong.size = 100,
   max.strong.size = 10000,
   max.cds = 1e+05,
-  thr = 1e-07
+  thr = 1e-07,
+  n.threads = -1
 )
 }
 \arguments{
 \item{A}{data covariance matrix (currently must be a dense matrix).}
 
-\item{y}{response vector.}
+\item{r}{correlation vector.}
 
 \item{s}{regularization to shrink A towards identity ((1-s) * A + s * I).}
 
