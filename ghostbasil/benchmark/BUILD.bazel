@@ -10,4 +10,5 @@
     "matmulvec_bench",
     "ghost_matrix_col_dot_bench",
     "lasso_bench",
+    "sp_vec_vs_map_dot_bench",
 ]]
