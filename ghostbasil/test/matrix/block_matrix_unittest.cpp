@@ -1,9 +1,7 @@
 #include <gtest/gtest.h>
 #include <Eigen/Dense>
-#include <Eigen/Sparse>
 #include <ghostbasil/matrix/block_matrix.hpp>
 #include <tools/matrix/block_matrix.hpp>
-#include <random>
 
 namespace ghostbasil {
 namespace {
@@ -16,44 +14,7 @@ struct BlockMatrixFixture
 {
     using util_t = tools::BlockMatrixUtil;
 
-    using vec_t = Eigen::VectorXd;
-    using sp_vec_t = Eigen::SparseVector<value_t>;
     using bmat_t = BlockMatrix<mat_t>;
-    using mat_list_t = std::vector<mat_t>;
-
-    auto generate_data(
-            size_t seed,
-            size_t L,
-            size_t p,
-            double density = 0.5,
-            bool do_dense = true,
-            bool do_v = true)
-    {
-        srand(seed);
-        mat_list_t mat_list(L);
-        for (size_t l = 0; l < L; ++l) {
-            mat_list[l].setRandom(p, p);
-            mat_list[l] = (mat_list[l] + mat_list[l].transpose()) / 2;
-        }
-        mat_t dense;
-        if (do_dense) {
-            dense = util_t::make_dense(mat_list);
-        }
-
-        vec_t v;
-        sp_vec_t vs;
-        if (do_v) {
-            v.setRandom(dense.cols());
-            vs.resize(v.size());
-            std::bernoulli_distribution bern(density);
-            std::mt19937 gen(seed);
-            for (size_t i = 0; i < vs.size(); ++i) {
-                if (bern(gen)) vs.coeffRef(i) = v[i];
-            }
-        }
-
-        return std::make_tuple(mat_list, v, vs, dense);
-    }
 };
 
 // ========================================================

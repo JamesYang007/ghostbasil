@@ -33,6 +33,20 @@ class BlockMatrix
     GHOSTBASIL_STRONG_INLINE
     auto n_features() const { return n_cum_sum_.back(); }
 
+    GHOSTBASIL_STRONG_INLINE
+    auto find_stride_at_index(
+            Eigen::Index i,
+            size_t begin,
+            size_t end) const
+    {
+        auto stride_begin = std::next(n_cum_sum_.begin(), begin);
+        auto stride_end = std::next(n_cum_sum_.begin(), end);
+        auto it = std::upper_bound(stride_begin, stride_end, i);
+        // guaranteed to not be the end
+        assert(it != stride_end);
+        return std::distance(n_cum_sum_.begin(), it)-1;
+    }
+
 public:
     using Scalar = value_t;
     using Index = typename Eigen::Index;
@@ -72,6 +86,7 @@ public:
 
     GHOSTBASIL_STRONG_INLINE Index rows() const { return n_features(); }
     GHOSTBASIL_STRONG_INLINE Index cols() const { return n_features(); }
+    GHOSTBASIL_STRONG_INLINE Index size() const { return rows() * cols(); }
 
     template <class VecType>
     GHOSTBASIL_STRONG_INLINE
@@ -127,13 +142,27 @@ public:
         return inv_quadform;
     }
 
+    GHOSTBASIL_STRONG_INLINE
     ConstBlockIterator block_begin() const { 
         return ConstBlockIterator(*this);
     }
+    GHOSTBASIL_STRONG_INLINE
     ConstBlockIterator block_end() const {
         return ConstBlockIterator(*this, n_cum_sum_.size()-1);
     }
+    GHOSTBASIL_STRONG_INLINE
     const auto& strides() const { return n_cum_sum_; }
+
+    GHOSTBASIL_STRONG_INLINE
+    Scalar coeff(Index i, Index j) const 
+    {
+        auto stride_idx = find_stride_at_index(i, 0, n_cum_sum_.size());
+        assert((stride_idx+1) < n_cum_sum_.size());
+        auto begin = n_cum_sum_[stride_idx];
+        auto end = n_cum_sum_[stride_idx+1];
+        if (j < begin || j >= end) return 0;
+        return mat_list_[stride_idx](i-begin, j-begin);
+    }
 };
 
 template <class MatrixType>
@@ -146,7 +175,7 @@ public:
     ConstBlockIterator(const BlockMatrix& m, size_t idx=0)
         : m_(m), idx_{idx}
     {
-        assert((idx+1) < m_.n_cum_sum_.size());
+        assert((idx+1) <= m_.n_cum_sum_.size());
     }
 
     const auto& block() const { return m_.mat_list_[idx_]; }
@@ -155,12 +184,7 @@ public:
     ConstBlockIterator& operator++() { ++idx_; return *this; }
     ConstBlockIterator& advance_at(size_t k) {
         assert((m_.n_cum_sum_[idx_] <= k) && (k < m_.n_cum_sum_.back()));
-        auto stride_begin = std::next(m_.n_cum_sum_.begin(), idx_);
-        auto stride_end = m_.n_cum_sum_.end();
-        auto it = std::upper_bound(stride_begin, stride_end, k);
-        // guaranteed to not be the end
-        assert(it != stride_end);
-        idx_ = std::distance(m_.n_cum_sum_.begin(), it)-1;
+        idx_ = m_.find_stride_at_index(k, idx_, m_.n_cum_sum_.size());
         return *this;
     }
     bool is_in_block(size_t k) const { 

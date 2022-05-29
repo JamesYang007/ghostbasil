@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
 #include <ghostbasil/optimization/lasso.hpp>
+#include <ghostbasil/matrix/block_matrix.hpp>
 #include <tools/data_util.hpp>
 #include <tools/macros.hpp>
+#include <tools/matrix/block_matrix.hpp>
 
 namespace ghostbasil {
 namespace {
@@ -25,8 +27,6 @@ struct LassoFixture
         auto&& expected_betas = std::get<5>(dataset);
         auto&& expected_objs = std::get<6>(dataset);
 
-        size_t p = r.size();
-
         std::vector<double> strong_grad(strong_set.size());
         for (size_t i = 0; i < strong_grad.size(); ++i) {
             strong_grad[i] = r[strong_set[i]];
@@ -38,12 +38,11 @@ struct LassoFixture
         Eigen::Vector<double, Eigen::Dynamic> strong_A_diag(strong_set.size());
         for (int i = 0; i < strong_A_diag.size(); ++i) {
             auto k = strong_set[i];
-            strong_A_diag[i] = A(k,k);
+            strong_A_diag[i] = A.coeff(k,k);
         }
 
         using sp_vec_t = Eigen::SparseVector<double>;
-        Eigen::Vector<sp_vec_t, Eigen::Dynamic> betas(lmdas.size());
-        betas.fill(sp_vec_t(p));
+        std::vector<sp_vec_t> betas(lmdas.size());
         std::vector<uint32_t> active_set;
         std::vector<bool> is_active(strong_set.size(), false);
         std::vector<double> rsqs(lmdas.size());
@@ -67,12 +66,10 @@ struct LassoFixture
                 std::move(expected_objs));
     }
 
-    template <class GenerateFType>
-    void test(GenerateFType generate_dataset)
+    template <class InputType>
+    auto run(InputType&& input)
     {
-        auto input = make_input(generate_dataset);
         auto& A = std::get<0>(input);
-        auto& r = std::get<1>(input);
         auto& s = std::get<2>(input);
         auto& strong_set = std::get<3>(input);
         auto& strong_A_diag = std::get<4>(input);
@@ -86,19 +83,39 @@ struct LassoFixture
         auto& rsqs = std::get<12>(input);
         auto& n_cds = std::get<13>(input);
         auto& n_lmdas = std::get<14>(input);
-        auto& expected_betas = std::get<15>(input);
-        auto& expected_objs = std::get<16>(input);
 
         lasso(A, s, strong_set, strong_A_diag, lmdas, max_cds, thr, rsq, strong_beta, 
               strong_grad, active_set, is_active, betas, rsqs, n_cds, n_lmdas);
+
+        return std::make_tuple(betas, rsqs, n_cds, n_lmdas);
+    }
+
+    template <class GenerateFType>
+    void test(GenerateFType generate_dataset)
+    {
+        auto&& input = make_input(generate_dataset);
+        auto&& output = run(input);
+
+        auto&& A = std::get<0>(input);
+        auto&& r = std::get<1>(input);
+        auto&& s = std::get<2>(input);
+        auto&& lmdas = std::get<5>(input);
+        auto&& expected_betas = std::get<15>(input);
+        auto&& expected_objs = std::get<16>(input);
+
+        auto&& betas = std::get<0>(output);
+        auto&& n_cds = std::get<2>(output);
+        auto&& n_lmdas = std::get<3>(output);
 
         EXPECT_LE(n_cds, max_cds);
 
         EXPECT_EQ(betas.size(), lmdas.size());
         EXPECT_EQ(expected_betas.cols(), lmdas.size());
         EXPECT_EQ(expected_objs.size(), lmdas.size());
+        EXPECT_LE(0, n_lmdas);
+        EXPECT_LE(n_lmdas, lmdas.size());
 
-        for (size_t i = 0; i < lmdas.size(); ++i) {
+        for (size_t i = 0; i < n_lmdas; ++i) {
             const auto& actual = betas[i];
             auto expected = expected_betas.col(i);
 
@@ -111,8 +128,8 @@ struct LassoFixture
     }
 };
 
-#ifndef TEST_LASSO
-#define TEST_LASSO(n) \
+#ifndef GENERATE_DATASET
+#define GENERATE_DATASET(n) \
     []() { \
         return tools::generate_dataset("lasso_" STRINGIFY(n));\
     }
@@ -120,30 +137,173 @@ struct LassoFixture
 
 TEST_F(LassoFixture, lasso_n_ge_p_full)
 {
-    test(TEST_LASSO(1));
+    test(GENERATE_DATASET(1));
 }
 
 TEST_F(LassoFixture, lasso_n_ge_p_partial)
 {
-    test(TEST_LASSO(2));
+    test(GENERATE_DATASET(2));
 }
 
 TEST_F(LassoFixture, lasso_n_le_p_full)
 {
-    test(TEST_LASSO(3));
+    test(GENERATE_DATASET(3));
 }
 
 TEST_F(LassoFixture, lasso_n_le_p_partial)
 {
-    test(TEST_LASSO(4));
+    test(GENERATE_DATASET(4));
 }
 
 TEST_F(LassoFixture, lasso_p_large)
 {
-    test(TEST_LASSO(5));
+    test(GENERATE_DATASET(5));
 }
 
-#undef TEST_LASSO
+struct LassoBlockFixture
+    : LassoFixture,
+      tools::BlockMatrixUtil,
+      ::testing::WithParamInterface<
+        std::tuple<size_t, size_t, size_t> >
+{
+    using butil = tools::BlockMatrixUtil;
+    using value_t = double;
+    using mat_t = util::mat_type<value_t>;
+    using bmat_t = BlockMatrix<mat_t>;
+
+    // Generates a block matrix and a corresponding dense matrix
+    // and other data that make_input needs.
+    auto generate_block_dense(
+            size_t seed,
+            size_t L,
+            size_t p)
+    {
+        auto&& out = butil::generate_data(seed, L, p, 0, true, false);
+        auto&& mat_list = std::get<0>(out);
+
+        auto&& A_dense = std::get<3>(out);
+        bmat_t A(mat_list); 
+
+        std::mt19937 gen(seed);
+        std::normal_distribution<> norm(0., 1.);
+        size_t n_cols = A.cols();
+        Eigen::VectorXd beta(n_cols); 
+        beta.setZero();
+        std::uniform_int_distribution<> unif(0, n_cols-1);
+        for (size_t k = 0; k < 10; ++k) {
+            beta[unif(gen)] = norm(gen);
+        }
+
+        Eigen::VectorXd r = A_dense * beta + Eigen::VectorXd::NullaryExpr(n_cols,
+                [&](auto) { return 0.2 * norm(gen); });
+
+        value_t s = 0.1;
+
+        std::vector<uint32_t> strong_set(n_cols);
+        std::iota(strong_set.begin(), strong_set.end(), 0);
+
+        util::vec_type<value_t> lmdas(3);
+        lmdas[0] = r.array().abs().maxCoeff();
+        for (int i = 1; i < lmdas.size(); ++i) {
+            lmdas[i] = lmdas[i-1] * 0.001;
+        }
+
+        return std::make_tuple(
+                std::move(mat_list), // must return also since A references it
+                std::move(A),
+                std::move(A_dense),
+                std::move(r),
+                std::move(s),
+                std::move(strong_set),
+                std::move(lmdas),
+                0, 0); // dummy variables for expected betas and objs
+    }
+
+    template <class DatasetType>
+    auto generate_datasets(const DatasetType& dataset)
+    {
+        auto generate_block_pack = [&]() {
+            return std::make_tuple(
+                std::get<1>(dataset), // A (block)
+                std::get<3>(dataset), // r
+                std::get<4>(dataset), // s
+                std::get<5>(dataset), // strong_set
+                std::get<6>(dataset), // lmdas
+                std::get<7>(dataset), // dummy: expected_betas
+                std::get<8>(dataset)  // dummy: expected_objs
+                );
+        };
+        auto generate_dense_pack = [&]() {
+            return std::make_tuple(
+                std::get<2>(dataset), // A_dense
+                std::get<3>(dataset), // r
+                std::get<4>(dataset), // s
+                std::get<5>(dataset), // strong_set
+                std::get<6>(dataset), // lmdas
+                std::get<7>(dataset), // dummy: expected_betas
+                std::get<8>(dataset)  // dummy: expected_objs
+                );
+        };
+        return std::make_tuple(generate_block_pack, generate_dense_pack);
+    }
+
+    template <class F1, class F2>
+    void test(F1 generate_dataset_block,
+              F2 generate_dataset_dense)
+    {
+        auto&& actual_dataset = make_input(generate_dataset_block);
+        auto&& expected_dataset = make_input(generate_dataset_dense);
+
+        auto&& expected = run(expected_dataset);
+        auto&& actual = run(actual_dataset);
+
+        auto&& expected_betas = std::get<0>(expected);
+        auto&& expected_rsqs = std::get<1>(expected);
+        auto&& expected_n_lmdas = std::get<3>(expected);
+        auto&& actual_betas = std::get<0>(actual);
+        auto&& actual_rsqs = std::get<1>(actual);
+        auto&& actual_n_lmdas = std::get<3>(actual);
+        
+        EXPECT_EQ(actual_betas.size(), expected_betas.size());
+        EXPECT_EQ(actual_rsqs.size(), expected_rsqs.size());
+        EXPECT_EQ(actual_n_lmdas, expected_n_lmdas);
+        for (size_t i = 0; i < expected_n_lmdas; ++i) {
+            auto& expected_beta_i = expected_betas[i];
+            auto& actual_beta_i = actual_betas[i];
+            EXPECT_EQ(actual_beta_i.size(), expected_beta_i.size());
+            for (size_t j = 0; j < expected_beta_i.size(); ++j) {
+                EXPECT_DOUBLE_EQ(actual_beta_i.coeff(j), expected_beta_i.coeff(j));
+            }
+            EXPECT_DOUBLE_EQ(actual_rsqs[i], expected_rsqs[i]);
+        }
+    }
+};
+
+TEST_P(LassoBlockFixture, lasso_block_1)
+{
+    size_t seed;
+    size_t L;
+    size_t p;
+    std::tie(seed, L, p) = GetParam();
+    auto&& dataset = generate_block_dense(seed, L, p);
+    auto fs = generate_datasets(dataset);
+    test(std::get<0>(fs), std::get<1>(fs));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+        LassoBlockSuite,
+        LassoBlockFixture,
+        testing::Values(
+            std::make_tuple(0,      1, 2),
+            std::make_tuple(124,    3, 10),
+            std::make_tuple(321,    5, 20),
+            std::make_tuple(9382,   10, 7),
+            std::make_tuple(3,      20, 3),
+            std::make_tuple(6,      4, 20)
+            )
+    );
 
 }
 } // namespace ghostbasil
+  
+#undef GENERATE_DATASET

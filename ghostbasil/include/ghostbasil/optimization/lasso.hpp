@@ -279,7 +279,6 @@ void coordinate_descent(
     // Since begin->end results in increasing sequence of strong set indices,
     // we can update the block iterator as we increment begin.
     auto block_it = A.block_begin();
-    const auto block_end = A.block_end();
 
     convg_measure = 0;
     for (auto it = begin; it != end; ++it) {
@@ -310,7 +309,7 @@ void coordinate_descent(
         // update gradient
         strong_grad[ss_idx] -= s * del;
         for (auto jt = begin; jt != end; ++jt) {
-            auto ss_idx_j = *begin;
+            auto ss_idx_j = *jt;
             auto j = strong_set[ss_idx_j];
             // optimization: if j is not in the current block, no update.
             if (!block_it.is_in_block(j)) continue;
@@ -496,6 +495,7 @@ void lasso_active(
         using index_t = std::decay_t<decltype(strong_set_[0])>;
         using sp_vec_t = util::sp_vec_type<value_t, Eigen::ColMajor, index_t>;
         const auto sc = 1-s;
+        // TODO: check this? with segment?
         Eigen::Map<const sp_vec_t> beta_diff_map(
                 A_.cols(),
                 strong_set_.size(),
@@ -503,7 +503,6 @@ void lasso_active(
                 beta_diff_.data());
 
         auto block_it = A_.block_begin();
-        const auto block_end = A_.block_end();
 
         // update gradient in non-active positions
         for (size_t ss_idx = 0; ss_idx < strong_set_.size(); ++ss_idx) {
@@ -511,10 +510,12 @@ void lasso_active(
             auto k = strong_set_[ss_idx];
             // update A block stride pointer if current feature is not in the block.
             if (!block_it.is_in_block(k)) block_it.advance_at(k);
+            const auto k_shifted = block_it.shift(k);
             const auto stride_begin = block_it.stride();
             const auto& A_block = block_it.block();
-            const auto beta_diff_map_seg = beta_diff_map.segment(stride_begin, A_block.cols());
-            strong_grad_[ss_idx] -= sc * A_block.col_dot(k, beta_diff_map_seg);
+            const auto beta_diff_map_seg = 
+                beta_diff_map.segment(stride_begin, A_block.cols());
+            strong_grad_[ss_idx] -= sc * A_block.col_dot(k_shifted, beta_diff_map_seg);
         }
     };
 
