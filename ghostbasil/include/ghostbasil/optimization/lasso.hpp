@@ -248,6 +248,9 @@ void coordinate_descent(
             auto A_jk = A.coeff(j, k);
             strong_grad[ss_idx_j] -= sc * A_jk * del;
         }
+
+        // additional step
+        additional_step(ss_idx);
     }
 }
 
@@ -315,6 +318,9 @@ void coordinate_descent(
             auto A_jk = block.coeff(j_shifted, k_shifted);
             strong_grad[ss_idx_j] -= sc * A_jk * del;
         }
+
+        // additional step
+        additional_step(ss_idx);
     }
 }
 

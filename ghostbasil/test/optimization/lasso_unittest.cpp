@@ -9,7 +9,7 @@ namespace {
 struct LassoFixture
     : ::testing::Test
 {
-    const double tol = 2e-8;
+    const double tol = 1e-8;
     const double thr = 1e-16;
     const size_t max_cds = 1000;
 

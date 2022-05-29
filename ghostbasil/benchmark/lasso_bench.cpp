@@ -1,8 +1,8 @@
 #include <benchmark/benchmark.h>
-#include <ghostbasil/optimization/lasso.hpp>
 #include <random>
 #include <iostream>
 #include <iomanip>
+#include <ghostbasil/optimization/lasso.hpp>
 
 namespace ghostbasil {
 namespace {
@@ -106,7 +106,9 @@ BENCHMARK_DEFINE_F(LassoFixture, lasso_bench)(benchmark::State& state)
               n_cds, n_lmdas);
     }
 
-    PRINT(n_lmdas);
+    //for (auto x : active_set) {
+    //    std::cerr << x << ' ' << std::endl;
+    //}
 
     state.counters["n_cds"] = n_cds;
 }
