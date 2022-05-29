@@ -107,7 +107,6 @@ BENCHMARK_DEFINE_F(LassoFixture, lasso_bench)(benchmark::State& state)
     }
 
     PRINT(n_lmdas);
-    PRINT(betas[n_lmdas-1]);
 
     state.counters["n_cds"] = n_cds;
 }
