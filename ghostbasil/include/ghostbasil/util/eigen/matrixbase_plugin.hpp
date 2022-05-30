@@ -1,17 +1,19 @@
+using value_type = Scalar;
+
 template <class VecType>
-Scalar col_dot(size_t k, const VecType& v) const
+inline Scalar col_dot(size_t k, const VecType& v) const
 {
     return v.dot(this->col(k));
 }
 
 template <class VecType>
-Scalar quad_form(const VecType& v) const
+inline Scalar quad_form(const VecType& v) const
 {
     return v.dot((*this) * v);
 }
 
 template <class VecType>
-Scalar inv_quad_form(Scalar s, const Eigen::MatrixBase<VecType>& v) const
+inline Scalar inv_quad_form(Scalar s, const Eigen::MatrixBase<VecType>& v) const
 {
     using matrix_t = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
     matrix_t m = (1-s) * (*this);
@@ -21,7 +23,7 @@ Scalar inv_quad_form(Scalar s, const Eigen::MatrixBase<VecType>& v) const
 }
 
 template <class VecType>
-Scalar inv_quad_form(Scalar s, const Eigen::SparseMatrixBase<VecType>& v) const
+inline Scalar inv_quad_form(Scalar s, const Eigen::SparseMatrixBase<VecType>& v) const
 {
     using colvec_t = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
     colvec_t vd = v;

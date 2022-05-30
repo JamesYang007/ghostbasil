@@ -303,7 +303,7 @@ auto check_kkt(
     {
 #pragma omp single
         for (; i < lmdas.size(); ++i) {
-            auto beta_i = betas[i];
+            const auto& beta_i = betas[i];
             auto lmda = lmdas[i];
 
             std::atomic<bool> kkt_fail(false);

@@ -31,12 +31,14 @@ struct LassoFixture
     }
 
     template <class SGType, class StrongBetaType,
-              class ASType, class IAType>
+              class ASType, class AOType, class ASOType, class IAType>
     static void reset(
             const SGType& orig_strong_grad,
             StrongBetaType& strong_beta,
             SGType& strong_grad,
             ASType& active_set,
+            AOType& active_order,
+            ASOType& active_set_ordered,
             IAType& is_active,
             size_t& n_cds,
             size_t& n_lmdas,
@@ -47,6 +49,8 @@ struct LassoFixture
         strong_beta_view.setZero();
         strong_grad = orig_strong_grad;
         active_set.clear();
+        active_order.clear();
+        active_set_ordered.clear();
         std::fill(is_active.begin(), is_active.end(), false);
         n_cds = 0;
         n_lmdas = 0;
@@ -77,6 +81,8 @@ BENCHMARK_DEFINE_F(LassoFixture, lasso_bench)(benchmark::State& state)
     std::vector<uint32_t> strong_set(p);
     std::iota(strong_set.begin(), strong_set.end(), 0);
 
+    auto strong_order = strong_set;
+
     const Eigen::VectorXd strong_A_diag = A.diagonal();
 
     std::vector<double> strong_beta(strong_set.size(), 0);
@@ -85,6 +91,8 @@ BENCHMARK_DEFINE_F(LassoFixture, lasso_bench)(benchmark::State& state)
         strong_grad[i] = r[strong_set[i]];
     }
     std::vector<uint32_t> active_set;
+    std::vector<uint32_t> active_order;
+    std::vector<uint32_t> active_set_ordered;
     std::vector<bool> is_active(strong_set.size(), false);
 
     const auto orig_strong_grad = strong_grad;
@@ -99,16 +107,14 @@ BENCHMARK_DEFINE_F(LassoFixture, lasso_bench)(benchmark::State& state)
     for (auto _ : state) {
         state.PauseTiming();
         reset(orig_strong_grad, strong_beta, strong_grad, active_set,
-              is_active, n_cds, n_lmdas, rsq);
+              active_order, active_set_ordered, is_active, n_cds, n_lmdas, rsq);
         state.ResumeTiming();
-        lasso(A, s, strong_set, strong_A_diag, lmdas, max_cds, thr, rsq, strong_beta, 
-              strong_grad, active_set, is_active, betas, rsqs, 
+        lasso(A, s, strong_set, strong_order, 
+              strong_A_diag, lmdas, max_cds, thr, rsq, strong_beta, 
+              strong_grad, active_set, active_order, active_set_ordered,
+              is_active, betas, rsqs, 
               n_cds, n_lmdas);
     }
-
-    //for (auto x : active_set) {
-    //    std::cerr << x << ' ' << std::endl;
-    //}
 
     state.counters["n_cds"] = n_cds;
 }

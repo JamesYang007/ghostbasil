@@ -27,6 +27,11 @@ struct LassoFixture
         auto&& expected_betas = std::get<5>(dataset);
         auto&& expected_objs = std::get<6>(dataset);
 
+        std::vector<int> strong_order(strong_set.size());
+        std::iota(strong_order.begin(), strong_order.end(), 0);
+        std::sort(strong_order.begin(), strong_order.end(),
+                  [&](auto x, auto y) { return strong_set[x] < strong_set[y]; });
+
         std::vector<double> strong_grad(strong_set.size());
         for (size_t i = 0; i < strong_grad.size(); ++i) {
             strong_grad[i] = r[strong_set[i]];
@@ -44,6 +49,8 @@ struct LassoFixture
         using sp_vec_t = Eigen::SparseVector<double>;
         std::vector<sp_vec_t> betas(lmdas.size());
         std::vector<uint32_t> active_set;
+        std::vector<uint32_t> active_order;
+        std::vector<uint32_t> active_set_ordered;
         std::vector<bool> is_active(strong_set.size(), false);
         std::vector<double> rsqs(lmdas.size());
         size_t n_cds = 0;
@@ -52,16 +59,24 @@ struct LassoFixture
         double rsq = 0;
 
         return std::make_tuple(
-                std::move(A), std::move(r), std::move(s),
-                std::move(strong_set), std::move(strong_A_diag), 
-                std::move(lmdas), rsq, 
+                std::move(A), 
+                std::move(r), 
+                std::move(s),
+                std::move(strong_set), 
+                std::move(strong_order),
+                std::move(strong_A_diag), 
+                std::move(lmdas), 
+                rsq, 
                 std::move(strong_beta),
                 std::move(strong_grad),
                 std::move(active_set),
+                std::move(active_order),
+                std::move(active_set_ordered),
                 std::move(is_active),
                 std::move(betas),
                 std::move(rsqs),
-                n_cds, n_lmdas,
+                n_cds, 
+                n_lmdas,
                 std::move(expected_betas),
                 std::move(expected_objs));
     }
@@ -72,20 +87,27 @@ struct LassoFixture
         auto& A = std::get<0>(input);
         auto& s = std::get<2>(input);
         auto& strong_set = std::get<3>(input);
-        auto& strong_A_diag = std::get<4>(input);
-        auto& lmdas = std::get<5>(input);
-        auto& rsq = std::get<6>(input);
-        auto& strong_beta = std::get<7>(input);
-        auto& strong_grad = std::get<8>(input);
-        auto& active_set = std::get<9>(input);
-        auto& is_active = std::get<10>(input);
-        auto& betas = std::get<11>(input);
-        auto& rsqs = std::get<12>(input);
-        auto& n_cds = std::get<13>(input);
-        auto& n_lmdas = std::get<14>(input);
+        auto& strong_order = std::get<4>(input);
+        auto& strong_A_diag = std::get<5>(input);
+        auto& lmdas = std::get<6>(input);
+        auto& rsq = std::get<7>(input);
+        auto& strong_beta = std::get<8>(input);
+        auto& strong_grad = std::get<9>(input);
+        auto& active_set = std::get<10>(input);
+        auto& active_order = std::get<11>(input);
+        auto& active_set_ordered = std::get<12>(input);
+        auto& is_active = std::get<13>(input);
+        auto& betas = std::get<14>(input);
+        auto& rsqs = std::get<15>(input);
+        auto& n_cds = std::get<16>(input);
+        auto& n_lmdas = std::get<17>(input);
 
-        lasso(A, s, strong_set, strong_A_diag, lmdas, max_cds, thr, rsq, strong_beta, 
-              strong_grad, active_set, is_active, betas, rsqs, n_cds, n_lmdas);
+        lasso(
+            A, s, strong_set, strong_order, 
+            strong_A_diag, lmdas, max_cds, thr, rsq, strong_beta, 
+            strong_grad, active_set, active_order, 
+            active_set_ordered, is_active, 
+            betas, rsqs, n_cds, n_lmdas);
 
         return std::make_tuple(betas, rsqs, n_cds, n_lmdas);
     }
@@ -99,9 +121,9 @@ struct LassoFixture
         auto&& A = std::get<0>(input);
         auto&& r = std::get<1>(input);
         auto&& s = std::get<2>(input);
-        auto&& lmdas = std::get<5>(input);
-        auto&& expected_betas = std::get<15>(input);
-        auto&& expected_objs = std::get<16>(input);
+        auto&& lmdas = std::get<6>(input);
+        auto&& expected_betas = std::get<18>(input);
+        auto&& expected_objs = std::get<19>(input);
 
         auto&& betas = std::get<0>(output);
         auto&& n_cds = std::get<2>(output);

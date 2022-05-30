@@ -16,5 +16,21 @@
     "util",
     "research",
     "matrix",
+    #"optimization",
+]]
+
+[cc_test(
+    name = type_,
+    srcs = glob([
+        "{}/*lasso*.cpp".format(type_), 
+    ]),
+    includes = ['.'],
+    defines = ["EIGEN_INITIALIZE_MATRICES_BY_NAN"],
+    deps = [
+        "//ghostbasil",
+        "//ghostbasil:tools",
+        "@com_google_googletest//:gtest_main",
+    ],
+) for type_ in [
     "optimization",
 ]]
