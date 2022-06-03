@@ -1,4 +1,5 @@
 #' @useDynLib ghostbasil, .registration = TRUE
-#' @importFrom Rcpp evalCpp
+#' @import Rcpp 
 #' @import Matrix
 NULL
+Rcpp::loadModule("core_module", T)

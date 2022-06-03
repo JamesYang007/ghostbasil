@@ -5,6 +5,7 @@
 #include <type_traits>
 #include <vector>
 #include <ghostbasil/util/macros.hpp>
+#include <ghostbasil/util/type_traits.hpp>
 #include <ghostbasil/matrix/forward_decl.hpp>
 
 namespace ghostbasil {
@@ -87,7 +88,7 @@ class GhostMatrix
         value_t quadform = 0;
         for (size_t k = 0; k < n_groups_; ++k, x_k_begin += group_size) {
             const auto x_k = x.segment(x_k_begin, group_size);
-            quadform += x_k.dot(T + Q.col(k));
+            quadform += x_k.dot(T) + Q.col(k).dot(x_k);
         }
         return quadform;
     }
@@ -96,8 +97,9 @@ public:
     using Scalar = value_t;
     using Index = Eigen::Index;
     
-    GhostMatrix(const mat_t& mat,
-                const vec_t& vec,
+    template <class MatType_, class VecType_>
+    GhostMatrix(const MatType_& mat,
+                const VecType_& vec,
                 size_t n_groups)
         : mat_(mat.data(), mat.rows(), mat.cols()),
           vec_(vec.data(), vec.size()),
@@ -195,7 +197,7 @@ public:
 
         // Choose type of Q based on whether v is dense or sparse.
         using Q_t = std::conditional_t<
-            std::is_base_of<Eigen::DenseBase<VecType>, VecType>::value,
+            util::is_dense<VecType>::value,
             mat_t, sp_mat_t>;
 
         const auto& S = matrix();
@@ -242,7 +244,7 @@ public:
 
         // Choose type of Q based on whether v is dense or sparse.
         using Q_t = std::conditional_t<
-            std::is_base_of<Eigen::DenseBase<VecType>, VecType>::value,
+            util::is_dense<VecType>::value,
             mat_t, sp_mat_t>;
 
         const auto& S = matrix();
@@ -260,12 +262,12 @@ public:
         compute_TQ(v, S, D, buffer, T, Q);
 
         // Compute Av_norm_sq.
-        for (size_t l = 0; l < n_groups_; ++l) {
+        for (size_t l = 0; l < Q.cols(); ++l) {
             Av_norm_sq += (T + Q.col(l)).squaredNorm();
         }
 
         // Compute quadratic form of current block.
-        vTAv += compute_quadform(v, T, Q);
+        vTAv = compute_quadform(v, T, Q);
 
         // Compute the inverse quadratic form estimate.
         const auto sc = 1-s;

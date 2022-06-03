@@ -117,6 +117,7 @@ BENCHMARK_DEFINE_F(LassoFixture, lasso_bench)(benchmark::State& state)
     }
 
     state.counters["n_cds"] = n_cds;
+    state.counters["n_active_max"] = active_set.size();
 }
 
 BENCHMARK_REGISTER_F(LassoFixture, lasso_bench)

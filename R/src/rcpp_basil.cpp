@@ -1,14 +1,16 @@
 #include <Rcpp.h>
 #include <RcppEigen.h>
-#include <ghostbasil/optimization/lasso.hpp>
 #include <ghostbasil/optimization/basil.hpp>
 #include <thread>
+#include "rcpp_block_matrix.hpp"
 
 using namespace Rcpp;
 
-// [[Rcpp::export]]
+// [[Rcpp::plugins(openmp)]]
+
+template <class AType>
 List basil__(
-        const Eigen::Map<Eigen::MatrixXd> A, // TODO: change type of A?
+        const AType& A, 
         const Eigen::Map<Eigen::VectorXd> r,
         double s,
         const Eigen::Map<Eigen::VectorXd> user_lmdas,
@@ -19,6 +21,7 @@ List basil__(
         size_t max_strong_size,
         size_t max_n_cds,
         double thr,
+        double min_ratio,
         size_t n_threads)
 {
     std::vector<Eigen::SparseVector<double>> betas;
@@ -37,11 +40,19 @@ List basil__(
         n_threads = std::thread::hardware_concurrency();
     }
 
+    auto check_user_interrupt = [&](auto n_cds) {
+        if (n_cds % 100 == 0) {
+            Rcpp::checkUserInterrupt();
+        }
+    };
+
     try {
         ghostbasil::basil(
                 A, r, s, user_lmdas, max_n_lambdas, n_lambdas_iter,
-                strong_size, delta_strong_size, max_strong_size, max_n_cds, thr, n_threads,
-                betas, lmdas, rsqs);
+                strong_size, delta_strong_size, max_strong_size, max_n_cds, thr, 
+                min_ratio, n_threads,
+                betas, lmdas, rsqs,
+                check_user_interrupt);
     }
     catch (const std::exception& e) {
         error = e.what();
@@ -62,6 +73,55 @@ List basil__(
             Named("lmdas")=std::move(lmdas),
             Named("rsqs")=std::move(rsqs),
             Named("error")=std::move(error));
+}
+
+
+// [[Rcpp::export]]
+List basil_dense__(
+        const Eigen::Map<Eigen::MatrixXd> A,
+        const Eigen::Map<Eigen::VectorXd> r,
+        double s,
+        const Eigen::Map<Eigen::VectorXd> user_lmdas,
+        size_t max_n_lambdas,
+        size_t n_lambdas_iter,
+        size_t strong_size,
+        size_t delta_strong_size,
+        size_t max_strong_size,
+        size_t max_n_cds,
+        double thr,
+        double min_ratio,
+        size_t n_threads)
+{
+    return basil__(A, r, s, user_lmdas, max_n_lambdas,
+            n_lambdas_iter, strong_size, delta_strong_size,
+            max_strong_size, max_n_cds, thr, min_ratio, n_threads);
+}
+
+// [[Rcpp::export]]
+List basil_block_dense__(
+        SEXP A,
+        const Eigen::Map<Eigen::VectorXd> r,
+        double s,
+        const Eigen::Map<Eigen::VectorXd> user_lmdas,
+        size_t max_n_lambdas,
+        size_t n_lambdas_iter,
+        size_t strong_size,
+        size_t delta_strong_size,
+        size_t max_strong_size,
+        size_t max_n_cds,
+        double thr,
+        double min_ratio,
+        size_t n_threads)
+{
+    auto bmw = Rcpp::as<BlockMatrixWrap>(A);
+
+    // gets the internal BlockMatrix class
+    const auto& bm = bmw.internal();
+    
+    return basil__(
+            bm, r, s, user_lmdas, max_n_lambdas,
+            n_lambdas_iter, strong_size, delta_strong_size,
+            max_strong_size, max_n_cds, thr, min_ratio, n_threads);
 }
 
 // [[Rcpp::export]]

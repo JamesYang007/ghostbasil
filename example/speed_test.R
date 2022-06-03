@@ -2,33 +2,11 @@ library(devtools)
 library(lassosum)
 library(fdrtool)
 
-# get path of current file
-# https://stackoverflow.com/a/61739930/9936090
-stub <- function() {}
-thisPath <- function() {
-  cmdArgs <- commandArgs(trailingOnly = FALSE)
-  if (length(grep("^-f$", cmdArgs)) > 0) {
-    # R console option
-    normalizePath(dirname(cmdArgs[grep("^-f", cmdArgs) + 1]))[1]
-  } else if (length(grep("^--file=", cmdArgs)) > 0) {
-    # Rscript/R console option
-    scriptPath <- normalizePath(dirname(sub("^--file=", "", cmdArgs[grep("^--file=", cmdArgs)])))[1]
-  } else if (Sys.getenv("RSTUDIO") == "1") {
-    # RStudio
-    dirname(rstudioapi::getSourceEditorContext()$path)
-  } else if (is.null(attr(stub, "srcref")) == FALSE) {
-    # 'source'd via R console
-    dirname(normalizePath(attr(attr(stub, "srcref"), "srcfile")$filename))
-  } else {
-    stop("Cannot find file path")
-  }
-}
+source('utils.R')
 
 # Load GhostBASIL
 GhostBASIL.path <- paste(thisPath(), '/../R', sep='')
 load_all(GhostBASIL.path)
-
-set.seed(1234)
 
 elnetR <- function(lambda1, lambda2=0, X, b, thr=1e-4,
                    trace=0, maxiter=10000,
@@ -106,6 +84,7 @@ solve.BASIL<-function(A,r,s=0.5,M=100,dM=50,maxiter=1000,cbound=10000){
   epsilon <- .0001
   K <- 100
   lambda<-c();beta<-c()
+  chol.time <- 0
   
   #BASIL step 1
   abs_Df<-2*abs(r)
@@ -116,8 +95,11 @@ solve.BASIL<-function(A,r,s=0.5,M=100,dM=50,maxiter=1000,cbound=10000){
   lambdapath <- round(exp(seq(log(lambda_max), log(lambda_max*epsilon),
                               length.out = K)), digits = 10)
   #lambdapath
-  
+  t1<-proc.time()
   refpanel<-chol(A[include.index,include.index,drop=F])
+  t2<-proc.time()
+  chol.time <- chol.time + t2[3]-t1[3]
+
   fit.lassosum<-elnetR(lambda1=lambdapath/(1-s),lambda2=s/(1-s),X=refpanel,b=r[include.index]/(1-s),maxiter=maxiter)
   fit.lassosum$lambda1 <- lambdapath
   
@@ -150,7 +132,11 @@ solve.BASIL<-function(A,r,s=0.5,M=100,dM=50,maxiter=1000,cbound=10000){
                                   length.out = K)), digits = 10)
       #lambdapath
       
+      t1<-proc.time()
       refpanel<-chol(A[include.index,include.index,drop=F])
+      t2<-proc.time()
+      chol.time <- chol.time + t2[3]-t1[3]
+
       fit.lassosum<-try(elnetR(lambda1=lambdapath/(1-s),lambda2=s/(1-s),X=refpanel,b=r[include.index]/(1-s),maxiter=maxiter),silent=T)
       fit.lassosum$lambda1 <- lambdapath
       if(class(fit.lassosum)=='try-error'){break}
@@ -186,7 +172,7 @@ solve.BASIL<-function(A,r,s=0.5,M=100,dM=50,maxiter=1000,cbound=10000){
     }
   }
   
-  return(list(lambda=lambda,beta=beta))
+  return(list(lambda=lambda,beta=beta,chol.time=chol.time))
 }
 
 
@@ -196,6 +182,7 @@ solve.BASIL.PV<-function(A,r,n,s=0.5,M=100,dM=50,maxiter=1000,cbound=10000){
   epsilon <- .0001
   K <- 100
   lambda<-c();beta<-c();f.lambda<-c()
+  chol.time<-0
   
   #local FDR, shrunken estimate
   fdr <- fdrtool::fdrtool(as.vector(r)*sqrt(n), statistic="normal",
@@ -212,7 +199,11 @@ solve.BASIL.PV<-function(A,r,n,s=0.5,M=100,dM=50,maxiter=1000,cbound=10000){
                               length.out = K)), digits = 10)
   #lambdapath
   
+  t1<-proc.time()
   refpanel<-chol(A[include.index,include.index,drop=F])
+  t2<-proc.time()
+  chol.time <- chol.time + t2[3]-t1[3]
+
   fit.lassosum<-elnetR(lambda1=lambdapath/(1-s),lambda2=s/(1-s),X=refpanel,b=r[include.index]/(1-s),maxiter=maxiter)
   fit.lassosum$lambda1 <- lambdapath
   
@@ -252,7 +243,11 @@ solve.BASIL.PV<-function(A,r,n,s=0.5,M=100,dM=50,maxiter=1000,cbound=10000){
                                   length.out = K)), digits = 10)
       #lambdapath
       
+      t1<-proc.time()
       refpanel<-chol(A[include.index,include.index,drop=F])
+      t2<-proc.time()
+      chol.time <- chol.time + t2[3]-t1[3]
+
       fit.lassosum<-try(elnetR(lambda1=lambdapath/(1-s),lambda2=s/(1-s),X=refpanel,b=r[include.index]/(1-s),maxiter=maxiter),silent=T)
       fit.lassosum$lambda1 <- lambdapath
       if(class(fit.lassosum)=='try-error'){break}
@@ -307,7 +302,7 @@ solve.BASIL.PV<-function(A,r,n,s=0.5,M=100,dM=50,maxiter=1000,cbound=10000){
     lambda.final<-lambda[which.max(f.lambda)]
   }
   
-  return(list(lambda=lambda,beta=beta,f.lambda=f.lambda,beta.final=beta.final,lambda.final=lambda.final))
+  return(list(lambda=lambda,beta=beta,f.lambda=f.lambda,beta.final=beta.final,lambda.final=lambda.final,chol.time=chol.time))
 }
 
 # Computes objective value for BASIL and ghostbasil methods
@@ -339,7 +334,7 @@ obj.test <- function(fit, idx.test=1)
     BASIL.PV.beta.test <- if (ncol(fit.BASIL.PV$beta) < idx.test) NA else fit.BASIL.PV$beta[,idx.test,drop=F]
     ghostbasil.beta.test <- if (ncol(fit.ghostbasil$beta) < idx.test) NA else fit.ghostbasil$betas[,idx.test,drop=F]
 
-    BASIL.objective <- if (any(is.na(ghostbasil.beta.test))) NA else objective(A, r, s, ghostbasil.lmda.test, BASIL.beta.test)
+    BASIL.objective <- if (any(is.na(BASIL.beta.test))) NA else objective(A, r, s, ghostbasil.lmda.test, BASIL.beta.test)
     cd.objective <- if (any(is.na(cd.beta.test))) NA else objective(A, r, s, ghostbasil.lmda.test, cd.beta.test)
     BASIL.PV.objective <- if (any(is.na(BASIL.PV.beta.test))) NA else objective(A, r, s, ghostbasil.lmda.test, BASIL.PV.beta.test)
     ghostbasil.objective <- if (any(is.na(ghostbasil.beta.test))) NA else objective(A, r, s, ghostbasil.lmda.test, ghostbasil.beta.test)
@@ -387,7 +382,7 @@ kkt.test <- function(fit, idx.test=1, eps=1e-5)
         sum(abs((1-s) * (A %*% beta) - r + s * beta) > lmda+eps) == 0
     }
 
-    BASIL.check.kkt <- if (any(is.na(ghostbasil.beta.test))) NA else check.kkt(A, r, s, ghostbasil.lmda.test, BASIL.beta.test)
+    BASIL.check.kkt <- if (any(is.na(BASIL.beta.test))) NA else check.kkt(A, r, s, ghostbasil.lmda.test, BASIL.beta.test)
     cd.check.kkt <- if (any(is.na(cd.beta.test))) NA else check.kkt(A, r, s, ghostbasil.lmda.test, cd.beta.test)
     BASIL.PV.check.kkt <- if (any(is.na(BASIL.PV.beta.test))) NA else check.kkt(A, r, s, ghostbasil.lmda.test, BASIL.PV.beta.test)
     ghostbasil.check.kkt <- if (any(is.na(ghostbasil.beta.test))) NA else check.kkt(A, r, s, ghostbasil.lmda.test, ghostbasil.beta.test)
@@ -404,44 +399,44 @@ speed.test <- function(ps=seq(1000, 3000, by=1000),
                        k=10,# number of variables with nonzero coefficients
                        amplitude=7.5,# signal amplitude (for noise level = 1)
                        rho=0.1,
-                       s=0.5)
+                       s=0.5,
+                       seed=1234)
 {
     objectives <- list()
     kkts <- list()
-    cpu.time<-c()
+    fit.time<-c()
+    chol.time<-c()
 
     for (p in ps) {
       print(p)
-      
-      # Generate the variables from a multivariate normal distribution
-      mu = rep(0,p)
-      Sigma = toeplitz(rho^(0:(p-1)))
-      X = matrix(rnorm(n*p),n) %*% chol(Sigma)
-      
-      # Generate the response from a logistic model and encode it as a factor.
-      nonzero = sample(p, k)
-      beta = amplitude * (1:p %in% nonzero) / sqrt(n)
-      y<-X%*%beta+rnorm(n)
-      
-      A<-t(X)%*%X/n; r<-cor(X,y);
-      
+      data <- generate.data(n=n, p=p, rho=rho, k=k, 
+                            amplitude=amplitude, seed=seed)
+      A <- data$A
+      r <- data$r
+       
       t1<-proc.time()
       fit.BASIL<-solve.BASIL(A,r,s=s,M=500,dM=200,maxiter=1000,cbound=1000)
       t2<-proc.time()
-      temp.time<-t2[3]-t1[3]
+      temp.time<-t2[3]-t1[3]-fit.BASIL$chol.time
+      temp.chol.time<-fit.BASIL$chol.time
       
       #verify results
       t1<-proc.time()
       temp.X<-chol(A)
-      fit.lassosum<-elnetR(lambda1=fit.BASIL$lambda/(1-s),lambda2=s/(1-s),X=temp.X,b=r/(1-s),maxiter=1000)
-      fit.lassosum$lambda1 <- fit.BASIL$lambda
       t2<-proc.time()
+      temp.chol.time<-c(temp.chol.time, t2[3]-t1[3])
+
+      t1<-proc.time()
+      fit.lassosum<-elnetR(lambda1=fit.BASIL$lambda/(1-s),lambda2=s/(1-s),X=temp.X,b=r/(1-s),maxiter=1000)
+      t2<-proc.time()
+      fit.lassosum$lambda1 <- fit.BASIL$lambda
       temp.time<-c(temp.time,t2[3]-t1[3])
       
       t1<-proc.time()
       fit.BASIL.PV<-solve.BASIL.PV(A,r,n=n,s=s,M=500,dM=200,maxiter=1000,cbound=1000)
       t2<-proc.time()
-      temp.time<-c(temp.time,t2[3]-t1[3])
+      temp.time<-c(temp.time,t2[3]-t1[3]-fit.BASIL.PV$chol.time)
+      temp.chol.time<-c(temp.chol.time,fit.BASIL.PV$chol.time)
       
       t1<-proc.time()
       fit.ghostbasil <- ghostbasil(A,r,s,
@@ -453,8 +448,10 @@ speed.test <- function(ps=seq(1000, 3000, by=1000),
                                    max.cds=1000)
       t2<-proc.time()
       temp.time<-c(temp.time,t2[3]-t1[3])
+      temp.chol.time<-c(temp.chol.time,0)
       
-      cpu.time<-rbind(cpu.time,temp.time)
+      fit.time<-rbind(fit.time,temp.time)
+      chol.time<-rbind(chol.time, temp.chol.time)
       fit <- list(A=A, r=r, s=s, BASIL=fit.BASIL, CD=fit.lassosum, BASIL.PV=fit.BASIL.PV, ghostbasil=fit.ghostbasil)
       fit.objective <- do.call(rbind, lapply(1:length(fit.BASIL$lambda), function(i) t(data.frame(obj.test(fit, i)))))
       fit.kkt <- do.call(rbind, lapply(1:length(fit.BASIL$lambda), function(i) t(data.frame(kkt.test(fit, i)))))
@@ -462,11 +459,27 @@ speed.test <- function(ps=seq(1000, 3000, by=1000),
       rownames(fit.kkt) <- NULL
       objectives <- append(objectives, list(fit.objective))
       kkts <- append(kkts, list(fit.kkt))
-      print(cpu.time)
+      print(fit.time)
     }
-    result<-cbind(ps, cpu.time)
-    colnames(result)<-c('p','BASIL','CoordinateDescent','BASIL-PV','ghostbasil')
-    rownames(result)<-NULL
-    list(times=result, objectives=objectives, kkts=kkts)
+    
+    make.time.out <- function(x) {
+        names <- c('p','BASIL','CoordinateDescent','BASIL-PV','ghostbasil')
+        out <- cbind(ps, x)
+        colnames(out) <- names
+        rownames(out) <- NULL
+        out
+    }
+
+    total.time <- fit.time + chol.time
+
+    total.time <- make.time.out(total.time)
+    fit.time <- make.time.out(fit.time)
+    chol.time <- make.time.out(chol.time)
+
+    list(fit.time=fit.time, 
+         chol.time=chol.time, 
+         total.time=total.time,
+         objectives=objectives, 
+         kkts=kkts)
 }
 

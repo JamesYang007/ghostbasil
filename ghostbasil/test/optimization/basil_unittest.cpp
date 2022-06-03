@@ -55,6 +55,7 @@ struct BasilFixture
             size_t max_strong_size = 100,
             size_t strong_size = 1,
             size_t delta_strong_size = 1,
+            double min_ratio = 1e-6,
             bool do_user = false)
     {
         auto input = make_input(generate_dataset, max_strong_size, do_user);
@@ -72,7 +73,8 @@ struct BasilFixture
 
         try {
             basil(A, r, s, user_lmdas, max_n_lambdas, n_lambdas_iter,
-                  strong_size, delta_strong_size, max_strong_size_local, max_cds, thr, n_threads,
+                  strong_size, delta_strong_size, max_strong_size_local, max_cds, thr, 
+                  min_ratio, n_threads,
                   betas, lmdas, rsqs);
 #ifdef MAKE_LMDAS
             for (size_t i = 0; i < lmdas.size(); ++i) {

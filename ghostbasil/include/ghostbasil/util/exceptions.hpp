@@ -34,12 +34,12 @@ public:
     }
 };
 
-class lasso_finished_early_error : public ghostbasil_error
+class basil_finished_early_error : public ghostbasil_error
 {
     std::string msg_;
 public:
-    lasso_finished_early_error(): 
-        msg_{"Lasso fitting on strong set finished early in the lambda sequence due to minimal change in R^2."}
+    basil_finished_early_error(): 
+        msg_{"Basil finished early due to minimal change in R^2."}
     {}
 
     const char* what() const noexcept override {

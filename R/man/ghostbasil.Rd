@@ -11,12 +11,13 @@ ghostbasil(
   user.lambdas = c(),
   max.lambdas = 100,
   lambdas.iter = 10,
-  strong.size = 1000,
-  delta.strong.size = 100,
+  strong.size = 100,
+  delta.strong.size = 500,
   max.strong.size = 10000,
   max.cds = 1e+05,
   thr = 1e-07,
-  n.threads = -1
+  min.ratio = 1e-06,
+  n.threads = 0
 )
 }
 \arguments{
@@ -28,7 +29,13 @@ ghostbasil(
 
 \item{user.lambdas}{user-specified sequence of lambdas. Will be sorted in decreasing order if not sorted already.}
 
-\item{max.lambdas}{maximum number of lambdas to compute solutions for.}
+\item{max.lambdas}{maximum number of lambdas to compute solutions for.
+This defines the granularity of the lambda sequence
+starting from the maximum lambda
+to the smallest lambda, which is the maximum lambda * min.ratio.
+Note that the call may terminate early and output solutions for fewer lambdas than max.lambdas.
+This can occur, for example, if the algorithm detects that the R^2 isn't changing enough.
+The maximum lambda is the largest lambda where solution isn't 0.}
 
 \item{lambdas.iter}{number of lambdas to compute strong set solutions for at each iteration of the BASIL algorithm.
 Internally, capped at max.lambdas.}
@@ -45,6 +52,13 @@ Internally, capped at number of features.}
 \item{max.cds}{maximum number of coordinate descents per BASIL iteration.}
 
 \item{thr}{coordinate descent convergence threshold.}
+
+\item{min.ratio}{a factor times the maximum lambda value defines the smallest lambda value.
+This is only used if user.lambdas is empty.}
+
+\item{n.threads}{number of OpenMP threads for KKT check.
+Set it to 0 (default) to disable OpenMP usage.
+Set it to -1 to use all available logical cores.}
 }
 \description{
 Fits PGR objective with BASIL framework.

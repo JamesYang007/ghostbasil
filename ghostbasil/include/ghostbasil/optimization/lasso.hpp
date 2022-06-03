@@ -73,13 +73,16 @@ void lasso_assert_valid_inputs(
         assert(!active_set.size() || (0 <= as_view.minCoeff() && as_view.maxCoeff() < strong_set.size()));
 
         // check that active order is sorted.
-        util::vec_type<as_value_t> as_copy = as_view;
-        std::sort(as_copy.data(), as_copy.data()+as_copy.size());
-        assert(active_order.size() == active_set.size());
-        assert((as_copy.array() == 
-                    util::vec_type<as_value_t>::NullaryExpr(as_view.size(),
-                        [&](auto i) { return as_view[active_order[i]]; }
-                        ).array()).all());
+        using ao_value_t = typename std::decay_t<AOType>::value_type;
+        Eigen::Map<const util::vec_type<ao_value_t>> ao_view(
+                active_order.data(),
+                active_order.size());
+        util::vec_type<ao_value_t> ao_copy = ao_view;
+        std::sort(ao_copy.data(), ao_copy.data()+ao_copy.size(),
+                  [&](auto i, auto j) { 
+                        return strong_set[active_set[i]] < strong_set[active_set[j]]; 
+                    });
+        assert((ao_copy.array() == ao_view.array()).all());
 
         // check that active set contains at least the non-zero betas
         for (size_t i = 0; i < strong_set.size(); ++i) {
@@ -118,7 +121,57 @@ void lasso_assert_valid_inputs(
 #endif
 }
 
+template<class ForwardIt, class F, class T>
+ForwardIt lower_bound(ForwardIt first, ForwardIt last, F f, T value)
+{
+    ForwardIt it = first;
+    typename std::iterator_traits<ForwardIt>::difference_type count, step;
+    count = std::distance(first, last);
+
+    while (count > 0) {
+        it = first;
+        step = count / 2;
+        std::advance(it, step);
+        if (f(*it) < value) {
+            first = ++it;
+            count -= step + 1;
+        }
+        else
+            count = step;
+    }
+    return first;
+}
+
 } // namespace internal
+  
+/*
+ * Checks early stopping based on R^2 values.
+ * Returns true (early stopping should occur) if both are true:
+ *
+ *      delta_u := (R^2_u - R^2_m)/R^2_u
+ *      delta_m := (R^2_m - R^2_l)/R^2_m 
+ *      delta_u < cond_0_thresh 
+ *      AND
+ *      (delta_u - delta_m) < cond_1_thresh
+ *
+ * @param   rsq_l   third to last R^2 value.
+ * @param   rsq_m   second to last R^2 value.
+ * @param   rsq_u   last R^2 value.
+ */
+template <class ValueType>
+GHOSTBASIL_STRONG_INLINE
+bool check_early_stop_rsq(
+        ValueType rsq_l,
+        ValueType rsq_m,
+        ValueType rsq_u,
+        ValueType cond_0_thresh = 1e-5,
+        ValueType cond_1_thresh = 1e-5)
+{
+    auto delta_u = (rsq_u-rsq_m);
+    auto delta_m = (rsq_m-rsq_l);
+    return ((delta_u < cond_0_thresh*rsq_u) &&
+            ((delta_m*rsq_u-delta_u*rsq_m) < cond_1_thresh*rsq_m*rsq_u));
+}
 
 /*
  * Computes the objective that we wish to minimize.
@@ -231,7 +284,7 @@ void update_rsq(
  * @param   rsq             R^2 of current beta. Stores the updated value after the call.
  */
 template <class Iter, class StrongSetType, 
-          class StrongADiagType, class AType, class ValueType,
+          class StrongADiagType, class DerivedType, class ValueType,
           class StrongBetaType, class StrongGradType,
           class AdditionalStepType=util::no_op>
 GHOSTBASIL_STRONG_INLINE
@@ -240,7 +293,7 @@ void coordinate_descent(
         Iter end,
         const StrongSetType& strong_set,
         const StrongADiagType& strong_A_diag,
-        const AType& A,
+        const Eigen::DenseBase<DerivedType>& A_base,
         ValueType s,
         ValueType lmda,
         StrongBetaType& strong_beta,
@@ -249,6 +302,7 @@ void coordinate_descent(
         ValueType& rsq,
         AdditionalStepType additional_step=AdditionalStepType())
 {
+    const auto& A = A_base.derived();
     const auto sc = 1-s;
 
     convg_measure = 0;
@@ -274,11 +328,12 @@ void coordinate_descent(
 
         // update gradient
         strong_grad[ss_idx] -= s * del;
+        auto sc_del = sc * del;
         for (auto jt = begin; jt != end; ++jt) {
             auto ss_idx_j = *jt;
             auto j = strong_set[ss_idx_j];
             auto A_jk = A.coeff(j, k);
-            strong_grad[ss_idx_j] -= sc * A_jk * del;
+            strong_grad[ss_idx_j] -= sc_del * A_jk;
         }
 
         // additional step
@@ -312,6 +367,19 @@ void coordinate_descent(
     // we can update the block iterator as we increment begin.
     auto block_it = A.block_begin();
 
+    // We can also keep track of the range of strong set indices
+    // that produce indices within the current block.
+    // TODO: binary search?
+    auto range_begin = begin;
+    while (!block_it.is_in_block(*range_begin)) { ++block_it; } 
+
+    const auto get_strong_set = [&](auto i) {
+        return strong_set[i];
+    };
+    auto range_end = internal::lower_bound(
+                range_begin, end, get_strong_set,
+                block_it.stride() + block_it.block().cols());
+
     convg_measure = 0;
     for (auto it = begin; it != end; ++it) {
         auto ss_idx = *it;              // index to strong set
@@ -333,21 +401,32 @@ void coordinate_descent(
         // update rsq
         update_rsq(rsq, ak, ak_ref, A_kk, gk, s, sc);
 
-        // update A block stride pointer if current feature is not in the block.
-        if (!block_it.is_in_block(k)) block_it.advance_at(k);
+        // update outer iterators to preserve invariant
+        if (!block_it.is_in_block(k)) {
+            block_it.advance_at(k);
+
+            // find the first position that is in block
+            range_begin = internal::lower_bound(
+                    range_end, end, get_strong_set,
+                    block_it.stride());
+            range_end = internal::lower_bound(
+                        range_begin, end, get_strong_set,
+                        block_it.stride() + block_it.block().cols());
+        }
         auto k_shifted = block_it.shift(k);
         const auto& block = block_it.block();
+        const auto k_begin = block_it.stride();
+        const auto k_end = k_begin + block.cols();
         
         // update gradient
         strong_grad[ss_idx] -= s * del;
-        for (auto jt = begin; jt != end; ++jt) {
+        auto sc_del = sc * del;
+        for (auto jt = range_begin; jt != range_end; ++jt) {
             auto ss_idx_j = *jt;
             auto j = strong_set[ss_idx_j];
-            // optimization: if j is not in the current block, no update.
-            if (!block_it.is_in_block(j)) continue;
             const auto j_shifted = block_it.shift(j);
             auto A_jk = block.coeff(j_shifted, k_shifted);
-            strong_grad[ss_idx_j] -= sc * A_jk * del;
+            strong_grad[ss_idx_j] -= sc_del * A_jk;
         }
 
         // additional step
@@ -412,7 +491,8 @@ void coordinate_descent(
  */
 template <class AType, class ValueType, class SSType, class SOType, 
           class ASType, class AOType, class ASOType,class IAType, class StrongADiagType, 
-          class SBType, class SGType, class ABDiffOType, class SGUpdateType>
+          class SBType, class SGType, class ABDiffOType, class SGUpdateType,
+          class CUIType = util::no_op>
 GHOSTBASIL_STRONG_INLINE
 void lasso_active_impl(
     const AType& A,
@@ -433,7 +513,8 @@ void lasso_active_impl(
     ABDiffOType& active_beta_diff_ordered,
     ValueType& rsq,
     size_t& n_cds,
-    SGUpdateType sg_update)
+    SGUpdateType sg_update,
+    CUIType check_user_interrupt = CUIType())
 {
     using value_t = ValueType;
     using ao_value_t = typename std::decay_t<AOType>::value_type;
@@ -461,6 +542,7 @@ void lasso_active_impl(
     };
 
     while (1) {
+        check_user_interrupt(n_cds);
         ++n_cds;
         value_t convg_measure;
         coordinate_descent(
@@ -492,13 +574,13 @@ void lasso_active_impl(
  * Calls lasso_active_impl with a specialized gradient update routine
  * for a generic matrix.
  */
-template <class AType, class ValueType, class SSType, class SOType,
+template <class DerivedType, class ValueType, class SSType, class SOType,
           class ASType, class AOType, class ASOType, class IAType, 
           class StrongADiagType, class SBType, class SGType,
-          class ABDiffOType>
+          class ABDiffOType, class CUIType = util::no_op>
 GHOSTBASIL_STRONG_INLINE 
 void lasso_active(
-    const AType& A,
+    const Eigen::DenseBase<DerivedType>& A_base,
     ValueType s,
     const SSType& strong_set,
     const SOType& strong_order,
@@ -515,9 +597,13 @@ void lasso_active(
     SGType& strong_grad,
     ABDiffOType& active_beta_diff_ordered,
     ValueType& rsq,
-    size_t& n_cds)
+    size_t& n_cds,
+    CUIType check_user_interrupt = CUIType())
 {
+    const auto& A = A_base.derived();
     auto sg_update = [&](const auto& sp_beta_diff) {
+        if (sp_beta_diff.nonZeros() == 0) return;
+
         const auto sc = 1-s;
         // update gradient in non-active positions
         for (size_t ss_idx = 0; ss_idx < strong_set.size(); ++ss_idx) {
@@ -533,7 +619,8 @@ void lasso_active(
             is_active, strong_A_diag,
             lmda_idx, lmda, max_cds, thr, 
             strong_beta, strong_grad, 
-            active_beta_diff_ordered, rsq, n_cds, sg_update);
+            active_beta_diff_ordered, rsq, n_cds, sg_update,
+            check_user_interrupt);
 }
 
 /*
@@ -543,7 +630,7 @@ void lasso_active(
 template <class MatType, class ValueType, class SSType, class SOType, 
           class ASType, class AOType, class ASOType, class IAType, 
           class StrongADiagType, class SBType, class SGType,
-          class ABDiffOType>
+          class ABDiffOType, class CUIType=util::no_op>
 GHOSTBASIL_STRONG_INLINE 
 void lasso_active(
     const BlockMatrix<MatType>& A,
@@ -563,25 +650,71 @@ void lasso_active(
     SGType& strong_grad,
     ABDiffOType& active_beta_diff_ordered,
     ValueType& rsq,
-    size_t& n_cds)
+    size_t& n_cds,
+    CUIType check_user_interrupt = CUIType())
 {
     auto sg_update = [&](const auto& sp_beta_diff) {
+        using value_t = ValueType;
         const auto sc = 1-s;
 
         auto block_it = A.block_begin();
+        const auto bd_inner = sp_beta_diff.innerIndexPtr();
+        const auto bd_value = sp_beta_diff.valuePtr();
+        const auto bd_nnz = sp_beta_diff.nonZeros();
+
+        if (bd_nnz == 0) return;
+
+        // initialized below
+        size_t bd_seg_begin;
+        size_t bd_seg_end; 
+
+        {
+            const auto curr_stride = block_it.stride(); // should be 0
+            assert(curr_stride == 0);
+
+            // find first time a non-zero index of beta is inside the current block
+            const auto it = std::lower_bound(bd_inner, bd_inner+bd_nnz, curr_stride);
+            bd_seg_begin = std::distance(bd_inner, it);
+
+            // find first time a non-zero index of beta is outside the current block
+            const auto next_stride = curr_stride+block_it.block().cols();
+            const auto end = std::lower_bound(bd_inner+bd_seg_begin, bd_inner+bd_nnz, next_stride);
+            bd_seg_end = std::distance(bd_inner, end);
+
+            // these two define the index of bd_inner and size to read
+            // to perform any dot product with a column of current block.
+        }
 
         // update gradient in non-active positions
         for (size_t ss_idx : strong_order) {
             if (is_active[ss_idx]) continue;
             auto k = strong_set[ss_idx];
             // update A block stride pointer if current feature is not in the block.
-            if (!block_it.is_in_block(k)) block_it.advance_at(k);
+            if (!block_it.is_in_block(k)) {
+                block_it.advance_at(k);
+
+                const auto curr_stride = block_it.stride();
+                const auto it = std::lower_bound(
+                        bd_inner+bd_seg_end, 
+                        bd_inner+bd_nnz, 
+                        curr_stride);
+                bd_seg_begin = std::distance(bd_inner, it);
+
+                const auto next_stride = curr_stride+block_it.block().cols();
+                const auto end = std::lower_bound(
+                        bd_inner+bd_seg_begin, 
+                        bd_inner+bd_nnz, 
+                        next_stride);
+                bd_seg_end = std::distance(bd_inner, end);
+            }
             const auto k_shifted = block_it.shift(k);
-            const auto stride_begin = block_it.stride();
             const auto& A_block = block_it.block();
-            const auto beta_diff_map_seg = 
-                sp_beta_diff.segment(stride_begin, A_block.cols());
-            strong_grad[ss_idx] -= sc * A_block.col_dot(k_shifted, beta_diff_map_seg);
+            
+            value_t dp = 0;
+            for (auto i = bd_seg_begin; i < bd_seg_end; ++i) {
+                dp += A_block.coeff(block_it.shift(bd_inner[i]), k_shifted) * bd_value[i];
+            }
+            strong_grad[ss_idx] -= sc * dp;
         }
     };
 
@@ -591,7 +724,8 @@ void lasso_active(
             is_active, strong_A_diag,
             lmda_idx, lmda, max_cds, thr, 
             strong_beta, strong_grad, 
-            active_beta_diff_ordered, rsq, n_cds, sg_update);
+            active_beta_diff_ordered, rsq, n_cds, sg_update,
+            check_user_interrupt);
 }
 
 /*
@@ -614,7 +748,8 @@ template <class AType, class ValueType,
           class SADType, class LmdasType,
           class SBType, class SGType,
           class ASType, class AOType, class ASOType, 
-          class IAType, class BetasType, class RsqsType>
+          class IAType, class BetasType, class RsqsType,
+          class CUIType = util::no_op>
 inline void lasso(
     const AType& A, 
     ValueType s, 
@@ -634,7 +769,8 @@ inline void lasso(
     BetasType& betas, 
     RsqsType& rsqs,
     size_t& n_cds,
-    size_t& n_lmdas)
+    size_t& n_lmdas,
+    CUIType check_user_interrupt = CUIType())
 {
     internal::lasso_assert_valid_inputs(
             A, s, strong_set, strong_order, 
@@ -655,9 +791,9 @@ inline void lasso(
     std::vector<beta_value_t> active_beta_diff_ordered;
     active_beta_ordered.reserve(strong_set.size());
     active_beta_diff_ordered.reserve(strong_set.size());
+    active_beta_diff_ordered.resize(active_order.size());
     
     bool lasso_active_called = false;
-
     n_cds = 0;
     n_lmdas = 0;
 
@@ -675,13 +811,13 @@ inline void lasso(
                 is_active, strong_A_diag,
                 l, lmda, max_cds, thr, 
                 strong_beta, strong_grad, 
-                active_beta_diff_ordered, rsq, n_cds);
+                active_beta_diff_ordered, rsq, n_cds,
+                check_user_interrupt);
         lasso_active_called = true;
     };
 
     for (size_t l = 0; l < lmdas.size(); ++l) {
         const auto lmda = lmdas[l];
-        const auto rsq_prev = rsq;
 
         if (lasso_active_called) {
             lasso_active_and_update(l, lmda);
@@ -689,6 +825,7 @@ inline void lasso(
 
         size_t old_active_size;
         while (1) {
+            check_user_interrupt(n_cds);
             ++n_cds;
             value_t convg_measure;
             old_active_size = active_set.size();
@@ -697,13 +834,14 @@ inline void lasso(
                     strong_set, strong_A_diag, A, s, lmda,
                     strong_beta, strong_grad,
                     convg_measure, rsq, add_active_set);
+            bool new_active_added = (old_active_size < active_set.size());
 
             // since coordinate descent could have added new active variables,
             // we update active_order and active_set_ordered to preserve invariant.
             // NOTE: speed shouldn't be affected since most of the array is already sorted
             // and std::sort is really fast in this setting!
             // See: https://solarianprogrammer.com/2012/10/24/cpp-11-sort-benchmark/
-            if (old_active_size < active_set.size()) {
+            if (new_active_added) {
                 active_order.resize(active_set.size());
                 std::iota(std::next(active_order.begin(), old_active_size), 
                           active_order.end(), 
@@ -749,8 +887,11 @@ inline void lasso(
         rsqs[l] = rsq;
         ++n_lmdas;
 
-        if (l == 0) continue;
-        if (rsq-rsq_prev < 1e-5*rsq) break;
+        // make sure to do at least 3 lambdas.
+        if (l < 2) continue;
+
+        // early stop if R^2 criterion is fulfilled.
+        if (check_early_stop_rsq(rsqs[l-2], rsqs[l-1], rsqs[l])) break;
     }
 }
 
