@@ -352,7 +352,7 @@ auto check_kkt(
                 bd_seg_end = std::distance(bd_inner, end);
             }
 
-//#pragma omp parallel for schedule(static) num_threads(n_threads) firstprivate(block_it, bd_seg_begin, bd_seg_end, bd_inner2, do_initial_skip)
+#pragma omp parallel for schedule(static) num_threads(n_threads) firstprivate(block_it, bd_seg_begin, bd_seg_end, bd_inner2, do_initial_skip)
             for (size_t k = 0; k < r.size(); ++k) {
                 // Just omit the KKT check for strong variables.
                 // If KKT failed previously, just do a no-op until loop finishes.
@@ -388,10 +388,10 @@ auto check_kkt(
 
                 // Note: this whole block of code assumes k runs contiguously!
                 // This should be guaranteed when schedule is set to static.
-                //if (do_initial_skip) {
-                //    bd_inner2 = std::lower_bound(bd_inner, bd_inner+bd_nnz, k);
-                //    do_initial_skip = false;
-                //}
+                if (do_initial_skip) {
+                    bd_inner2 = std::lower_bound(bd_inner, bd_inner+bd_nnz, k);
+                    do_initial_skip = false;
+                }
                 const bool is_active_k = (bd_inner2 != bd_inner+bd_nnz) && (k == *bd_inner2);
                 auto beta_i_coeff_k = (is_active_k) ? 
                     bd_value[bd_inner2-bd_inner] : 0;

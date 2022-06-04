@@ -167,8 +167,8 @@ bool check_early_stop_rsq(
         ValueType cond_0_thresh = 1e-5,
         ValueType cond_1_thresh = 1e-5)
 {
-    auto delta_u = (rsq_u-rsq_m);
-    auto delta_m = (rsq_m-rsq_l);
+    const auto delta_u = (rsq_u-rsq_m);
+    const auto delta_m = (rsq_m-rsq_l);
     return ((delta_u < cond_0_thresh*rsq_u) &&
             ((delta_m*rsq_u-delta_u*rsq_m) < cond_1_thresh*rsq_m*rsq_u));
 }
@@ -213,9 +213,9 @@ void update_coefficient(
         ValueType sc,
         ValueType lmda)
 {
-    auto denom = sc * x_var + s;
-    auto u = grad + coeff * denom;
-    auto v = std::abs(u) - lmda;
+    const auto denom = sc * x_var + s;
+    const auto u = grad + coeff * denom;
+    const auto v = std::abs(u) - lmda;
     coeff = (v > 0.0) ? std::copysign(v,u)/denom : 0;
 }
 
@@ -233,7 +233,7 @@ void update_convergence_measure(
         ValueType coeff_diff,
         ValueType x_var)
 {
-    auto convg_measure_curr = x_var * coeff_diff * coeff_diff;
+    const auto convg_measure_curr = x_var * coeff_diff * coeff_diff;
     convg_measure = std::max(convg_measure_curr, convg_measure);
 }
 
@@ -259,8 +259,8 @@ void update_rsq(
         ValueType s, 
         ValueType sc)
 {
-    auto del = new_coeff - old_coeff;
-    auto x_var_reg = sc * x_var + s;
+    const auto del = new_coeff - old_coeff;
+    const auto x_var_reg = sc * x_var + s;
     rsq += del * (2 * grad - del * x_var_reg);
 }
 
@@ -307,18 +307,18 @@ void coordinate_descent(
 
     convg_measure = 0;
     for (auto it = begin; it != end; ++it) {
-        auto ss_idx = *it;              // index to strong set
-        auto k = strong_set[ss_idx];    // actual feature index
-        auto ak = strong_beta[ss_idx];  // corresponding beta
-        auto gk = strong_grad[ss_idx];  // corresponding gradient
-        auto A_kk = strong_A_diag[ss_idx];  // corresponding A diagonal element
+        const auto ss_idx = *it;              // index to strong set
+        const auto k = strong_set[ss_idx];    // actual feature index
+        const auto ak = strong_beta[ss_idx];  // corresponding beta
+        const auto gk = strong_grad[ss_idx];  // corresponding gradient
+        const auto A_kk = strong_A_diag[ss_idx];  // corresponding A diagonal element
                                     
         auto& ak_ref = strong_beta[ss_idx];
         update_coefficient(ak_ref, A_kk, gk, s, sc, lmda);
 
         if (ak_ref == ak) continue;
 
-        auto del = ak_ref - ak;
+        const auto del = ak_ref - ak;
 
         // update measure of convergence
         update_convergence_measure(convg_measure, del, A_kk);
@@ -328,11 +328,11 @@ void coordinate_descent(
 
         // update gradient
         strong_grad[ss_idx] -= s * del;
-        auto sc_del = sc * del;
+        const auto sc_del = sc * del;
         for (auto jt = begin; jt != end; ++jt) {
-            auto ss_idx_j = *jt;
-            auto j = strong_set[ss_idx_j];
-            auto A_jk = A.coeff(j, k);
+            const auto ss_idx_j = *jt;
+            const auto j = strong_set[ss_idx_j];
+            const auto A_jk = A.coeff(j, k);
             strong_grad[ss_idx_j] -= sc_del * A_jk;
         }
 
@@ -361,6 +361,7 @@ void coordinate_descent(
         AdditionalStepType additional_step=AdditionalStepType())
 {
     const auto sc = 1-s;
+    const auto get_strong_set = [&](auto i) { return strong_set[i]; };
 
     // Note: here we really assume sorted-ness!
     // Since begin->end results in increasing sequence of strong set indices,
@@ -369,31 +370,25 @@ void coordinate_descent(
 
     // We can also keep track of the range of strong set indices
     // that produce indices within the current block.
-    // TODO: binary search?
     auto range_begin = begin;
-    while (!block_it.is_in_block(*range_begin)) { ++block_it; } 
-
-    const auto get_strong_set = [&](auto i) {
-        return strong_set[i];
-    };
     auto range_end = internal::lower_bound(
-                range_begin, end, get_strong_set,
-                block_it.stride() + block_it.block().cols());
+            range_begin, end, get_strong_set,
+            block_it.stride() + block_it.block().cols());
 
     convg_measure = 0;
     for (auto it = begin; it != end; ++it) {
-        auto ss_idx = *it;              // index to strong set
-        auto k = strong_set[ss_idx];    // actual feature index
-        auto ak = strong_beta[ss_idx];  // corresponding beta
-        auto gk = strong_grad[ss_idx];  // corresponding gradient
-        auto A_kk = strong_A_diag[ss_idx];  // corresponding A diagonal element
+        const auto ss_idx = *it;              // index to strong set
+        const auto k = strong_set[ss_idx];    // actual feature index
+        const auto ak = strong_beta[ss_idx];  // corresponding beta
+        const auto gk = strong_grad[ss_idx];  // corresponding gradient
+        const auto A_kk = strong_A_diag[ss_idx];  // corresponding A diagonal element
                                     
         auto& ak_ref = strong_beta[ss_idx];
         update_coefficient(ak_ref, A_kk, gk, s, sc, lmda);
 
         if (ak_ref == ak) continue;
 
-        auto del = ak_ref - ak;
+        const auto del = ak_ref - ak;
 
         // update measure of convergence
         update_convergence_measure(convg_measure, del, A_kk);
@@ -404,28 +399,24 @@ void coordinate_descent(
         // update outer iterators to preserve invariant
         if (!block_it.is_in_block(k)) {
             block_it.advance_at(k);
-
-            // find the first position that is in block
             range_begin = internal::lower_bound(
                     range_end, end, get_strong_set,
                     block_it.stride());
             range_end = internal::lower_bound(
-                        range_begin, end, get_strong_set,
-                        block_it.stride() + block_it.block().cols());
+                    range_begin, end, get_strong_set,
+                    block_it.stride() + block_it.block().cols());
         }
-        auto k_shifted = block_it.shift(k);
+        const auto k_shifted = block_it.shift(k);
         const auto& block = block_it.block();
-        const auto k_begin = block_it.stride();
-        const auto k_end = k_begin + block.cols();
         
         // update gradient
         strong_grad[ss_idx] -= s * del;
-        auto sc_del = sc * del;
+        const auto sc_del = sc * del;
         for (auto jt = range_begin; jt != range_end; ++jt) {
-            auto ss_idx_j = *jt;
-            auto j = strong_set[ss_idx_j];
+            const auto ss_idx_j = *jt;
+            const auto j = strong_set[ss_idx_j];
             const auto j_shifted = block_it.shift(j);
-            auto A_jk = block.coeff(j_shifted, k_shifted);
+            const auto A_jk = block.coeff(j_shifted, k_shifted);
             strong_grad[ss_idx_j] -= sc_del * A_jk;
         }
 
@@ -531,13 +522,13 @@ void lasso_active_impl(
     Eigen::Map<util::vec_type<value_t>> ab_diff_o_view(
             active_beta_diff_ordered.data(), 
             active_beta_diff_ordered.size());
-    auto active_beta_ordered_expr = 
+    const auto active_beta_ordered_expr = 
         util::vec_type<value_t>::NullaryExpr(
             active_order.size(),
             [&](auto i) { return strong_beta[active_set[active_order[i]]]; });
     ab_diff_o_view = active_beta_ordered_expr;
 
-    auto active_set_iter_f = [&](auto i) {
+    const auto active_set_iter_f = [&](auto i) {
         return active_set[active_order[i]];
     };
 
@@ -601,14 +592,14 @@ void lasso_active(
     CUIType check_user_interrupt = CUIType())
 {
     const auto& A = A_base.derived();
-    auto sg_update = [&](const auto& sp_beta_diff) {
+    const auto sg_update = [&](const auto& sp_beta_diff) {
         if (sp_beta_diff.nonZeros() == 0) return;
 
         const auto sc = 1-s;
         // update gradient in non-active positions
         for (size_t ss_idx = 0; ss_idx < strong_set.size(); ++ss_idx) {
             if (is_active[ss_idx]) continue;
-            auto k = strong_set[ss_idx];
+            const auto k = strong_set[ss_idx];
             strong_grad[ss_idx] -= sc * A.col_dot(k, sp_beta_diff);
         }
     };
@@ -688,7 +679,7 @@ void lasso_active(
         // update gradient in non-active positions
         for (size_t ss_idx : strong_order) {
             if (is_active[ss_idx]) continue;
-            auto k = strong_set[ss_idx];
+            const auto k = strong_set[ss_idx];
             // update A block stride pointer if current feature is not in the block.
             if (!block_it.is_in_block(k)) {
                 block_it.advance_at(k);
@@ -797,14 +788,14 @@ inline void lasso(
     n_cds = 0;
     n_lmdas = 0;
 
-    auto add_active_set = [&](auto ss_idx) {
+    const auto add_active_set = [&](auto ss_idx) {
         if (!is_active[ss_idx]) {
             is_active[ss_idx] = true;
             active_set.push_back(ss_idx);
         }
     };
 
-    auto lasso_active_and_update = [&](size_t l, auto lmda) {
+    const auto lasso_active_and_update = [&](size_t l, auto lmda) {
         lasso_active(
                 A, s, strong_set, strong_order, 
                 active_set, active_order, active_set_ordered,
@@ -834,7 +825,7 @@ inline void lasso(
                     strong_set, strong_A_diag, A, s, lmda,
                     strong_beta, strong_grad,
                     convg_measure, rsq, add_active_set);
-            bool new_active_added = (old_active_size < active_set.size());
+            const bool new_active_added = (old_active_size < active_set.size());
 
             // since coordinate descent could have added new active variables,
             // we update active_order and active_set_ordered to preserve invariant.
