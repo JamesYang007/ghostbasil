@@ -13,3 +13,9 @@ __To build tests__:
 ```
 bazel test //ghostbasil/test/... -c dbg
 ```
+
+__To build benchmarks__:
+```
+bazel run //ghostbasil/benchmark:name_of_benchmark -c opt
+```
+where `name_of_benchmark.cpp` in `benchmark/` directory.

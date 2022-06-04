@@ -18,8 +18,7 @@ library(devtools)
 load_all(path_to_package)
 ```
 
-where `path_to_package` is `"."` if in the current directory,
-otherwise, the path to the current directory. 
+where `path_to_package` is `"."` if in the current directory. 
 
 To install the package locally:
 

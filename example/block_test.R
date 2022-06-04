@@ -26,7 +26,7 @@ for (k in 1:n_groups) {
     bmd[(k-1)*p + 1:p, (k-1)*p + 1:p] <- A
 }
 
-bench <- function(A) {
-    out.time <- microbenchmark(out <- ghostbasil(A,br,s), times=10L, unit='s')
+bench <- function(A, n.threads=0) {
+    out.time <- microbenchmark(out <- ghostbasil(A,br,s,n.threads=n.threads), times=10L, unit='s')
     list(out, out.time)
 }
