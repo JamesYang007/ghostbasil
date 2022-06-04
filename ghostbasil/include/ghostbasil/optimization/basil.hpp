@@ -41,19 +41,19 @@ void next_lambdas(
  * into strong_set and strong_hashset.
  * strong_set is sorted to fit the invariant.
  */
-template <class SSType, class SHType, class GradType,
+template <class SSType, class SHType, class AbsGradType,
           class ISType>
 GHOSTBASIL_STRONG_INLINE
 void init_strong_set(
         SSType& strong_set, 
         SHType& strong_hashset,
-        const GradType& grad, 
+        const AbsGradType& abs_grad, 
         const ISType& is_strong,
         size_t n_add,
         size_t capacity)
 {
     strong_set.reserve(capacity); 
-    screen(grad.array().abs(), is_strong, n_add, strong_set);
+    screen(abs_grad, is_strong, n_add, strong_set);
     strong_hashset.insert(strong_set.begin(), strong_set.end());
     std::sort(strong_set.begin(), strong_set.end());
 }
@@ -134,18 +134,17 @@ void init_strong_grad(
  * Initializes strong_A_diag with the diagonal of A on strong set.
  * strong_A_diag[i] = diagonal of A at index strong_set[i].
  */
-template <class SADType, class DerivedType, class SSType>
+template <class SADType, class AType, class SSType>
 GHOSTBASIL_STRONG_INLINE
 void init_strong_A_diag(
         SADType& strong_A_diag, 
-        const Eigen::DenseBase<DerivedType>& A_base, 
+        const AType& A, 
         const SSType& strong_set,
         size_t begin,
         size_t end,
         size_t capacity=0)
 {
     assert((begin <= end) && (end <= strong_set.size()));
-    const auto& A = A_base.derived();
 
     // subsequent calls does not affect capacity
     strong_A_diag.reserve(capacity);
@@ -154,36 +153,6 @@ void init_strong_A_diag(
     for (size_t i = begin; i < end; ++i) {
         auto k = strong_set[i];
         strong_A_diag[i] = A.coeff(k, k);
-    }
-}
-
-template <class SADType, class MatType, class SSType>
-GHOSTBASIL_STRONG_INLINE
-void init_strong_A_diag(
-        SADType& strong_A_diag, 
-        const BlockMatrix<MatType>& A, 
-        const SSType& strong_set,
-        size_t begin,
-        size_t end,
-        size_t capacity=0)
-{
-    assert((begin <= end) && (end <= strong_set.size()));
-
-    // subsequent calls does not affect capacity
-    strong_A_diag.reserve(capacity);
-    strong_A_diag.resize(strong_set.size());
-
-    auto block_it = A.block_begin();
-
-    for (size_t i = begin; i < end; ++i) {
-        auto k = strong_set[i];
-
-        // update A block stride pointer if current feature is not in the block.
-        if (!block_it.is_in_block(k)) block_it.advance_at(k);
-
-        const auto k_shifted = block_it.shift(k);
-        const auto& block = block_it.block();
-        strong_A_diag[i] = block.coeff(k_shifted, k_shifted);
     }
 }
 
@@ -322,7 +291,7 @@ auto check_kkt(
     const LmdasType& lmdas, 
     const BetasType& betas,
     const ISType& is_strong,
-    size_t n_threads, // TODO: bring back OpenMP later
+    size_t n_threads, 
     GradType& grad,
     GradType& grad_next)
 {
@@ -367,6 +336,7 @@ auto check_kkt(
             // initialized below
             size_t bd_seg_begin;
             size_t bd_seg_end; 
+            bool do_initial_skip = true;
 
             {
                 const auto curr_stride = block_it.stride(); // should be 0
@@ -382,6 +352,7 @@ auto check_kkt(
                 bd_seg_end = std::distance(bd_inner, end);
             }
 
+//#pragma omp parallel for schedule(static) num_threads(n_threads) firstprivate(block_it, bd_seg_begin, bd_seg_end, bd_inner2, do_initial_skip)
             for (size_t k = 0; k < r.size(); ++k) {
                 // Just omit the KKT check for strong variables.
                 // If KKT failed previously, just do a no-op until loop finishes.
@@ -415,7 +386,13 @@ auto check_kkt(
                     dp += A_block.coeff(block_it.shift(bd_inner[i]), k_shifted) * bd_value[i];
                 }
 
-                const bool is_active_k = (k == *bd_inner2);
+                // Note: this whole block of code assumes k runs contiguously!
+                // This should be guaranteed when schedule is set to static.
+                //if (do_initial_skip) {
+                //    bd_inner2 = std::lower_bound(bd_inner, bd_inner+bd_nnz, k);
+                //    do_initial_skip = false;
+                //}
+                const bool is_active_k = (bd_inner2 != bd_inner+bd_nnz) && (k == *bd_inner2);
                 auto beta_i_coeff_k = (is_active_k) ? 
                     bd_value[bd_inner2-bd_inner] : 0;
                 bd_inner2 += is_active_k;
@@ -548,7 +525,7 @@ inline void basil(
     using sp_vec_t = util::sp_vec_type<value_t, Eigen::ColMajor, index_t>;
 
     const size_t n_features = r.size();
-    const size_t initial_size = std::min(n_features, 1uL << 14);
+    const size_t initial_size = std::min(n_features, 1uL << 20);
 
     // input cleaning
     const bool use_user_lmdas = user_lmdas.size() != 0;
@@ -577,7 +554,7 @@ inline void basil(
     std::vector<index_t> strong_set; 
 
     // initialize strong_set, strong_hashset based on current absolute gradient
-    init_strong_set(strong_set, strong_hashset, grad, 
+    init_strong_set(strong_set, strong_hashset, grad.array().abs(), 
             is_strong, strong_size, initial_size);
 
     // strong set order
@@ -668,9 +645,9 @@ inline void basil(
 
         // check early termination 
         if (rsqs.size() >= 3) {
-            auto rsq_u = rsqs[rsqs.size()-1];
-            auto rsq_m = rsqs[rsqs.size()-2];
-            auto rsq_l = rsqs[rsqs.size()-3];
+            const auto rsq_u = rsqs[rsqs.size()-1];
+            const auto rsq_m = rsqs[rsqs.size()-2];
+            const auto rsq_l = rsqs[rsqs.size()-3];
             if (check_early_stop_rsq(rsq_l, rsq_m, rsq_u)) break;
         }
 
@@ -685,16 +662,15 @@ inline void basil(
 
         if (idx < lmdas_curr.size()) {
             screen(grad.array().abs(), is_strong, delta_strong_size, strong_set);
+            if (strong_set.size() > max_strong_size) throw util::max_basil_strong_set();
             new_strong_added = (old_strong_set_size < strong_set.size());
 
-            if (strong_set.size() > max_strong_size) throw util::max_basil_strong_set();
-
-            auto strong_set_new_begin = std::next(strong_set.begin(), old_strong_set_size);
+            const auto strong_set_new_begin = std::next(strong_set.begin(), old_strong_set_size);
             strong_hashset.insert(strong_set_new_begin, strong_set.end());
 
             // Note: DO NOT UPDATE strong_order YET!
             // Updating previously valid beta requires the old order.
-
+            
             // only need to update on the new strong variables
             init_strong_A_diag(strong_A_diag, A, strong_set, 
                     old_strong_set_size, strong_set.size());
