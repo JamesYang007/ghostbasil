@@ -225,11 +225,11 @@ void init_strong_beta(
  *                      It is undefined-behavior accessing this after the call.
  *                      It just has to be initialized to the same size as grad.
  */
-template <class DerivedType, class RType, class ValueType, 
+template <class AType, class RType, class ValueType, 
           class LmdasType, class BetasType, class ISType, class GradType>
 GHOSTBASIL_STRONG_INLINE 
 auto check_kkt(
-    const Eigen::DenseBase<DerivedType>& A_base, 
+    const AType& A, 
     const RType& r,
     ValueType s,
     const LmdasType& lmdas, 
@@ -242,8 +242,6 @@ auto check_kkt(
     assert(r.size() == grad.size());
     assert(grad.size() == grad_next.size());
     assert(betas.size() == lmdas.size());
-
-    const auto& A = A_base.derived();
 
     size_t i = 0;
     auto sc = 1-s;
@@ -272,143 +270,6 @@ auto check_kkt(
                 (std::abs(gk) < lmda /* TODO: numerical prec window? */)) continue;
             
             kkt_fail.store(true, std::memory_order_relaxed);
-        }
-
-        if (kkt_fail.load(std::memory_order_relaxed)) break; 
-        else grad.swap(grad_next);
-    }
-
-    return i;
-}
-
-template <class BlockType, class RType, class ValueType, 
-          class LmdasType, class BetasType, class ISType, class GradType>
-GHOSTBASIL_STRONG_INLINE 
-auto check_kkt(
-    const BlockMatrix<BlockType>& A, 
-    const RType& r,
-    ValueType s,
-    const LmdasType& lmdas, 
-    const BetasType& betas,
-    const ISType& is_strong,
-    size_t n_threads, 
-    GradType& grad,
-    GradType& grad_next)
-{
-    using value_t = ValueType;
-
-    assert(r.size() == grad.size());
-    assert(grad.size() == grad_next.size());
-    assert(betas.size() == lmdas.size());
-
-    size_t i = 0;
-    auto sc = 1-s;
-
-    if (lmdas.size() == 0) return i;
-
-    for (; i < lmdas.size(); ++i) {
-        const auto& beta_i = betas[i];
-        auto lmda = lmdas[i];
-
-        std::atomic<bool> kkt_fail(false);
-
-        const auto bd_nnz = beta_i.nonZeros();
-
-        // simpler case for zero case:
-        // it MUST be the case the current grad is simply r,
-        // so it is already computed.
-        if (bd_nnz == 0) {
-#pragma omp parallel for schedule(static) num_threads(n_threads)
-            for (size_t k = 0; k < r.size(); ++k) {
-                if (kkt_fail.load(std::memory_order_relaxed) || is_strong(k) || 
-                    (std::abs(grad[k]) < lmda /* TODO: numerical prec window? */)) continue;
-                kkt_fail.store(true, std::memory_order_relaxed);
-            }
-        } else {
-            auto block_it = A.block_begin();
-            const auto bd_inner = beta_i.innerIndexPtr();
-            const auto bd_value = beta_i.valuePtr();
-
-            // iterator responsible for keeping track of
-            // the next active feature as we iterate.
-            auto bd_inner2 = beta_i.innerIndexPtr();
-
-            // initialized below
-            size_t bd_seg_begin;
-            size_t bd_seg_end; 
-            bool do_initial_skip = true;
-
-            {
-                const auto curr_stride = block_it.stride(); // should be 0
-                assert(curr_stride == 0);
-
-                // find first time a non-zero index of beta is inside the current block
-                const auto it = std::lower_bound(bd_inner, bd_inner+bd_nnz, curr_stride);
-                bd_seg_begin = std::distance(bd_inner, it);
-
-                // find first time a non-zero index of beta is outside the current block
-                const auto next_stride = curr_stride+block_it.block().cols();
-                const auto end = std::lower_bound(bd_inner+bd_seg_begin, bd_inner+bd_nnz, next_stride);
-                bd_seg_end = std::distance(bd_inner, end);
-            }
-
-#pragma omp parallel for schedule(static) num_threads(n_threads) firstprivate(block_it, bd_seg_begin, bd_seg_end, bd_inner2, do_initial_skip)
-            for (size_t k = 0; k < r.size(); ++k) {
-                // Just omit the KKT check for strong variables.
-                // If KKT failed previously, just do a no-op until loop finishes.
-                // This is because OpenMP doesn't allow break statements.
-                bool kkt_fail_raw = kkt_fail.load(std::memory_order_relaxed);
-                if (kkt_fail_raw) continue;
-
-                if (!block_it.is_in_block(k)) {
-                    block_it.advance_at(k);
-
-                    const auto curr_stride = block_it.stride();
-                    const auto it = std::lower_bound(
-                            bd_inner+bd_seg_end, 
-                            bd_inner+bd_nnz, 
-                            curr_stride);
-                    bd_seg_begin = std::distance(bd_inner, it);
-
-                    const auto next_stride = curr_stride+block_it.block().cols();
-                    const auto end = std::lower_bound(
-                            bd_inner+bd_seg_begin, 
-                            bd_inner+bd_nnz, 
-                            next_stride);
-                    bd_seg_end = std::distance(bd_inner, end);
-                }
-
-                const auto k_shifted = block_it.shift(k);
-                const auto& A_block = block_it.block();
-                
-                value_t dp = 0;
-                for (auto i = bd_seg_begin; i < bd_seg_end; ++i) {
-                    dp += A_block.coeff(block_it.shift(bd_inner[i]), k_shifted) * bd_value[i];
-                }
-
-                // Note: this whole block of code assumes k runs contiguously!
-                // This should be guaranteed when schedule is set to static.
-                if (do_initial_skip) {
-                    bd_inner2 = std::lower_bound(bd_inner, bd_inner+bd_nnz, k);
-                    do_initial_skip = false;
-                }
-                const bool is_active_k = (bd_inner2 != bd_inner+bd_nnz) && (k == *bd_inner2);
-                auto beta_i_coeff_k = (is_active_k) ? 
-                    bd_value[bd_inner2-bd_inner] : 0;
-                bd_inner2 += is_active_k;
-
-                // we still need to save the gradients including strong variables
-                auto gk = -sc * dp + r[k] - s * beta_i_coeff_k;
-                grad_next[k] = gk;
-
-                // this check MUST come after gradient has been computed.
-                // Even for strong variables, we need to compute their gradient.
-                if (is_strong(k) || 
-                    (std::abs(gk) < lmda /* TODO: numerical prec window? */)) continue;
-
-                // if KKT check failed and is not strong, tell other threads to stop working also.
-                kkt_fail.store(true, std::memory_order_relaxed);
-            }
         }
 
         if (kkt_fail.load(std::memory_order_relaxed)) break; 

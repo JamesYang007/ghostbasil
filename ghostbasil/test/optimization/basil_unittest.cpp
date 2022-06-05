@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
 #include <ghostbasil/optimization/basil.hpp>
+#include <ghostbasil/matrix/block_matrix.hpp>
 #include <tools/data_util.hpp>
 #include <tools/macros.hpp>
+#include <tools/matrix/block_matrix.hpp>
 #include <thread>
 
 namespace ghostbasil {
@@ -63,7 +65,7 @@ struct BasilFixture
         auto& r = std::get<1>(input);
         auto& s = std::get<2>(input);
         auto& user_lmdas = std::get<3>(input);
-        auto& max_strong_size_local = std::get<4>(input);
+        max_strong_size = std::get<4>(input);
         auto& betas = std::get<5>(input);
         auto& lmdas = std::get<6>(input);
         auto& rsqs = std::get<7>(input);
@@ -73,7 +75,7 @@ struct BasilFixture
 
         try {
             basil(A, r, s, user_lmdas, max_n_lambdas, n_lambdas_iter,
-                  strong_size, delta_strong_size, max_strong_size_local, max_cds, thr, 
+                  strong_size, delta_strong_size, max_strong_size, max_cds, thr, 
                   min_ratio, n_threads,
                   betas, lmdas, rsqs);
 #ifdef MAKE_LMDAS
@@ -136,6 +138,195 @@ TEST_F(BasilFixture, basil_p_large)
             strong_size,
             delta_strong_size);
 }
+
+struct BasilBlockFixture
+    : BasilFixture,
+      tools::BlockMatrixUtil,
+      ::testing::WithParamInterface<
+        std::tuple<size_t, size_t, size_t> >
+{
+    using butil = tools::BlockMatrixUtil;
+    using value_t = double;
+    using mat_t = util::mat_type<value_t>;
+    using bmat_t = BlockMatrix<mat_t>;
+
+    // Generates a block matrix and a corresponding dense matrix
+    // and other data that make_input needs.
+    auto generate_block_dense(
+            size_t seed,
+            size_t L,
+            size_t p,
+            size_t strong_size = 2,
+            size_t delta_strong_size = 3,
+            size_t max_strong_size = 100,
+            double min_ratio = 1e-6)
+    {
+        auto&& out = butil::generate_data(seed, L, p, 0, true, false);
+        auto&& mat_list = std::get<0>(out);
+
+        auto&& A_dense = std::get<3>(out);
+        bmat_t A(mat_list); 
+
+        std::mt19937 gen(seed);
+        std::normal_distribution<> norm(0., 1.);
+        size_t n_cols = A.cols();
+        Eigen::VectorXd beta(n_cols); 
+        beta.setZero();
+        std::uniform_int_distribution<> unif(0, n_cols-1);
+        for (size_t k = 0; k < 10; ++k) {
+            beta[unif(gen)] = norm(gen);
+        }
+
+        Eigen::VectorXd r = A_dense * beta + Eigen::VectorXd::NullaryExpr(n_cols,
+                [&](auto) { return 0.2 * norm(gen); });
+
+        value_t s = 0.1;
+
+        return std::make_tuple(
+                std::move(mat_list), // must return also since A references it
+                std::move(A),
+                std::move(A_dense),
+                std::move(r),
+                std::move(s),
+                strong_size,
+                delta_strong_size,
+                max_strong_size,
+                min_ratio);
+    }
+
+    template <class DatasetType>
+    auto generate_datasets(const DatasetType& dataset)
+    {
+        auto generate_block_pack = [&]() {
+            return std::make_tuple(
+                std::get<1>(dataset), // A (block)
+                std::get<3>(dataset), // r
+                std::get<4>(dataset), // s
+                std::get<5>(dataset),
+                std::get<6>(dataset),
+                std::get<7>(dataset),
+                std::get<8>(dataset)
+                );
+        };
+        auto generate_dense_pack = [&]() {
+            return std::make_tuple(
+                std::get<2>(dataset), // A_dense
+                std::get<3>(dataset), // r
+                std::get<4>(dataset), // s
+                std::get<5>(dataset),
+                std::get<6>(dataset),
+                std::get<7>(dataset),
+                std::get<8>(dataset)
+                );
+        };
+        return std::make_tuple(generate_block_pack, generate_dense_pack);
+    }
+
+    template <class F>
+    auto make_input(F generate_dataset)
+    {
+        auto dataset = generate_dataset();
+        auto&& A = std::get<0>(dataset);
+        auto&& r = std::get<1>(dataset);
+        auto&& s = std::get<2>(dataset);
+        auto&& strong_size = std::get<3>(dataset);
+        auto&& delta_strong_size = std::get<4>(dataset);
+        auto&& max_strong_size = std::get<5>(dataset);
+        auto&& min_ratio = std::get<6>(dataset);
+
+        std::vector<double> user_lmdas;
+        std::vector<Eigen::SparseVector<double>> betas;
+        std::vector<double> lmdas;
+        std::vector<double> rsqs;
+
+        return std::make_tuple(
+                A, r, s, user_lmdas, strong_size, delta_strong_size, 
+                max_strong_size, min_ratio,
+                betas, lmdas, rsqs);
+    }
+
+    template <class DataSetType>
+    auto run(const DataSetType& dataset)
+    {
+        auto&& A = std::get<0>(dataset);
+        auto&& r = std::get<1>(dataset);
+        auto&& s = std::get<2>(dataset);
+        auto&& user_lmdas = std::get<3>(dataset);
+        auto&& strong_size = std::get<4>(dataset);
+        auto&& delta_strong_size = std::get<5>(dataset);
+        auto&& max_strong_size = std::get<6>(dataset);
+        auto&& min_ratio = std::get<7>(dataset);
+        auto betas = std::get<8>(dataset);
+        auto lmdas = std::get<9>(dataset);
+        auto rsqs = std::get<10>(dataset);
+
+        basil(A, r, s, user_lmdas, max_n_lambdas, n_lambdas_iter,
+              strong_size, delta_strong_size, max_strong_size, max_cds, thr, 
+              min_ratio, n_threads,
+              betas, lmdas, rsqs);
+        return std::make_tuple(betas, lmdas, rsqs);
+    }
+
+    template <class F1, class F2>
+    void test(F1 generate_dataset_block,
+              F2 generate_dataset_dense)
+    {
+        auto&& actual_dataset = make_input(generate_dataset_block);
+        auto&& expected_dataset = make_input(generate_dataset_dense);
+
+        auto&& expected = run(expected_dataset);
+        auto&& actual = run(actual_dataset);
+
+        auto&& expected_betas = std::get<0>(expected);
+        auto&& expected_lmdas = std::get<1>(expected);
+        auto&& expected_rsqs = std::get<2>(expected);
+        auto&& actual_betas = std::get<0>(actual);
+        auto&& actual_lmdas = std::get<1>(actual);
+        auto&& actual_rsqs = std::get<2>(actual);
+        
+        EXPECT_EQ(expected_betas.size(), expected_lmdas.size());
+        EXPECT_EQ(expected_betas.size(), expected_rsqs.size());
+
+        EXPECT_EQ(actual_betas.size(), expected_betas.size());
+        EXPECT_EQ(actual_lmdas.size(), expected_lmdas.size());
+        EXPECT_EQ(actual_rsqs.size(), expected_rsqs.size());
+        for (size_t i = 0; i < expected_lmdas.size(); ++i) {
+            const auto& expected_beta_i = expected_betas[i];
+            const auto& actual_beta_i = actual_betas[i];
+            EXPECT_EQ(actual_beta_i.size(), expected_beta_i.size());
+            for (size_t j = 0; j < expected_beta_i.size(); ++j) {
+                EXPECT_DOUBLE_EQ(actual_beta_i.coeff(j), expected_beta_i.coeff(j));
+            }
+            EXPECT_DOUBLE_EQ(actual_rsqs[i], expected_rsqs[i]);
+            EXPECT_DOUBLE_EQ(actual_lmdas[i], expected_lmdas[i]);
+        }
+    }
+};
+
+TEST_P(BasilBlockFixture, basil_block)
+{
+    size_t seed;
+    size_t L;
+    size_t p;
+    std::tie(seed, L, p) = GetParam();
+    auto&& dataset = generate_block_dense(seed, L, p);
+    auto fs = generate_datasets(dataset);
+    test(std::get<0>(fs), std::get<1>(fs));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+        BasilBlockSuite,
+        BasilBlockFixture,
+        testing::Values(
+            std::make_tuple(0,      1, 2),
+            std::make_tuple(0,      2, 2),
+            std::make_tuple(124,    3, 10),
+            std::make_tuple(321,    5, 20),
+            std::make_tuple(9382,   10, 7),
+            std::make_tuple(3,      20, 3),
+            std::make_tuple(6,      4, 20)
+            )
+    );
     
 } // namespace
 } // namespace ghostbasil

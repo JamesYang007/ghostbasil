@@ -301,7 +301,7 @@ struct LassoBlockFixture
     }
 };
 
-TEST_P(LassoBlockFixture, lasso_block_1)
+TEST_P(LassoBlockFixture, lasso_block)
 {
     size_t seed;
     size_t L;

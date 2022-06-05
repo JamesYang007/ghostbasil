@@ -1,5 +1,6 @@
 #pragma once
 #include <Eigen/Core>
+#include <Eigen/SparseCore>
 #include <vector>
 #include <string>
 #include <ghostbasil/util/macros.hpp>
@@ -104,7 +105,7 @@ public:
 
     template <class VecType>
     GHOSTBASIL_STRONG_INLINE
-    value_t col_dot(size_t k, const VecType& v) const
+    value_t col_dot(size_t k, const Eigen::DenseBase<VecType>& v) const
     {
         assert(k < cols());
 
@@ -118,7 +119,7 @@ public:
         const auto ik = std::distance(n_cum_sum_.begin(), ik_begin);  
         assert((ik+1) < n_cum_sum_.size());
 
-        // Find i(k)th block matrix, diagonal matrix, and size.
+        // Find i(k)th block matrix.
         const auto& B = mat_list_[ik];
 
         // Find v_{i(k)}, i(k)th block of vector. 
@@ -128,6 +129,43 @@ public:
         const size_t k_shifted = k - n_cum_sum_[ik];
 
         return B.col_dot(k_shifted, vi);
+    }
+
+    template <class VecType>
+    GHOSTBASIL_STRONG_INLINE
+    value_t col_dot(size_t k, const Eigen::SparseCompressedBase<VecType>& v) const
+    {
+        assert(k < cols());
+
+        // Find the i(k) which is the closest index to k:
+        // n_cum_sum_[i(k)] <= k < n_cum_sum_[i(k)+1]
+        const auto ik_end = std::upper_bound(
+                n_cum_sum_.begin(),
+                n_cum_sum_.end(),
+                k);
+        const auto ik_begin = std::next(ik_end, -1);
+        const auto ik = std::distance(n_cum_sum_.begin(), ik_begin);  
+        assert((ik+1) < n_cum_sum_.size());
+
+        // Find i(k)th block matrix.
+        const auto& B = mat_list_[ik];
+        const auto stride = n_cum_sum_[ik];
+        const size_t k_shifted = k - stride;
+
+        // Find v_{i(k)}, i(k)th block of vector. 
+        const auto v_inner = v.innerIndexPtr();
+        const auto v_value = v.valuePtr();
+        const auto v_nnz = v.nonZeros();
+        const auto begin = std::lower_bound(v_inner, v_inner+v_nnz, stride)-v_inner;
+        const auto end = std::lower_bound(v_inner+begin, v_inner+v_nnz, n_cum_sum_[ik+1])-v_inner;
+
+        // Compute dot-product
+        Scalar dp = 0; 
+        for (auto j = begin; j != end; ++j) {
+            dp += B.coeff(v_inner[j]-stride, k_shifted) * v_value[j]; 
+        }
+
+        return dp;
     }
 
     template <class VecType>
