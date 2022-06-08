@@ -8,21 +8,21 @@ load_all(GhostBASIL.path)
 
 p <- 100
 s <- 0.5
-n_groups <- 2
+n_blocks <- 2
 dataset <- generate.data(p, p)
 A <- dataset$A
 r <- dataset$r
 
 mat_list <- list()
-for (k in 1:n_groups) {
+for (k in 1:n_blocks) {
     mat_list <- append(mat_list, list(A))
 }
 
 bm <- BlockMatrix(mat_list)
-br <- rep(r, times=n_groups)
+br <- rep(r, times=n_blocks)
 
-bmd <- matrix(0, n_groups*p, n_groups*p)
-for (k in 1:n_groups) {
+bmd <- matrix(0, n_blocks*p, n_blocks*p)
+for (k in 1:n_blocks) {
     bmd[(k-1)*p + 1:p, (k-1)*p + 1:p] <- A
 }
 

@@ -1,5 +1,8 @@
 #' Fits PGR objective with BASIL framework.
-#' @param   A   data covariance matrix (currently must be a dense matrix).
+#'
+#' @param   A   data covariance matrix.
+#'              It must be one of four types: matrix, GhostMatrix__, BlockMatrix__, BlockGhostMatrix__.
+#'              For types of the form <type>__, see the function <type>.
 #' @param   r   correlation vector.
 #' @param   s   regularization to shrink A towards identity ((1-s) * A + s * I).
 #' @param   user.lambdas    user-specified sequence of lambdas. Will be sorted in decreasing order if not sorted already.
@@ -12,19 +15,25 @@
 #'                          The maximum lambda is the largest lambda where solution isn't 0.
 #' @param   lambdas.iter    number of lambdas to compute strong set solutions for at each iteration of the BASIL algorithm.
 #'                          Internally, capped at max.lambdas.
+#'                          Must be positive.
 #' @param   strong.size     initial number of strong set variables to include.
 #'                          Internally, capped at max.strong.size.
 #' @param   delta.strong.size   number of strong set variables to include at every iteration of the BASIL algorithm.
 #'                              Internally, capped at number of non-strong variables at every iteration of BASIL.
+#'                              Must be positive.
 #' @param   max.strong.size     maximum number of strong set size. 
 #'                              Internally, capped at number of features.
+#'                              Must be positive.
 #' @param   max.cds         maximum number of coordinate descents per BASIL iteration.
+#'                          Must be positive.
 #' @param   thr             coordinate descent convergence threshold.
 #' @param   min.ratio       a factor times the maximum lambda value defines the smallest lambda value.
 #'                          This is only used if user.lambdas is empty.
 #' @param   n.threads       number of OpenMP threads for KKT check. 
 #'                          Set it to 0 (default) to disable OpenMP usage.
 #'                          Set it to -1 to use all available logical cores.
+#'                          Note that if this value is too high, performance may worsen.
+#'                          A general rule of thumb is to use the number of physical (not logical) cores.
 #' @export
 ghostbasil <- function(A, r, s, 
                       user.lambdas=c(), 
@@ -77,25 +86,24 @@ ghostbasil <- function(A, r, s,
         stop("Number of threads must be at least -1.")
     }
 
-    # run the C++ routine
+    # choose the C++ routine
+    basil_cpp <- NA
     if (any(class(A) == 'matrix')) {
-        out <- basil_dense__(
-                    A=A,
-                    r=r,
-                    s=s,
-                    user_lmdas=user.lambdas,
-                    max_n_lambdas=max.lambdas,
-                    n_lambdas_iter=lambdas.iter,
-                    strong_size=strong.size, 
-                    delta_strong_size=delta.strong.size, 
-                    max_strong_size=max.strong.size,
-                    max_n_cds=max.cds, 
-                    thr=thr,
-                    min_ratio=min.ratio,
-                    n_threads=n.threads)
+        basil_cpp <- basil_dense__
     }
     else if (any(class(A) == 'Rcpp_BlockMatrix__')) {
-        out <- basil_block_dense__(
+        basil_cpp <- basil_block_dense__
+    }
+    else if (any(class(A) == 'Rcpp_GhostMatrix__')) {
+        basil_cpp <- basil_ghost__
+    }
+    else if (any(class(A) == 'Rcpp_BlockGhostMatrix__')) {
+        basil_cpp <- basil_block_ghost__
+    }
+    else {
+        stop("Unrecognized type of A.")
+    }
+    out <- basil_cpp(
                     A=A,
                     r=r,
                     s=s,
@@ -109,11 +117,7 @@ ghostbasil <- function(A, r, s,
                     thr=thr,
                     min_ratio=min.ratio,
                     n_threads=n.threads
-        )
-    }
-    else {
-        stop("Unrecognized type of A.")
-    }
+                    )
 
     # raise any warnings
     if (out$error != "") warning(out$error)

@@ -9,6 +9,14 @@ basil_block_dense__ <- function(A, r, s, user_lmdas, max_n_lambdas, n_lambdas_it
     .Call(`_ghostbasil_basil_block_dense__`, A, r, s, user_lmdas, max_n_lambdas, n_lambdas_iter, strong_size, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads)
 }
 
+basil_ghost__ <- function(A, r, s, user_lmdas, max_n_lambdas, n_lambdas_iter, strong_size, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads) {
+    .Call(`_ghostbasil_basil_ghost__`, A, r, s, user_lmdas, max_n_lambdas, n_lambdas_iter, strong_size, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads)
+}
+
+basil_block_ghost__ <- function(A, r, s, user_lmdas, max_n_lambdas, n_lambdas_iter, strong_size, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads) {
+    .Call(`_ghostbasil_basil_block_ghost__`, A, r, s, user_lmdas, max_n_lambdas, n_lambdas_iter, strong_size, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads)
+}
+
 objective_sparse__ <- function(A, r, s, lmda, beta) {
     .Call(`_ghostbasil_objective_sparse__`, A, r, s, lmda, beta)
 }

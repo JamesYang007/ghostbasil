@@ -48,7 +48,18 @@ class BlockMatrix
         return std::distance(n_cum_sum_.begin(), it)-1;
     }
 
-    inline void constructor_check() const
+public:
+    using Scalar = value_t;
+    using Index = typename Eigen::Index;
+
+    class ConstBlockIterator;
+
+    BlockMatrix(): mat_list_{nullptr}, n_mats_{0} {}
+
+    template <class MatrixListType>
+    BlockMatrix(const MatrixListType& mat_list)
+        : mat_list_(mat_list.data()),
+          n_mats_(mat_list.size())
     {
         for (size_t i = 0; i < n_mats_; ++i) {
             const auto& B = mat_list_[i];
@@ -67,27 +78,6 @@ class BlockMatrix
                 throw std::runtime_error(error);
             }
         }
-    }
-
-public:
-    using Scalar = value_t;
-    using Index = typename Eigen::Index;
-
-    class ConstBlockIterator;
-
-    BlockMatrix(): mat_list_{nullptr}, n_mats_{0} {}
-
-    template <class MatrixListType>
-    BlockMatrix(const MatrixListType& mat_list)
-    {
-        reset(mat_list);
-    }
-
-    template <class MatrixListType>
-    inline void reset(const MatrixListType& mat_list) 
-    {
-        mat_list_ = mat_list.data();
-        n_mats_ = mat_list.size();
 
         // Compute the cumulative number of features.
         n_cum_sum_.resize(n_mats_+1);
@@ -95,8 +85,6 @@ public:
         for (size_t i = 0; i < n_mats_; ++i) {
             n_cum_sum_[i+1] = n_cum_sum_[i] + mat_list_[i].cols();
         }
-
-        constructor_check();
     }
 
     GHOSTBASIL_STRONG_INLINE Index rows() const { return n_features(); }

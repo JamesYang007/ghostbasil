@@ -3,7 +3,7 @@
 dim.Rcpp_BlockMatrix__ <- function(x) x$dim
 
 #' Creates an instance of a BlockMatrix.
-#' @param   blocks  list of matrices of the same type.
+#' @param   blocks  list of dense matrices.
 #' @export
 BlockMatrix <- function(blocks)
 {

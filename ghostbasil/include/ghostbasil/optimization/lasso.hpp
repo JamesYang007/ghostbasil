@@ -264,6 +264,70 @@ void update_rsq(
     rsq += del * (2 * grad - del * x_var_reg);
 }
 
+namespace internal {
+
+/*
+ * Default behavior of coordinate descent.
+ */
+template <class Iter, class StrongSetType, 
+          class StrongADiagType, class AType, class ValueType,
+          class StrongBetaType, class StrongGradType,
+          class AdditionalStepType=util::no_op>
+GHOSTBASIL_STRONG_INLINE
+void coordinate_descent__(
+        Iter begin,
+        Iter end,
+        const StrongSetType& strong_set,
+        const StrongADiagType& strong_A_diag,
+        const AType& A,
+        ValueType s,
+        ValueType lmda,
+        StrongBetaType& strong_beta,
+        StrongGradType& strong_grad,
+        ValueType& convg_measure,
+        ValueType& rsq,
+        AdditionalStepType additional_step=AdditionalStepType())
+{
+    const auto sc = 1-s;
+
+    convg_measure = 0;
+    for (auto it = begin; it != end; ++it) {
+        const auto ss_idx = *it;              // index to strong set
+        const auto k = strong_set[ss_idx];    // actual feature index
+        const auto ak = strong_beta[ss_idx];  // corresponding beta
+        const auto gk = strong_grad[ss_idx];  // corresponding gradient
+        const auto A_kk = strong_A_diag[ss_idx];  // corresponding A diagonal element
+                                    
+        auto& ak_ref = strong_beta[ss_idx];
+        update_coefficient(ak_ref, A_kk, gk, s, sc, lmda);
+
+        if (ak_ref == ak) continue;
+
+        const auto del = ak_ref - ak;
+
+        // update measure of convergence
+        update_convergence_measure(convg_measure, del, A_kk);
+
+        // update rsq
+        update_rsq(rsq, ak, ak_ref, A_kk, gk, s, sc);
+
+        // update gradient
+        strong_grad[ss_idx] -= s * del;
+        const auto sc_del = sc * del;
+        for (auto jt = begin; jt != end; ++jt) {
+            const auto ss_idx_j = *jt;
+            const auto j = strong_set[ss_idx_j];
+            const auto A_jk = A.coeff(j, k);
+            strong_grad[ss_idx_j] -= sc_del * A_jk;
+        }
+
+        // additional step
+        additional_step(ss_idx);
+    }
+}
+
+} // namespace internal
+
 /*
  * Coordinate descent (one loop) over a possibly subset of strong variables.
  * See "lasso_active" for more descriptions of arguments.
@@ -303,6 +367,31 @@ void coordinate_descent(
         AdditionalStepType additional_step=AdditionalStepType())
 {
     const auto& A = A_base.derived();
+    internal::coordinate_descent__(
+            begin, end, strong_set, strong_A_diag, A,
+            s, lmda, strong_beta, strong_grad, convg_measure, rsq,
+            additional_step);
+}
+
+template <class Iter, class StrongSetType, 
+          class StrongADiagType, class MatType, class VecType, class ValueType,
+          class StrongBetaType, class StrongGradType,
+          class AdditionalStepType=util::no_op>
+GHOSTBASIL_STRONG_INLINE
+void coordinate_descent(
+        Iter begin,
+        Iter end,
+        const StrongSetType& strong_set,
+        const StrongADiagType& strong_A_diag,
+        const GhostMatrix<MatType, VecType>& A,
+        ValueType s,
+        ValueType lmda,
+        StrongBetaType& strong_beta,
+        StrongGradType& strong_grad,
+        ValueType& convg_measure,
+        ValueType& rsq,
+        AdditionalStepType additional_step=AdditionalStepType())
+{
     const auto sc = 1-s;
 
     convg_measure = 0;
@@ -327,13 +416,18 @@ void coordinate_descent(
         update_rsq(rsq, ak, ak_ref, A_kk, gk, s, sc);
 
         // update gradient
-        strong_grad[ss_idx] -= s * del;
         const auto sc_del = sc * del;
+        const auto& S = A.matrix();
+        const auto& D = A.vector();
+        const auto k_shift = A.shift(k);
+        const auto D_kk = D[k_shift];
+        strong_grad[ss_idx] -= s * del + sc_del * D_kk;
         for (auto jt = begin; jt != end; ++jt) {
             const auto ss_idx_j = *jt;
             const auto j = strong_set[ss_idx_j];
-            const auto A_jk = A.coeff(j, k);
-            strong_grad[ss_idx_j] -= sc_del * A_jk;
+            const auto j_shift = A.shift(j);
+            const auto S_jk = S.coeff(j_shift, k_shift);
+            strong_grad[ss_idx_j] -= sc_del * S_jk;
         }
 
         // additional step
@@ -418,6 +512,95 @@ void coordinate_descent(
             const auto j_shifted = block_it.shift(j);
             const auto A_jk = block.coeff(j_shifted, k_shifted);
             strong_grad[ss_idx_j] -= sc_del * A_jk;
+        }
+
+        // additional step
+        additional_step(ss_idx);
+    }
+}
+
+template <class Iter, class StrongSetType, 
+          class StrongADiagType, class MatType, class VecType,
+          class ValueType, class StrongBetaType, class StrongGradType,
+          class AdditionalStepType=util::no_op>
+GHOSTBASIL_STRONG_INLINE
+void coordinate_descent(
+        Iter begin,
+        Iter end,
+        const StrongSetType& strong_set,
+        const StrongADiagType& strong_A_diag,
+        const BlockMatrix<GhostMatrix<MatType, VecType>>& A,
+        ValueType s,
+        ValueType lmda,
+        StrongBetaType& strong_beta,
+        StrongGradType& strong_grad,
+        ValueType& convg_measure,
+        ValueType& rsq,
+        AdditionalStepType additional_step=AdditionalStepType())
+{
+    const auto sc = 1-s;
+    const auto get_strong_set = [&](auto i) { return strong_set[i]; };
+
+    // Note: here we really assume sorted-ness!
+    // Since begin->end results in increasing sequence of strong set indices,
+    // we can update the block iterator as we increment begin.
+    auto block_it = A.block_begin();
+
+    // We can also keep track of the range of strong set indices
+    // that produce indices within the current block.
+    auto range_begin = begin;
+    auto range_end = internal::lower_bound(
+            range_begin, end, get_strong_set,
+            block_it.stride() + block_it.block().cols());
+
+    convg_measure = 0;
+    for (auto it = begin; it != end; ++it) {
+        const auto ss_idx = *it;              // index to strong set
+        const auto k = strong_set[ss_idx];    // actual feature index
+        const auto ak = strong_beta[ss_idx];  // corresponding beta
+        const auto gk = strong_grad[ss_idx];  // corresponding gradient
+        const auto A_kk = strong_A_diag[ss_idx];  // corresponding A diagonal element
+                                    
+        auto& ak_ref = strong_beta[ss_idx];
+        update_coefficient(ak_ref, A_kk, gk, s, sc, lmda);
+
+        if (ak_ref == ak) continue;
+
+        const auto del = ak_ref - ak;
+
+        // update measure of convergence
+        update_convergence_measure(convg_measure, del, A_kk);
+
+        // update rsq
+        update_rsq(rsq, ak, ak_ref, A_kk, gk, s, sc);
+
+        // update outer iterators to preserve invariant
+        if (!block_it.is_in_block(k)) {
+            block_it.advance_at(k);
+            range_begin = internal::lower_bound(
+                    range_end, end, get_strong_set,
+                    block_it.stride());
+            range_end = internal::lower_bound(
+                    range_begin, end, get_strong_set,
+                    block_it.stride() + block_it.block().cols());
+        }
+        const auto k_block_shift = block_it.shift(k);
+        const auto& block = block_it.block();
+        
+        // update gradient
+        const auto sc_del = sc * del;
+        const auto& S = block.matrix();
+        const auto& D = block.vector();
+        const auto k_shift = block.shift(k_block_shift);
+        const auto D_kk = D[k_shift];
+        strong_grad[ss_idx] -= s * del + sc_del * D_kk;
+        for (auto jt = range_begin; jt != range_end; ++jt) {
+            const auto ss_idx_j = *jt;
+            const auto j = strong_set[ss_idx_j];
+            const auto j_block_shift = block_it.shift(j);
+            const auto j_shift = block.shift(j_block_shift);
+            const auto S_jk = S.coeff(j_shift, k_shift);
+            strong_grad[ss_idx_j] -= sc_del * S_jk;
         }
 
         // additional step
@@ -560,6 +743,61 @@ void lasso_active_impl(
     sg_update(active_beta_diff_map);
 }
 
+namespace internal {
+
+/*
+ * Default dispatcher for fitting lasso on active set.
+ */
+template <class AType, class ValueType, class SSType, class SOType,
+          class ASType, class AOType, class ASOType, class IAType, 
+          class StrongADiagType, class SBType, class SGType,
+          class ABDiffOType, class CUIType = util::no_op>
+GHOSTBASIL_STRONG_INLINE 
+void lasso_active__(
+    const AType& A,
+    ValueType s,
+    const SSType& strong_set,
+    const SOType& strong_order,
+    const ASType& active_set,
+    const AOType& active_order,
+    const ASOType& active_set_ordered,
+    const IAType& is_active,
+    const StrongADiagType& strong_A_diag,
+    size_t lmda_idx,
+    ValueType lmda,
+    size_t max_cds,
+    ValueType thr,
+    SBType& strong_beta,
+    SGType& strong_grad,
+    ABDiffOType& active_beta_diff_ordered,
+    ValueType& rsq,
+    size_t& n_cds,
+    CUIType check_user_interrupt = CUIType())
+{
+    const auto sg_update = [&](const auto& sp_beta_diff) {
+        if ((sp_beta_diff.nonZeros() == 0) ||
+            (active_set.size() == strong_set.size())) return;
+
+        const auto sc = 1-s;
+        // update gradient in non-active positions
+        for (size_t ss_idx = 0; ss_idx < strong_set.size(); ++ss_idx) {
+            if (is_active[ss_idx]) continue;
+            const auto k = strong_set[ss_idx];
+            strong_grad[ss_idx] -= sc * A.col_dot(k, sp_beta_diff);
+        }
+    };
+
+    lasso_active_impl(
+            A, s, strong_set, strong_order, 
+            active_set, active_order, active_set_ordered,
+            is_active, strong_A_diag,
+            lmda_idx, lmda, max_cds, thr, 
+            strong_beta, strong_grad, 
+            active_beta_diff_ordered, rsq, n_cds, sg_update,
+            check_user_interrupt);
+}
+
+} // namespace internal
 
 /*
  * Calls lasso_active_impl with a specialized gradient update routine
@@ -592,15 +830,82 @@ void lasso_active(
     CUIType check_user_interrupt = CUIType())
 {
     const auto& A = A_base.derived();
-    const auto sg_update = [&](const auto& sp_beta_diff) {
-        if (sp_beta_diff.nonZeros() == 0) return;
+    internal::lasso_active__(
+        A, s, strong_set, strong_order, active_set,
+        active_order, active_set_ordered, is_active,
+        strong_A_diag, lmda_idx, lmda, max_cds, thr,
+        strong_beta, strong_grad, active_beta_diff_ordered,
+        rsq, n_cds, check_user_interrupt);
+}
 
+template <class MatType, class VecType, class ValueType, class SSType, class SOType,
+          class ASType, class AOType, class ASOType, class IAType, 
+          class StrongADiagType, class SBType, class SGType,
+          class ABDiffOType, class CUIType = util::no_op>
+GHOSTBASIL_STRONG_INLINE 
+void lasso_active(
+    const GhostMatrix<MatType, VecType>& A,
+    ValueType s,
+    const SSType& strong_set,
+    const SOType& strong_order,
+    const ASType& active_set,
+    const AOType& active_order,
+    const ASOType& active_set_ordered,
+    const IAType& is_active,
+    const StrongADiagType& strong_A_diag,
+    size_t lmda_idx,
+    ValueType lmda,
+    size_t max_cds,
+    ValueType thr,
+    SBType& strong_beta,
+    SGType& strong_grad,
+    ABDiffOType& active_beta_diff_ordered,
+    ValueType& rsq,
+    size_t& n_cds,
+    CUIType check_user_interrupt = CUIType())
+{
+    const auto sg_update = [&](const auto& sp_beta_diff) {
+        if ((sp_beta_diff.nonZeros() == 0) || 
+            (active_set.size() == strong_set.size())) return;
+
+        using beta_value_t = typename std::decay_t<SBType>::value_type;
         const auto sc = 1-s;
+        const auto& S = A.matrix();
+        const auto& D = A.vector();
+        const auto v_inner = sp_beta_diff.innerIndexPtr();
+        const auto v_value = sp_beta_diff.valuePtr();
+        const auto v_nnz = sp_beta_diff.nonZeros();
+        auto v_begin = 0;
+
+        util::vec_type<beta_value_t> sum_vs(S.cols());
+        util::vec_type<beta_value_t> S_sum_vs(S.cols());
+        sum_vs.setZero();
+
+        static constexpr beta_value_t inf = 
+            std::numeric_limits<beta_value_t>::infinity();
+        S_sum_vs.fill(inf);
+
+        // compute sum of v blocks
+        for (size_t j = 0; j < v_nnz; ++j) {
+            const auto j_inner = v_inner[j];
+            const auto j_shift = A.shift(j_inner);
+            sum_vs[j_shift] += v_value[j];
+        }
+
         // update gradient in non-active positions
-        for (size_t ss_idx = 0; ss_idx < strong_set.size(); ++ss_idx) {
+        for (size_t ss_idx : strong_order) {
             if (is_active[ss_idx]) continue;
             const auto k = strong_set[ss_idx];
-            strong_grad[ss_idx] -= sc * A.col_dot(k, sp_beta_diff);
+            const auto k_shifted = A.shift(k);
+            if (S_sum_vs[k_shifted] == inf) {
+                S_sum_vs[k_shifted] = sum_vs.dot(S.col(k_shifted));
+            }
+            const auto D_kk = D[k_shifted];
+            v_begin = std::lower_bound(
+                    v_inner+v_begin, v_inner+v_nnz, k)-v_inner;
+            const auto D_kk_v_k = ((v_begin != v_nnz) && (v_inner[v_begin] == k)) ?
+                D_kk*v_value[v_begin] : 0;
+            strong_grad[ss_idx] -= sc * (S_sum_vs[k_shifted] + D_kk_v_k);
         }
     };
 
@@ -614,10 +919,6 @@ void lasso_active(
             check_user_interrupt);
 }
 
-/*
- * Calls lasso_active_impl with a specialized gradient update routine
- * for BlockMatrix.
- */
 template <class MatType, class ValueType, class SSType, class SOType, 
           class ASType, class AOType, class ASOType, class IAType, 
           class StrongADiagType, class SBType, class SGType,
@@ -645,6 +946,9 @@ void lasso_active(
     CUIType check_user_interrupt = CUIType())
 {
     auto sg_update = [&](const auto& sp_beta_diff) {
+        if ((sp_beta_diff.nonZeros() == 0) || 
+            (active_set.size() == strong_set.size())) return;
+
         using value_t = ValueType;
         const auto sc = 1-s;
 
@@ -652,8 +956,6 @@ void lasso_active(
         const auto bd_inner = sp_beta_diff.innerIndexPtr();
         const auto bd_value = sp_beta_diff.valuePtr();
         const auto bd_nnz = sp_beta_diff.nonZeros();
-
-        if (bd_nnz == 0) return;
 
         // initialized below
         size_t bd_seg_begin;

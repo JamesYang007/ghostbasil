@@ -125,6 +125,60 @@ List basil_block_dense__(
 }
 
 // [[Rcpp::export]]
+List basil_ghost__(
+        SEXP A,
+        const Eigen::Map<Eigen::VectorXd> r,
+        double s,
+        const Eigen::Map<Eigen::VectorXd> user_lmdas,
+        size_t max_n_lambdas,
+        size_t n_lambdas_iter,
+        size_t strong_size,
+        size_t delta_strong_size,
+        size_t max_strong_size,
+        size_t max_n_cds,
+        double thr,
+        double min_ratio,
+        size_t n_threads)
+{
+    auto gmw = Rcpp::as<GhostMatrixWrap>(A);
+
+    // gets the internal GhostMatrix class
+    const auto& gm = gmw.internal();
+    
+    return basil__(
+            gm, r, s, user_lmdas, max_n_lambdas,
+            n_lambdas_iter, strong_size, delta_strong_size,
+            max_strong_size, max_n_cds, thr, min_ratio, n_threads);
+}
+
+// [[Rcpp::export]]
+List basil_block_ghost__(
+        SEXP A,
+        const Eigen::Map<Eigen::VectorXd> r,
+        double s,
+        const Eigen::Map<Eigen::VectorXd> user_lmdas,
+        size_t max_n_lambdas,
+        size_t n_lambdas_iter,
+        size_t strong_size,
+        size_t delta_strong_size,
+        size_t max_strong_size,
+        size_t max_n_cds,
+        double thr,
+        double min_ratio,
+        size_t n_threads)
+{
+    auto bgmw = Rcpp::as<BlockGhostMatrixWrap>(A);
+
+    // gets the internal GhostMatrix class
+    const auto& bgm = bgmw.internal();
+    
+    return basil__(
+            bgm, r, s, user_lmdas, max_n_lambdas,
+            n_lambdas_iter, strong_size, delta_strong_size,
+            max_strong_size, max_n_cds, thr, min_ratio, n_threads);
+}
+
+// [[Rcpp::export]]
 List objective_sparse__(
         const Eigen::Map<Eigen::MatrixXd> A,
         const Eigen::Map<Eigen::VectorXd> r,

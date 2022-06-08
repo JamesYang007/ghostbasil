@@ -3,8 +3,8 @@
 dim.Rcpp_GhostMatrix__ <- function(x) x$dim
 
 #' Creates an instance of a GhostMatrix.
-#' @param   Sigma   covariance matrix of original features.
-#' @param   D       diagonal to subtract from Sigma in the off-diagonal blocks.
+#' @param   Sigma   covariance matrix of original features (dense matrix).
+#' @param   D       diagonal to add to Sigma on the diagonal blocks (dense vector).
 #' @param   n.groups    number of groups (e.g. 1 knockoff means 2 groups).
 #' @export
 GhostMatrix <- function(Sigma, D, n.groups)

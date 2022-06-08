@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
 #include <ghostbasil/optimization/basil.hpp>
 #include <ghostbasil/matrix/block_matrix.hpp>
+#include <ghostbasil/matrix/ghost_matrix.hpp>
 #include <tools/data_util.hpp>
 #include <tools/macros.hpp>
 #include <tools/matrix/block_matrix.hpp>
+#include <tools/matrix/ghost_matrix.hpp>
 #include <thread>
 
 namespace ghostbasil {
@@ -139,89 +141,13 @@ TEST_F(BasilFixture, basil_p_large)
             delta_strong_size);
 }
 
-struct BasilBlockFixture
-    : BasilFixture,
-      tools::BlockMatrixUtil,
-      ::testing::WithParamInterface<
-        std::tuple<size_t, size_t, size_t> >
+/*
+ * This fixture contains common routines used to compare
+ * other matrix with dense matrix.
+ */
+struct BasilCompareFixture
+    : BasilFixture
 {
-    using butil = tools::BlockMatrixUtil;
-    using value_t = double;
-    using mat_t = util::mat_type<value_t>;
-    using bmat_t = BlockMatrix<mat_t>;
-
-    // Generates a block matrix and a corresponding dense matrix
-    // and other data that make_input needs.
-    auto generate_block_dense(
-            size_t seed,
-            size_t L,
-            size_t p,
-            size_t strong_size = 2,
-            size_t delta_strong_size = 3,
-            size_t max_strong_size = 100,
-            double min_ratio = 1e-6)
-    {
-        auto&& out = butil::generate_data(seed, L, p, 0, true, false);
-        auto&& mat_list = std::get<0>(out);
-
-        auto&& A_dense = std::get<3>(out);
-        bmat_t A(mat_list); 
-
-        std::mt19937 gen(seed);
-        std::normal_distribution<> norm(0., 1.);
-        size_t n_cols = A.cols();
-        Eigen::VectorXd beta(n_cols); 
-        beta.setZero();
-        std::uniform_int_distribution<> unif(0, n_cols-1);
-        for (size_t k = 0; k < 10; ++k) {
-            beta[unif(gen)] = norm(gen);
-        }
-
-        Eigen::VectorXd r = A_dense * beta + Eigen::VectorXd::NullaryExpr(n_cols,
-                [&](auto) { return 0.2 * norm(gen); });
-
-        value_t s = 0.1;
-
-        return std::make_tuple(
-                std::move(mat_list), // must return also since A references it
-                std::move(A),
-                std::move(A_dense),
-                std::move(r),
-                std::move(s),
-                strong_size,
-                delta_strong_size,
-                max_strong_size,
-                min_ratio);
-    }
-
-    template <class DatasetType>
-    auto generate_datasets(const DatasetType& dataset)
-    {
-        auto generate_block_pack = [&]() {
-            return std::make_tuple(
-                std::get<1>(dataset), // A (block)
-                std::get<3>(dataset), // r
-                std::get<4>(dataset), // s
-                std::get<5>(dataset),
-                std::get<6>(dataset),
-                std::get<7>(dataset),
-                std::get<8>(dataset)
-                );
-        };
-        auto generate_dense_pack = [&]() {
-            return std::make_tuple(
-                std::get<2>(dataset), // A_dense
-                std::get<3>(dataset), // r
-                std::get<4>(dataset), // s
-                std::get<5>(dataset),
-                std::get<6>(dataset),
-                std::get<7>(dataset),
-                std::get<8>(dataset)
-                );
-        };
-        return std::make_tuple(generate_block_pack, generate_dense_pack);
-    }
-
     template <class F>
     auto make_input(F generate_dataset)
     {
@@ -268,10 +194,10 @@ struct BasilBlockFixture
     }
 
     template <class F1, class F2>
-    void test(F1 generate_dataset_block,
+    void test(F1 generate_dataset_other,
               F2 generate_dataset_dense)
     {
-        auto&& actual_dataset = make_input(generate_dataset_block);
+        auto&& actual_dataset = make_input(generate_dataset_other);
         auto&& expected_dataset = make_input(generate_dataset_dense);
 
         auto&& expected = run(expected_dataset);
@@ -295,11 +221,99 @@ struct BasilBlockFixture
             const auto& actual_beta_i = actual_betas[i];
             EXPECT_EQ(actual_beta_i.size(), expected_beta_i.size());
             for (size_t j = 0; j < expected_beta_i.size(); ++j) {
-                EXPECT_DOUBLE_EQ(actual_beta_i.coeff(j), expected_beta_i.coeff(j));
+                EXPECT_NEAR(actual_beta_i.coeff(j), expected_beta_i.coeff(j), 4e-15);
             }
-            EXPECT_DOUBLE_EQ(actual_rsqs[i], expected_rsqs[i]);
+            EXPECT_NEAR(actual_rsqs[i], expected_rsqs[i], 8e-15);
             EXPECT_DOUBLE_EQ(actual_lmdas[i], expected_lmdas[i]);
         }
+    }
+};
+
+// ================================================================
+// TEST Block<Dense> vs. Dense
+// ================================================================
+
+struct BasilBlockFixture
+    : BasilCompareFixture,
+      tools::BlockMatrixUtil,
+      ::testing::WithParamInterface<
+        std::tuple<size_t, size_t, size_t> >
+{
+    using butil = tools::BlockMatrixUtil;
+    using value_t = double;
+    using mat_t = util::mat_type<value_t>;
+    using bmat_t = BlockMatrix<mat_t>;
+
+    // Generates a block matrix and a corresponding dense matrix
+    // and other data that make_input needs.
+    auto generate(
+            size_t seed,
+            size_t L,
+            size_t p,
+            size_t strong_size = 2,
+            size_t delta_strong_size = 3,
+            size_t max_strong_size = 100,
+            double min_ratio = 1e-6)
+    {
+        auto&& out = butil::generate_data(seed, L, p, 0, true, false);
+        auto&& mat_list = std::get<0>(out);
+
+        auto&& A_dense = std::get<3>(out);
+        bmat_t A(mat_list); 
+
+        std::mt19937 gen(seed);
+        std::normal_distribution<> norm(0., 1.);
+        size_t n_cols = A.cols();
+        Eigen::VectorXd beta(n_cols); 
+        beta.setZero();
+        std::uniform_int_distribution<> unif(0, n_cols-1);
+        for (size_t k = 0; k < 10; ++k) {
+            beta[unif(gen)] = norm(gen);
+        }
+
+        Eigen::VectorXd r = A_dense * beta + Eigen::VectorXd::NullaryExpr(n_cols,
+                [&](auto) { return 0.2 * norm(gen); });
+
+        value_t s = 0.1;
+
+        return std::make_tuple(
+                std::move(mat_list), // must return also since A references it
+                std::move(A),
+                std::move(A_dense),
+                std::move(r),
+                std::move(s),
+                strong_size,
+                delta_strong_size,
+                max_strong_size,
+                min_ratio);
+    }
+
+    template <class DatasetType>
+    auto generate_datasets(const DatasetType& dataset)
+    {
+        auto generate_actual_pack = [&]() {
+            return std::make_tuple(
+                std::get<1>(dataset), // A (block)
+                std::get<3>(dataset), // r
+                std::get<4>(dataset), // s
+                std::get<5>(dataset),
+                std::get<6>(dataset),
+                std::get<7>(dataset),
+                std::get<8>(dataset)
+                );
+        };
+        auto generate_expected_pack = [&]() {
+            return std::make_tuple(
+                std::get<2>(dataset), // A_dense
+                std::get<3>(dataset), // r
+                std::get<4>(dataset), // s
+                std::get<5>(dataset),
+                std::get<6>(dataset),
+                std::get<7>(dataset),
+                std::get<8>(dataset)
+                );
+        };
+        return std::make_tuple(generate_actual_pack, generate_expected_pack);
     }
 };
 
@@ -309,7 +323,7 @@ TEST_P(BasilBlockFixture, basil_block)
     size_t L;
     size_t p;
     std::tie(seed, L, p) = GetParam();
-    auto&& dataset = generate_block_dense(seed, L, p);
+    auto&& dataset = generate(seed, L, p);
     auto fs = generate_datasets(dataset);
     test(std::get<0>(fs), std::get<1>(fs));
 }
@@ -325,6 +339,248 @@ INSTANTIATE_TEST_SUITE_P(
             std::make_tuple(9382,   10, 7),
             std::make_tuple(3,      20, 3),
             std::make_tuple(6,      4, 20)
+            )
+    );
+
+// ================================================================
+// TEST Ghost<Dense, Dense> vs. Dense
+// ================================================================
+
+struct BasilGhostFixture
+    : BasilCompareFixture,
+      tools::GhostMatrixUtil,
+      ::testing::WithParamInterface<
+        std::tuple<size_t, size_t, size_t> >
+{
+    using gutil = tools::GhostMatrixUtil;
+    using value_t = double;
+    using mat_t = util::mat_type<value_t>;
+    using vec_t = util::vec_type<value_t>;
+    using gmat_t = GhostMatrix<mat_t, vec_t>;
+
+    // Generates a ghost matrix and a corresponding dense matrix
+    // and other data that make_input needs.
+    auto generate(
+            size_t seed,
+            size_t p,
+            size_t n_groups,
+            size_t strong_size = 2,
+            size_t delta_strong_size = 3,
+            size_t max_strong_size = 100,
+            double min_ratio = 1e-6)
+    {
+        auto&& out = gutil::generate_data(seed, p, n_groups, 0, true, false);
+        auto&& mat = std::get<0>(out);
+        auto&& vec = std::get<1>(out);
+        auto&& A_dense = std::get<4>(out);
+        gmat_t A(mat, vec, n_groups); 
+
+        std::mt19937 gen(seed);
+        std::normal_distribution<> norm(0., 1.);
+        size_t n_cols = A.cols();
+        Eigen::VectorXd beta(n_cols); 
+        beta.setZero();
+        std::uniform_int_distribution<> unif(0, n_cols-1);
+        for (size_t k = 0; k < 10; ++k) {
+            beta[unif(gen)] = norm(gen);
+        }
+
+        Eigen::VectorXd r = A_dense * beta + Eigen::VectorXd::NullaryExpr(n_cols,
+                [&](auto) { return 0.2 * norm(gen); });
+
+        value_t s = 0.1;
+
+        return std::make_tuple(
+                std::move(mat), // must return also since A references it
+                std::move(vec), // must return also since A references it
+                std::move(A),
+                std::move(A_dense),
+                std::move(r),
+                std::move(s),
+                strong_size,
+                delta_strong_size,
+                max_strong_size,
+                min_ratio);
+    }
+
+    template <class DatasetType>
+    auto generate_datasets(const DatasetType& dataset)
+    {
+        auto generate_actual_pack = [&]() {
+            return std::make_tuple(
+                std::get<2>(dataset), // A (ghost)
+                std::get<4>(dataset), // r
+                std::get<5>(dataset), // s
+                std::get<6>(dataset),
+                std::get<7>(dataset),
+                std::get<8>(dataset),
+                std::get<9>(dataset)
+                );
+        };
+        auto generate_expected_pack = [&]() {
+            return std::make_tuple(
+                std::get<3>(dataset), // A_dense
+                std::get<4>(dataset), // r
+                std::get<5>(dataset), // s
+                std::get<6>(dataset),
+                std::get<7>(dataset),
+                std::get<8>(dataset),
+                std::get<9>(dataset)
+                );
+        };
+        return std::make_tuple(generate_actual_pack, generate_expected_pack);
+    }
+};
+
+TEST_P(BasilGhostFixture, basil_ghost)
+{
+    size_t seed;
+    size_t p;
+    size_t n_groups;
+    std::tie(seed, p, n_groups) = GetParam();
+    auto&& dataset = generate(seed, p, n_groups);
+    auto fs = generate_datasets(dataset);
+    test(std::get<0>(fs), std::get<1>(fs));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+        BasilGhostSuite,
+        BasilGhostFixture,
+        testing::Values(
+            std::make_tuple(0,      2, 2),
+            std::make_tuple(124,    3, 3),
+            std::make_tuple(321,    5, 4),
+            std::make_tuple(9382,   10, 2),
+            std::make_tuple(3,      20, 5),
+            std::make_tuple(6,      4, 10)
+            )
+    );
+
+// ================================================================
+// TEST Block<Ghost<Dense, Dense>> vs. Dense
+// ================================================================
+
+struct BasilBlockGhostFixture
+    : BasilCompareFixture,
+      tools::BlockMatrixUtil,
+      tools::GhostMatrixUtil,
+      ::testing::WithParamInterface<
+        std::tuple<size_t, size_t, size_t, size_t> >
+{
+    using gutil = tools::GhostMatrixUtil;
+    using butil = tools::BlockMatrixUtil;
+    using value_t = double;
+    using mat_t = util::mat_type<value_t>;
+    using vec_t = util::vec_type<value_t>;
+    using gmat_t = GhostMatrix<mat_t, vec_t>;
+    using bmat_t = BlockMatrix<gmat_t>;
+
+    // Generates a block matrix and a corresponding dense matrix
+    // and other data that make_input needs.
+    auto generate(
+            size_t seed,
+            size_t L,
+            size_t p,
+            size_t n_groups,
+            size_t strong_size = 2,
+            size_t delta_strong_size = 3,
+            size_t max_strong_size = 100,
+            double min_ratio = 1e-6)
+    {
+        std::vector<mat_t> mat_list(L);
+        std::vector<vec_t> vec_list(L);
+        std::vector<gmat_t> gmat_list;
+        std::vector<mat_t> dense_list(L);
+        for (size_t i = 0; i < L; ++i) {
+            auto&& out = gutil::generate_data(seed, p, n_groups, 0, true, false);
+            mat_list[i] = std::move(std::get<0>(out));
+            vec_list[i] = std::move(std::get<1>(out));
+            gmat_list.emplace_back(mat_list[i], vec_list[i], n_groups);
+            dense_list[i] = gutil::make_dense(mat_list[i], vec_list[i], n_groups);
+        }
+        bmat_t A(gmat_list); 
+        mat_t A_dense = butil::make_dense(dense_list);
+
+        std::mt19937 gen(seed);
+        std::normal_distribution<> norm(0., 1.);
+        size_t n_cols = A.cols();
+        Eigen::VectorXd beta(n_cols); 
+        beta.setZero();
+        std::uniform_int_distribution<> unif(0, n_cols-1);
+        for (size_t k = 0; k < 10; ++k) {
+            beta[unif(gen)] = norm(gen);
+        }
+
+        Eigen::VectorXd r = A_dense * beta + Eigen::VectorXd::NullaryExpr(n_cols,
+                [&](auto) { return 0.2 * norm(gen); });
+
+        value_t s = 0.1;
+
+        return std::make_tuple(
+                std::move(mat_list), // must return also since A references it
+                std::move(vec_list), // must return also since A references it
+                std::move(gmat_list), // must return also since A references it
+                std::move(A),
+                std::move(A_dense),
+                std::move(r),
+                std::move(s),
+                strong_size,
+                delta_strong_size,
+                max_strong_size,
+                min_ratio);
+    }
+
+    template <class DatasetType>
+    auto generate_datasets(const DatasetType& dataset)
+    {
+        auto generate_actual_pack = [&]() {
+            return std::make_tuple(
+                std::get<3>(dataset), // A (block)
+                std::get<5>(dataset), // r
+                std::get<6>(dataset), // s
+                std::get<7>(dataset),
+                std::get<8>(dataset),
+                std::get<9>(dataset),
+                std::get<10>(dataset)
+                );
+        };
+        auto generate_expected_pack = [&]() {
+            return std::make_tuple(
+                std::get<4>(dataset), // A (dense)
+                std::get<5>(dataset), // r
+                std::get<6>(dataset), // s
+                std::get<7>(dataset),
+                std::get<8>(dataset),
+                std::get<9>(dataset),
+                std::get<10>(dataset)
+                );
+        };
+        return std::make_tuple(generate_actual_pack, generate_expected_pack);
+    }
+};
+
+TEST_P(BasilBlockGhostFixture, basil_block_ghost)
+{
+    size_t seed;
+    size_t L;
+    size_t p;
+    size_t n_groups;
+    std::tie(seed, L, p, n_groups) = GetParam();
+    auto&& dataset = generate(seed, L, p, n_groups);
+    auto fs = generate_datasets(dataset);
+    test(std::get<0>(fs), std::get<1>(fs));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+        BasilBlockGhostSuite,
+        BasilBlockGhostFixture,
+        testing::Values(
+            std::make_tuple(0,      2, 2, 2),
+            std::make_tuple(124,    3, 3, 3),
+            std::make_tuple(321,    4, 5, 4),
+            std::make_tuple(9382,   2, 10, 2),
+            std::make_tuple(3,      2, 20, 5),
+            std::make_tuple(6,      2, 4, 10)
             )
     );
     

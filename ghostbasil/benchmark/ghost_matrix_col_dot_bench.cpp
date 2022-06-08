@@ -60,6 +60,10 @@ struct GhostMatrixColDotFixture
     }
 };
 
+// ==================================================================
+// BENCHMARK BlockMatrix<GhostMatrix> vs. Dense vs. BlockMatrix<Dense>
+// ==================================================================
+
 BENCHMARK_DEFINE_F(GhostMatrixColDotFixture, ghost_matrix)(benchmark::State& state) 
 {
     size_t seed = state.range(0);
@@ -86,6 +90,7 @@ BENCHMARK_DEFINE_F(GhostMatrixColDotFixture, ghost_matrix)(benchmark::State& sta
             res = bmat.col_dot(p/2, vs)
         );
     }
+    state.counters["dp"] = res;
 }
 
 BENCHMARK_REGISTER_F(GhostMatrixColDotFixture, ghost_matrix)
@@ -141,6 +146,7 @@ BENCHMARK_DEFINE_F(GhostMatrixColDotFixture, dense_matrix)(benchmark::State& sta
             res = vs.dot(dense.col(p/2))
         );
     }
+    state.counters["dp"] = res;
 }
 
 BENCHMARK_REGISTER_F(GhostMatrixColDotFixture, dense_matrix)
@@ -187,6 +193,7 @@ BENCHMARK_DEFINE_F(GhostMatrixColDotFixture, block_dense_matrix)(benchmark::Stat
             res = bmat.col_dot(p/2, vs)
         );
     }
+    state.counters["dp"] = res;
 }
 
 BENCHMARK_REGISTER_F(GhostMatrixColDotFixture, block_dense_matrix)
@@ -213,5 +220,152 @@ BENCHMARK_REGISTER_F(GhostMatrixColDotFixture, block_dense_matrix)
     -> Args({9, 100, 1000, 2})
     ;
 
+// ==================================================================
+// BENCHMARK GhostMatrix vs. Dense
+// ==================================================================
+
+struct GhostMatrixColDotFixture2
+    : GhostMatrixColDotFixture
+{};
+
+BENCHMARK_DEFINE_F(GhostMatrixColDotFixture2, ghost_matrix)(benchmark::State& state) 
+{
+    size_t seed = state.range(0);
+    size_t p = state.range(1);
+    size_t L = 1;
+    size_t n_groups = 2;
+    double density = 0.1;
+
+    auto input = generate_data(seed, L, p, n_groups, density);
+    auto& ml = std::get<0>(input);
+    auto& vl = std::get<1>(input);
+    auto& vs = std::get<2>(input);
+
+    gmat_t gmat(ml[0], vl[0], n_groups);
+
+    value_t res = 0;
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(
+            res = gmat.col_dot(p/2, vs)
+        );
+    }
+    state.counters["dp"] = res;
+}
+
+BENCHMARK_REGISTER_F(GhostMatrixColDotFixture2, ghost_matrix)
+    -> Args({0, 10})
+    -> Args({0, 50})
+    -> Args({0, 100})
+    -> Args({0, 500})
+    ;
+
+BENCHMARK_DEFINE_F(GhostMatrixColDotFixture2, dense_matrix)(benchmark::State& state) 
+{
+    size_t seed = state.range(0);
+    size_t p = state.range(1);
+    size_t L = 1;
+    size_t n_groups = 2;
+    double density = 0.1;
+
+    auto input = generate_data(seed, L, p, n_groups, density);
+    auto& ml = std::get<0>(input);
+    auto& vl = std::get<1>(input);
+    auto& vs = std::get<2>(input);
+
+    auto dense = gutil::make_dense(ml[0], vl[0], n_groups);
+    
+    value_t res = 0;
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(
+            res = dense.col_dot(p/2, vs)
+        );
+    }
+    state.counters["dp"] = res;
+}
+
+BENCHMARK_REGISTER_F(GhostMatrixColDotFixture2, dense_matrix)
+    -> Args({0, 10})
+    -> Args({0, 50})
+    -> Args({0, 100})
+    -> Args({0, 500})
+    ;
+
+// ==================================================================
+// BENCHMARK GhostMatrix vs. Dense Coeff
+// ==================================================================
+
+struct GhostMatrixCoeffFixture
+    : GhostMatrixColDotFixture
+{};
+
+BENCHMARK_DEFINE_F(GhostMatrixCoeffFixture, ghost_matrix)(benchmark::State& state) 
+{
+    size_t seed = state.range(0);
+    size_t p = state.range(1);
+    size_t L = 1;
+    size_t n_groups = 2;
+    double density = 0.1;
+
+    auto input = generate_data(seed, L, p, n_groups, density);
+    auto& ml = std::get<0>(input);
+    auto& vl = std::get<1>(input);
+
+    gmat_t gmat(ml[0], vl[0], n_groups);
+
+    value_t res = 0;
+    for (auto _ : state) {
+        res = 0;
+        for (size_t j = 0; j < gmat.cols(); ++j) {
+            for (size_t i = 0; i < gmat.rows(); ++i) {
+                benchmark::DoNotOptimize(
+                    res += gmat.coeff(i,j)
+                );
+            }
+        }
+    }
+    state.counters["dp"] = res;
+}
+
+BENCHMARK_REGISTER_F(GhostMatrixCoeffFixture, ghost_matrix)
+    -> Args({0, 10})
+    -> Args({0, 50})
+    -> Args({0, 100})
+    -> Args({0, 500})
+    ;
+
+BENCHMARK_DEFINE_F(GhostMatrixCoeffFixture, dense_matrix)(benchmark::State& state) 
+{
+    size_t seed = state.range(0);
+    size_t p = state.range(1);
+    size_t L = 1;
+    size_t n_groups = 2;
+    double density = 0.1;
+
+    auto input = generate_data(seed, L, p, n_groups, density);
+    auto& ml = std::get<0>(input);
+    auto& vl = std::get<1>(input);
+
+    auto dense = gutil::make_dense(ml[0], vl[0], n_groups);
+    
+    value_t res = 0;
+    for (auto _ : state) {
+        res = 0;
+        for (size_t j = 0; j < dense.cols(); ++j) {
+            for (size_t i = 0; i < dense.rows(); ++i) {
+                benchmark::DoNotOptimize(
+                    res += dense.coeff(i,j)
+                );
+            }
+        }
+    }
+    state.counters["dp"] = res;
+}
+
+BENCHMARK_REGISTER_F(GhostMatrixCoeffFixture, dense_matrix)
+    -> Args({0, 10})
+    -> Args({0, 50})
+    -> Args({0, 100})
+    -> Args({0, 500})
+    ;
 }
 } // namespace ghostbasil

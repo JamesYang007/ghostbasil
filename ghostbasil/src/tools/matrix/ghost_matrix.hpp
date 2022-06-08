@@ -1,5 +1,5 @@
 #pragma once
-#include <Eigen/Core>
+#include <Eigen/Dense>
 #include <Eigen/SparseCore>
 #include <random>
 
@@ -33,8 +33,9 @@ struct GhostMatrixUtil
             for (size_t l = 0; l < K; ++l) {
                 auto dense_kl = dense.block(pi*k, pi*l, pi, pi);
                 dense_kl = m;
-                if (k == l) continue;
-                dense_kl.diagonal() -= v;
+                if (k == l) {
+                    dense_kl.diagonal() += v;
+                }
             }
         }
 
@@ -54,14 +55,16 @@ struct GhostMatrixUtil
             size_t n_groups,
             double density = 0.5,
             bool do_dense = true,
-            bool do_v = true)
+            bool do_v = true,
+            double eps = 0.1)
     {
+        assert(eps > 0);
         srand(seed);
         mat_t mat;
-        vec_t vec;
+        vec_t vec(p);
         mat.setRandom(p, p);
-        mat = (mat + mat.transpose()) / 2;
-        vec.setRandom(p);
+        mat = (mat.transpose() * mat) / p;
+        vec.array() = eps; // make sure (g+1)/g mat >= vec >= 0
 
         mat_t dense;
         if (do_dense) {

@@ -489,8 +489,8 @@ inline void basil(
         // and if idx <= 0, then grad is unchanged.
         // In any case, grad corresponds to the first smallest lambda where KKT check passes.
         size_t idx = check_kkt(
-                A, r, s, lmdas_curr.head(n_lmdas), betas_curr.head(n_lmdas), 
-                is_strong, n_threads, grad, grad_next);
+                    A, r, s, lmdas_curr.head(n_lmdas), betas_curr.head(n_lmdas), 
+                    is_strong, n_threads, grad, grad_next);
 
         // decrement number of remaining lambdas
         n_lambdas_rem -= idx;

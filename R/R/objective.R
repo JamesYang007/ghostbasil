@@ -2,7 +2,7 @@
 #' \deqn{
 #'  \frac{1-s}{2} \beta^\top A \beta - \beta^\top r + \frac{s}{2} ||\beta||_2 + \lambda ||\beta||_1
 #' }
-#' @param   A   covariance matrix.
+#' @param   A   covariance matrix. Currently, only supports dense matrix.
 #' @param   r   covariance between covariates and response.
 #' @param   s   regularization strength of A towards identity.
 #' @param   lmda    lambda regularization value

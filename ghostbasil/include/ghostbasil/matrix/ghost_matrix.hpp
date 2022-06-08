@@ -6,6 +6,7 @@
 #include <vector>
 #include <ghostbasil/util/macros.hpp>
 #include <ghostbasil/util/type_traits.hpp>
+#include <ghostbasil/util/types.hpp>
 #include <ghostbasil/matrix/forward_decl.hpp>
 
 namespace ghostbasil {
@@ -13,10 +14,10 @@ namespace ghostbasil {
 /*
  * This class represents a matrix of the form:
  *
- *      S   S-D ... S-D
- *      S-D S   .   .
- *      .   .   S   .
- *      S-D .   ... S
+ *      S+D S ... S   S
+ *      S   S+D   .   .
+ *      .   .    S+D  .
+ *      S   .    ... S+D
  *
  * which is the typical form for the Gaussian covariance matrix
  * under multiple knockoffs framework.
@@ -43,7 +44,16 @@ class GhostMatrix
     Eigen::Map<const mat_t> mat_;  // matrix S
     Eigen::Map<const vec_t> vec_;  // diagonal vector D
     size_t n_groups_;       // number of groups
-    Eigen::Index rows_;
+    Eigen::Index rows_; // number of total rows (same as total columns)
+
+    // stores the shift information for each index k:
+    //      k_shift == k % group_size
+    // Note: benchmark shows that coeff() is extremely slow if we 
+    // recompute the shift at each call. Memory bottleneck
+    // will not occur here, so we can afford to cache this information one-time.
+    // This makes coeff() on par with a dense matrix, while still saving 
+    // enormous amount of memory.
+    std::vector<Eigen::Index> shift_;
 
     GHOSTBASIL_STRONG_INLINE
     auto compute_group_size() const { return rows_ / n_groups_; }
@@ -71,7 +81,6 @@ class GhostMatrix
                           // helps in sparse x_k case also so that the next step is vectorized.
             Q.col(k) = Q_k; // save S_k for later
             T += buffer;
-            T -= Q.col(k);
         }
     }
 
@@ -104,7 +113,8 @@ public:
         : mat_(mat.data(), mat.rows(), mat.cols()),
           vec_(vec.data(), vec.size()),
           n_groups_(n_groups),
-          rows_(mat.cols() * n_groups)
+          rows_(mat.cols() * n_groups),
+          shift_(rows_)
     {
         // Check that number of groups is at least 2.
         if (n_groups_ < 2) {
@@ -132,23 +142,32 @@ public:
                 "vector has length " + std::to_string(D.size()) + ". ";
             throw std::runtime_error(error);
         }
+
+        // populate stride_shift_
+        const auto group_size = compute_group_size();
+        for (size_t k = 0; k < shift_.size(); ++k) {
+            shift_[k] = k % group_size;
+        }
     }
 
     GHOSTBASIL_STRONG_INLINE Index rows() const { return rows_; }
     GHOSTBASIL_STRONG_INLINE Index cols() const { return rows(); }
+    GHOSTBASIL_STRONG_INLINE Index size() const { return rows() * cols(); }
     GHOSTBASIL_STRONG_INLINE
     const auto& matrix() const { return mat_; }
     GHOSTBASIL_STRONG_INLINE
     const auto& vector() const { return vec_; }
     GHOSTBASIL_STRONG_INLINE
     auto n_groups() const { return n_groups_; }
+    GHOSTBASIL_STRONG_INLINE
+    auto shift(Index i) const { return shift_[i]; }
 
     /*
      * Computes the dot product between kth column of the matrix with v: 
      *      A[:,k]^T * v
      */
     template <class VecType>
-    value_t col_dot(size_t k, const VecType& v) const
+    value_t col_dot(size_t k, const Eigen::DenseBase<VecType>& v) const
     {
         assert(k < cols());
         assert(cols() == v.size());
@@ -158,10 +177,7 @@ public:
         const auto& D = vector();
 
         // Find the index to block of K features containing k.
-        const size_t k_block_begin = (k / group_size) * group_size;
-
-        // Find the index relative to k_block_begin.
-        const size_t k_block = k - k_block_begin;
+        const size_t k_block = shift_[k];
 
         // Get quantities for reuse.
         value_t D_kk = D[k_block];
@@ -172,10 +188,52 @@ public:
         size_t v_j_begin = 0;
         for (size_t j = 0; j < n_groups_; ++j, v_j_begin += group_size) {
             const auto v_j = v.segment(v_j_begin, group_size);
-            dp += v_j.dot(S_k) - D_kk * v_j.coeff(k_block);
+            dp += v_j.dot(S_k);
         }
         dp += D_kk * v.coeff(k);
 
+        return dp;
+    }
+
+    template <class VecType>
+    value_t col_dot(size_t k, const Eigen::SparseCompressedBase<VecType>& v) const
+    {
+        assert(k < cols());
+        assert(cols() == v.size());
+
+        if (v.nonZeros() == 0) return 0;
+
+        const size_t group_size = compute_group_size();
+        const auto& S = matrix();
+        const auto& D = vector();
+
+        // Find the index to block of K features containing k.
+        const size_t k_block = shift_[k];
+
+        // Get quantities for reuse.
+        value_t D_kk = D[k_block];
+        const auto S_k = S.col(k_block);
+
+        // Compute the dot product.
+        value_t dp = 0;
+        size_t j_group_size = 0;
+        const auto v_inner = v.innerIndexPtr();
+        const auto v_value = v.valuePtr();
+        const auto v_nnz = v.nonZeros();
+        size_t v_begin = 0;
+        size_t v_end;
+        size_t j_k_block = k_block;
+        for (size_t j = 0; j < n_groups_; ++j, j_group_size += group_size, j_k_block += group_size) {
+            v_end = std::lower_bound(v_inner+v_begin, v_inner+v_nnz, j_group_size+group_size)-v_inner;
+            for (size_t l = v_begin; l < v_end; ++l) {
+                dp += v_value[l] * S_k[v_inner[l]-j_group_size];
+            } 
+            v_begin = v_end;
+        }
+        const auto v_j_k_block_ptr = std::lower_bound(
+                v_inner, v_inner+v_end, k);
+        dp += ((v_j_k_block_ptr != v_inner+v_end) && (*v_j_k_block_ptr == k)) ?
+               D_kk * v_value[v_j_k_block_ptr-v_inner] : 0; 
         return dp;
     }
 
@@ -193,7 +251,7 @@ public:
         // v_k = kth subset of v (of length group_size)
         // R_k = S v_k (columns of R)
         // Q_k = D v_k (columns of Q)
-        // T = \sum\limits_{k=1}^K R_k - \sum\limits_{k=1}^K Q_k
+        // T = \sum\limits_{k=1}^K R_k
 
         // Choose type of Q based on whether v is dense or sparse.
         using Q_t = std::conditional_t<
@@ -283,17 +341,13 @@ public:
         return inv_quad_form;
     }
 
-    Scalar coeff(Index i, Index j) const 
+    inline Scalar coeff(Index i, Index j) const 
     {
-        auto group_size = compute_group_size();
-        auto i_block = i/group_size;
-        auto j_block = j/group_size;
-        auto i_shifted = i-i_block*group_size;
-        auto j_shifted = j-j_block*group_size;
+        Index i_shift = shift_[i];
+        Index j_shift = shift_[j];
         const auto& S = matrix();
         const auto& D = vector();
-        return ((i_block != j_block) && (i_shifted == j_shifted)) ? 
-            (S(i_shifted, j_shifted)-D[i_shifted]) : S(i_shifted, j_shifted);
+        return S(i_shift, j_shift) + ((i == j) ? D[i_shift] : 0);
     }
 };
 
