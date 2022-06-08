@@ -2,7 +2,7 @@
 #'
 #' @param   A   data covariance matrix.
 #'              It must be one of four types: matrix, GhostMatrix__, BlockMatrix__, BlockGhostMatrix__.
-#'              For types of the form <type>__, see the function <type>.
+#'              For types of the form xxx__, see the function xxx.
 #' @param   r   correlation vector.
 #' @param   s   regularization to shrink A towards identity ((1-s) * A + s * I).
 #' @param   user.lambdas    user-specified sequence of lambdas. Will be sorted in decreasing order if not sorted already.

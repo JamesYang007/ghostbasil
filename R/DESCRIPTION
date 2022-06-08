@@ -13,4 +13,10 @@ LinkingTo:
     Rcpp,
     RcppEigen
 Imports: 
-    Rcpp
+    Rcpp,
+    methods
+Suggests: 
+    knitr,
+    rmarkdown
+SystemRequirements: GNU make
+VignetteBuilder: knitr

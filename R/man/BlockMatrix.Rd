@@ -7,8 +7,9 @@
 BlockMatrix(blocks)
 }
 \arguments{
-\item{blocks}{list of matrices of the same type.}
+\item{blocks}{list of dense matrices.}
 }
 \description{
-Creates an instance of a BlockMatrix.
+This matrix represents a block diagonal matrix where each
+block matrix is a dense matrix.
 }

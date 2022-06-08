@@ -2,26 +2,23 @@
 % Please edit documentation in R/objective.R
 \name{objective}
 \alias{objective}
-\title{Computes the objective that is minimized by ghostbasil
-\deqn{
- \frac{1-s}{2} \beta^\top A \beta - \beta^\top r + \frac{s}{2} ||\beta||_2 + \lambda ||\beta||_1
-}}
+\title{Computes the PGR objective that is minimized by ghostbasil.}
 \usage{
 objective(A, r, s, lmda, beta)
 }
 \arguments{
-\item{A}{covariance matrix.}
+\item{A}{covariance matrix. Currently, only supports dense matrix.}
 
-\item{r}{covariance between covariates and response.}
+\item{r}{correlation vector.}
 
 \item{s}{regularization strength of A towards identity.}
 
-\item{lmda}{lambda regularization value}
+\item{lmda}{lambda regularization value.}
 
-\item{beta}{vector of values.}
+\item{beta}{vector of coefficients}
 }
 \description{
-Computes the objective that is minimized by ghostbasil
+The objective is given by:
 \deqn{
  \frac{1-s}{2} \beta^\top A \beta - \beta^\top r + \frac{s}{2} ||\beta||_2 + \lambda ||\beta||_1
 }

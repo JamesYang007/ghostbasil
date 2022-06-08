@@ -21,7 +21,9 @@ ghostbasil(
 )
 }
 \arguments{
-\item{A}{data covariance matrix (currently must be a dense matrix).}
+\item{A}{data covariance matrix.
+It must be one of four types: matrix, GhostMatrix__, BlockMatrix__, BlockGhostMatrix__.
+For types of the form xxx__, see the function xxx.}
 
 \item{r}{correlation vector.}
 
@@ -38,18 +40,22 @@ This can occur, for example, if the algorithm detects that the R^2 isn't changin
 The maximum lambda is the largest lambda where solution isn't 0.}
 
 \item{lambdas.iter}{number of lambdas to compute strong set solutions for at each iteration of the BASIL algorithm.
-Internally, capped at max.lambdas.}
+Internally, capped at max.lambdas.
+Must be positive.}
 
 \item{strong.size}{initial number of strong set variables to include.
 Internally, capped at max.strong.size.}
 
 \item{delta.strong.size}{number of strong set variables to include at every iteration of the BASIL algorithm.
-Internally, capped at number of non-strong variables at every iteration of BASIL.}
+Internally, capped at number of non-strong variables at every iteration of BASIL.
+Must be positive.}
 
 \item{max.strong.size}{maximum number of strong set size.
-Internally, capped at number of features.}
+Internally, capped at number of features.
+Must be positive.}
 
-\item{max.cds}{maximum number of coordinate descents per BASIL iteration.}
+\item{max.cds}{maximum number of coordinate descents per BASIL iteration.
+Must be positive.}
 
 \item{thr}{coordinate descent convergence threshold.}
 
@@ -58,7 +64,9 @@ This is only used if user.lambdas is empty.}
 
 \item{n.threads}{number of OpenMP threads for KKT check.
 Set it to 0 (default) to disable OpenMP usage.
-Set it to -1 to use all available logical cores.}
+Set it to -1 to use all available logical cores.
+Note that if this value is too high, performance may worsen.
+A general rule of thumb is to use the number of physical (not logical) cores.}
 }
 \description{
 Fits PGR objective with BASIL framework.

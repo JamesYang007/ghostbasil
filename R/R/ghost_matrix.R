@@ -1,9 +1,22 @@
 #' Overload for GhostMatrix dimension.
+#'
+#' @param   x   GhostMatrix object.
 #' @export
 dim.Rcpp_GhostMatrix__ <- function(x) x$dim
 
 #' Creates an instance of a GhostMatrix.
-#' @param   Sigma   covariance matrix of original features (dense matrix).
+#'
+#' This matrix has the block-form of Sigma on the off-diagonal
+#' and Sigma + D on the diagonal.
+#' For example, if n.groups is 2, then GhostMatrix represents a matrix of the form
+#' \deqn{
+#'  \begin{bmatrix}
+#'      \Sigma+D & \Sigma \\
+#'      \Sigma & \Sigma+D
+#'  \end{bmatrix}
+#' }
+#'
+#' @param   Sigma   covariance matrix of original features (dense matrix) minus the diagonal D.
 #' @param   D       diagonal to add to Sigma on the diagonal blocks (dense vector).
 #' @param   n.groups    number of groups (e.g. 1 knockoff means 2 groups).
 #' @export
@@ -30,7 +43,7 @@ GhostMatrix <- function(Sigma, D, n.groups)
         stop("Sigma must have both dimensions as the length of D.")
     }
 
-    out <- new(GhostMatrix__, Sigma, D, n.groups) 
+    out <- methods::new(GhostMatrix__, Sigma, D, n.groups) 
 
     out
 }

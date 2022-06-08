@@ -1,0 +1,240 @@
+---
+title: "Tutorial"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Tutorial}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+<!--- R Markdown setup --->
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+<!--- Latex Definitions --->
+\DeclareMathOperator*{\minimize}{minimize\,}
+\newcommand{\norm}[1]{\vert\vert#1\rvert\rvert}
+\newcommand{\R}{\mathbb{R}}
+
+<!--- Begin Vignette --->
+
+In this tutorial, we will demonstrate common usage of `ghostbasil`.
+There are two steps in using `ghostbasil`:
+
+- Create a matrix class best suited for the user's needs to wrap the raw inputs.
+- Call `ghostbasil` with the matrix class and other inputs.
+
+We first discuss the optimization problem that `ghostbasil` aims to solve.
+Next, we outline the different types of matrix classes a user could construct.
+Finally, we discuss how to call `ghostbasil` and interpret its output.
+
+Before continuing, we load the `ghostbasil` library.
+```{r setup}
+library(ghostbasil)
+set.seed(314)
+```
+
+# Optimization Problem
+
+`ghostbasil` solves the following convex optimization problem:
+
+\begin{align*}
+    \minimize\limits_{\beta} &f(\beta) + \lambda \norm{\beta}_1 \\
+    f(\beta) &:= \frac{1-s}{2} \beta^\top A \beta - \beta^\top r + \frac{s}{2} \norm{\beta}_2^2
+\end{align*}
+where $\lambda \geq 0$, $A \in \R^{p \times p}$ is a positive semi-definite matrix, 
+$\beta, r \in \R^{p}$, and $0 \leq s \leq 1$.
+
+`ghostbasil` uses the BASIL algorithm along with coordinate descent to fit the lasso problem on the strong set.
+
+# Matrix Classes
+
+`ghostbasil` currently supports four types of matrix classes:
+
+- __`matrix`__: the usual dense matrix in `R`.
+- __`GhostMatrix`__: a matrix representing model-X knockoff-style structure. See `?GhostMatrix` for more detail.
+- __`BlockMatrix`__: a block diagonal matrix where each block is of `matrix` type. See `?BlockMatrix` for more detail.
+- __`BlockGhostMatrix`__: a block diagonal matrix where each block is of `GhostMatrix` type. See `?BlockGhostMatrix` for more detail.
+
+These matrices were introduced for the `A` matrix in the objective function.
+We will briefly describe each of the matrix types and their possible use-cases.
+
+## `matrix`
+
+A dense matrix can be constructed by calling `matrix(data, nrow, ncol)`
+where `data` is a numeric vector.
+If the `A` matrix is small-to-medium sized so that memory is not a concern,
+it is best to use this matrix in terms of performance.
+
+## `GhostMatrix`
+
+This matrix represents a large matrix of the form:
+
+\begin{align*}
+\begin{bmatrix}
+    S+D & S & \cdots & S \\
+    S   & S+D & \cdots & S \\
+    \vdots & \vdots & \ddots & \vdots \\
+    S & S & \cdots & S+D
+\end{bmatrix}
+\end{align*}
+
+This is the structure for a (multiple) model-X knockoff framework
+where $S \equiv \Sigma - D$, $\Sigma$ is the covariance matrix among the original features,
+and $D$ is the diagonal matrix obtained from solving the model-X knockoff optimization problem.
+Note that this slight formatting difference was done on purpose.
+`ghostbasil` can be significantly optimized with this format rather than the usual model-X knockoff format.
+
+If the `A` matrix is small-to-medium sized so that memory is not a concern
+and the user wishes to incorporate knockoff features,
+it is best to use this matrix in terms of performance.
+__There is almost no additional cost to using this matrix class even when $S$ is small and number of groups is small.__
+
+A `GhostMatrix` can be constructed by calling `GhostMatrix(S, D, n.groups)`,
+where `n.groups` is the number of _groups_ (i.e. one knockoff corresponds to two groups).
+An example construction is as follows:
+
+```{r}
+p <- 10
+X <- matrix(rnorm(p*p), p)
+S <- (t(X) %*% X) / p
+D <- rep(0.1, p)
+n.groups <- 2
+gmat <- GhostMatrix(S, D, n.groups)
+gmat
+```
+
+__Note: this matrix only _views_ the inputs! It is the user's responsibility that the inputs remain allocated throughout the use of `GhostMatrix`.__
+
+## `BlockMatrix`
+
+This matrix represents a large block-diagonal matrix of the form:
+
+\begin{align*}
+\begin{bmatrix}
+    A_1 & 0 & \cdots & 0 \\
+    0 & A_2 & \cdots & 0 \\
+    \vdots & \vdots & \ddots & \vdots \\
+    0 & 0 & \cdots & A_L
+\end{bmatrix}
+\end{align*}
+
+where each $A_i$ are dense (square) matrices.
+If the `A` matrix contains any level of sparsity where groups of features are independent from others,
+it is best to use this matrix class in terms of performance.
+__There is almost no additional cost to using this matrix class even when sparsity is low.__
+
+A `BlockMatrix` can be constructed by calling `BlockMatrix(blocks)`.
+An example construction is as follows:
+
+```{r}
+p <- 10
+X <- matrix(rnorm(p*p), p)
+B <- (t(X) %*% X) / p
+mat.list <- list(B, 2*B, 3*B)
+bmat <- BlockMatrix(mat.list)
+bmat
+```
+
+__Note: this matrix only _views_ the inputs! It is the user's responsibility that the inputs remain allocated throughout the use of `BlockMatrix`.__
+
+## `BlockGhostMatrix`
+
+This matrix represents a large block-diagonal matrix as in `BlockMatrix` 
+except that each block $A_i$ are `GhostMatrix` objects.
+If the `A` matrix contains any level of sparsity where groups of features are independent from others
+and the user wishes to add knockoff features as well,
+it is best to use this matrix class in terms of performance.
+__Currently, there is a small additional cost in speed. We are currently in the process of reducing this cost. In any case, this class brings a large reduction in memory consumption, so it is advised to use this class whenever possible.__
+
+A `BlockGhostMatrix` can be constructed by calling `BlockGhostMatrix(blocks, matrices, vectors, n.groups)`.
+An example construction is as follows:
+
+```{r}
+p <- 10
+X <- matrix(rnorm(p*p), p)
+S <- (t(X) %*% X) / p
+D <- rep(0.1, p)
+n.groups <- 2
+
+# Method 1
+matrices <- list(S, S, S)
+vectors <- list(D, D, D)
+bgmat <- BlockGhostMatrix(matrices=matrices,
+                          vectors=vectors,
+                          n.groups=n.groups)
+
+# Method 2
+block <- GhostMatrix(S, D, n.groups)
+blocks <- list(block, block, block)
+bgmat.2 <- BlockGhostMatrix(blocks=blocks)
+
+bgmat
+bgmat.2
+```
+
+__Note: this matrix only _views_ the inputs! It is the user's responsibility that the inputs remain allocated throughout the use of `BlockGhostMatrix`.__
+
+# Calling `ghostbasil` 
+
+Once the user has constructed one of the possible matrix objects discussed previously,
+they can now call `ghostbasil` to solve the lasso problem.
+Depending on the matrix type of `A`, `ghostbasil` will dispatch to the correct
+C++ routine to perform a highly optimized fitting procedure for that type.
+See `?ghostbasil` for the full description of the input arguments.
+The following is an example usage of `ghostbasil` using a dense matrix (for simplicity):
+
+```{r}
+# Generate data
+n <- 100
+p <- 10
+X <- matrix(rnorm(n*p), n)
+beta <- rnorm(p)
+y <- X %*% beta + rnorm(n)
+
+# Prepare inputs
+A <- (t(X) %*% X) / n
+r <- (t(X) %*% y) / n
+s <- 0.5
+
+gb.out <- ghostbasil(A, r, s)
+```
+
+The output is a list with the following names:
+```{r}
+attr(gb.out, 'names')
+```
+- __`betas`__: a sparse matrix of coefficient vectors $\beta$ where each column is a solution corresponding to a $\lambda$ value.
+- __`lmdas`__: a vector of $\lambda$ values that correspond to each column of `betas`.
+- __`rsqs`__: a vector of _unnormalized_ (training) $R^2$ values that correspond to each $\lambda$ and $\beta$.
+- __`error`__: any error message propagated from the C++ routine.
+
+Let's inspect some of the values:
+```{r}
+slice <- 1:13
+gb.out$betas[, slice]
+gb.out$lmdas[slice]
+gb.out$rsqs[slice]
+```
+
+Currently, `rsqs` is the _unnormalized_ (training) $R^2$.
+Our objective can be recasted as a bona fide lasso problem in the linear regression setting
+with pseudo-data $(\tilde{X}, \tilde{y})$,
+hence, we define $R^2$ in the usual sense as
+
+\begin{align*}
+    R^2 := \frac{\norm{\tilde{y}}_2^2 - \norm{\tilde{y}-\tilde{X}\beta}_2^2}{\norm{\tilde{y}}_2^2}
+\end{align*}
+
+However, for computation reasons, we do not have access to the denominator, $\norm{\tilde{y}}_2^2$.
+We are currently exploring ways to find estimates of this quantity so that `rsqs` is normalized
+for interpretability reasons. 
+
+It is worth noting that `ghostbasil` can finish early.
+Currently, there is only one early-stopping rule based on the training $R^2$.
+It measures whether the $R^2$ is increasing at a sufficiently slow rate
+and finishes early if it detects this behavior.

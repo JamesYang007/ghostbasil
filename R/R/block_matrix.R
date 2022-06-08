@@ -1,8 +1,14 @@
 #' Overload for GhostMatrix dimension.
+#'
+#' @param   x   BlockMatrix object.
 #' @export
 dim.Rcpp_BlockMatrix__ <- function(x) x$dim
 
 #' Creates an instance of a BlockMatrix.
+#'
+#' This matrix represents a block diagonal matrix where each
+#' block matrix is a dense matrix.
+#'
 #' @param   blocks  list of dense matrices.
 #' @export
 BlockMatrix <- function(blocks)
@@ -11,6 +17,9 @@ BlockMatrix <- function(blocks)
         stop("Length of blocks must be positive.")
     }
     block.type <- class(blocks[[1]])
+    if (all(block.type != 'matrix')) {
+        stop("Every block must be of matrix type.")
+    }
     for (i in 1:length(blocks)) {
         block.i <- blocks[[i]]
         block.dim <- dim(block.i)
@@ -30,7 +39,7 @@ BlockMatrix <- function(blocks)
         }
     }
 
-    out <- new(BlockMatrix__, blocks) 
+    out <- methods::new(BlockMatrix__, blocks) 
     
     out
 }

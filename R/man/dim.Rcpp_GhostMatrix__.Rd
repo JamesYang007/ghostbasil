@@ -6,6 +6,9 @@
 \usage{
 \method{dim}{Rcpp_GhostMatrix__}(x)
 }
+\arguments{
+\item{x}{GhostMatrix object.}
+}
 \description{
 Overload for GhostMatrix dimension.
 }

@@ -5,11 +5,12 @@ MAC_OPENMP_LDFLAGS = -lomp
 # If mac, add special flags to enable openmp
 IS_MAC=$(shell $(R_HOME)/bin/Rscript -e 'cat(grepl("Darwin", Sys.info()["sysname"]))')
 ifeq ($(IS_MAC),TRUE)
-   PKG_CXXFLAGS += $(MAC_OPENMP_CXXFLAGS)
-   PKG_LIBS += $(MAC_OPENMP_LDFLAGS)
+   PKG_CXXFLAGS = $(MAC_OPENMP_CXXFLAGS)
+   PKG_LIBS = $(MAC_OPENMP_LDFLAGS)
 endif
 
-# TODO: the include directory should probably change.
-PKG_CXXFLAGS += \
-    -I../../ghostbasil/include \
+# TODO: the ghostbasil include directory should probably change since it's a symlink.
+PKG_CPPFLAGS = \
+    -I../inst/ghostbasil/include \
+    -I../inst/include \
     -DEIGEN_MATRIXBASE_PLUGIN=\"ghostbasil/util/eigen/matrixbase_plugin.hpp\" 

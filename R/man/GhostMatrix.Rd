@@ -7,12 +7,20 @@
 GhostMatrix(Sigma, D, n.groups)
 }
 \arguments{
-\item{Sigma}{covariance matrix of original features.}
+\item{Sigma}{covariance matrix of original features (dense matrix) minus the diagonal D.}
 
-\item{D}{diagonal to subtract from Sigma in the off-diagonal blocks.}
+\item{D}{diagonal to add to Sigma on the diagonal blocks (dense vector).}
 
 \item{n.groups}{number of groups (e.g. 1 knockoff means 2 groups).}
 }
 \description{
-Creates an instance of a GhostMatrix.
+This matrix has the block-form of Sigma on the off-diagonal
+and Sigma + D on the diagonal.
+For example, if n.groups is 2, then GhostMatrix represents a matrix of the form
+\deqn{
+ \begin{bmatrix}
+     \Sigma+D & \Sigma \\
+     \Sigma & \Sigma+D
+ \end{bmatrix}
+}
 }

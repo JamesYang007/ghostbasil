@@ -6,6 +6,9 @@
 \usage{
 \method{dim}{Rcpp_BlockMatrix__}(x)
 }
+\arguments{
+\item{x}{BlockMatrix object.}
+}
 \description{
 Overload for GhostMatrix dimension.
 }
