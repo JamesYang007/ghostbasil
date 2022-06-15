@@ -9,7 +9,7 @@ class BlockMatrixWrap
     using vec_t = Eigen::VectorXd;
     using block_as_t = Eigen::Map<Eigen::MatrixXd>;
     using vec_map_t = Eigen::Map<vec_t>;
-    using mat_list_t = std::vector<const block_as_t>;
+    using mat_list_t = std::vector<block_as_t>;
     using block_mat_t = ghostbasil::BlockMatrix<block_as_t>;
     using dim_t = Eigen::Array<size_t, 2, 1>;
 
@@ -20,7 +20,7 @@ class BlockMatrixWrap
 
     static auto init_mat_list(Rcpp::List mat_list) 
     {
-        std::vector<const block_as_t> mat_list_;
+        std::vector<block_as_t> mat_list_;
         mat_list_.reserve(mat_list.size()); // important to not invoke resize?
         for (size_t i = 0; i < mat_list.size(); ++i) {
             mat_list_.emplace_back(Rcpp::as<block_as_t>(mat_list[i]));
@@ -66,7 +66,7 @@ class BlockGhostMatrixWrap
     using vec_t = Eigen::VectorXd;
     using block_as_t = ghostbasil::GhostMatrix<mat_t, vec_t>;
     using vec_map_t = Eigen::Map<vec_t>;
-    using mat_list_t = std::vector<const block_as_t>;
+    using mat_list_t = std::vector<block_as_t>;
     using block_mat_t = ghostbasil::BlockMatrix<block_as_t>;
     using dim_t = Eigen::Array<size_t, 2, 1>;
 
@@ -78,7 +78,7 @@ class BlockGhostMatrixWrap
     static auto init_mat_list(Rcpp::List mat_list) 
     {
         using as_t = GhostMatrixWrap;
-        std::vector<const block_as_t> mat_list_;
+        std::vector<block_as_t> mat_list_;
         mat_list_.reserve(mat_list.size()); // important to not invoke resize?
         for (size_t i = 0; i < mat_list.size(); ++i) {
             mat_list_.emplace_back(
