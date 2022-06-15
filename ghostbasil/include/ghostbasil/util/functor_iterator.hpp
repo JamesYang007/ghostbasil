@@ -93,6 +93,7 @@ public:
     GHOSTBASIL_STRONG_INLINE
     functor_iterator& operator-=(difference_type n) { curr_ -= n; return *this; }
     GHOSTBASIL_STRONG_INLINE functor_iterator& operator++() { ++curr_; return *this; }
+    GHOSTBASIL_STRONG_INLINE functor_iterator& operator--() { --curr_; return *this; }
 
     // Weirdly, returning reference destroys speed in lasso coordinate descent.
     // Make sure to return by value!
