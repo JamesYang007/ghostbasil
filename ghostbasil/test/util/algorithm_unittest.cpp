@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <ghostbasil/util/macros.hpp>
 #include <ghostbasil/util/algorithm.hpp>
+#include <algorithm>
 
 namespace ghostbasil {
 namespace util {

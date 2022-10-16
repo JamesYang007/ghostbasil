@@ -451,7 +451,7 @@ TEST_P(LassoGhostFixture, lasso_ghost)
     std::tie(seed, p, n_groups) = GetParam();
     auto&& dataset = generate(seed, p, n_groups);
     auto fs = generate_datasets(dataset);
-    test(std::get<0>(fs), std::get<1>(fs), false, 4e-15, 4e-15);
+    test(std::get<0>(fs), std::get<1>(fs), false, 1e-14, 1e-14);
 }
 
 INSTANTIATE_TEST_SUITE_P(
