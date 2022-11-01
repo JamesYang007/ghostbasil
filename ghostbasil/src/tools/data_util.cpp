@@ -41,7 +41,7 @@ Eigen::MatrixXd load_csv(const std::string& path)
     //   reason, then use Runfiles::Create(&error).
 
     if (runfiles == nullptr) {
-        throw std::runtime_error("Runfiles failed.");
+        throw std::runtime_error(error);
     }
 
     std::string new_path = runfiles->Rlocation("__main__/" + path);

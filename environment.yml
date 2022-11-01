@@ -1,0 +1,24 @@
+name: ghostbasil
+channels:
+  - conda-forge
+dependencies:
+  # essentials
+  - python=3.10
+  - setuptools
+  - numpy
+  - scipy
+  - matplotlib
+
+  # C++ toolchain
+  - cxx-compiler
+  - clang-tools
+
+  # essential dev tools
+  - cvxpy
+  - pytest
+  - pre-commit
+  - black
+  - flake8
+  - isort
+  - jupytext
+  - pip

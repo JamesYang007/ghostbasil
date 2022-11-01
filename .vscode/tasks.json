@@ -1,0 +1,53 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "Build Tests",
+			"command": "bazel build //ghostbasil/test/... -c dbg",
+			"options": {
+				"cwd": "${workspaceFolder}",
+			},
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+        {
+            "type": "shell",
+            "label": "Run Tests",
+            "command": "bazel test //ghostbasil/test/... -c dbg",
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            }
+        },
+        {
+            "type": "shell",
+            "label": "Run Matrix Tests",
+            "command": "${workspaceFolder}/bazel-bin/ghostbasil/test/matrix",
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            }
+        },
+        {
+            "type": "shell",
+            "label": "Run Optimization Tests",
+            "command": "${workspaceFolder}/bazel-bin/ghostbasil/test/optimization",
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            }
+        },
+        {
+            "type": "shell",
+            "label": "Run Util Tests",
+            "command": "${workspaceFolder}/bazel-bin/ghostbasil/test/util",
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            }
+        },
+	]
+}

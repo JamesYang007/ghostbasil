@@ -195,8 +195,8 @@ struct LassoCompareFixture
     void test(F1 generate_dataset_actual,
               F2 generate_dataset_expected,
               bool do_eq = true,
-              double coeff_tol = 1e-16,
-              double rsq_tol = 1e-16)
+              double coeff_tol = 1e-12,
+              double rsq_tol = 1e-12)
     {
         auto&& actual_dataset = make_input(generate_dataset_actual);
         auto&& expected_dataset = make_input(generate_dataset_expected);
@@ -451,7 +451,7 @@ TEST_P(LassoGhostFixture, lasso_ghost)
     std::tie(seed, p, n_groups) = GetParam();
     auto&& dataset = generate(seed, p, n_groups);
     auto fs = generate_datasets(dataset);
-    test(std::get<0>(fs), std::get<1>(fs), false, 1e-14, 1e-14);
+    test(std::get<0>(fs), std::get<1>(fs), false, 1e-12, 1e-12);
 }
 
 INSTANTIATE_TEST_SUITE_P(

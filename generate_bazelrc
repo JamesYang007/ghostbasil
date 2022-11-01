@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 import os
 import subprocess
 from sys import platform
@@ -21,44 +20,13 @@ def run_cmd(cmd):
 
 def main():
     with open(OUT_PATH, "w") as f:
-        # MacOS
-        if platform == "darwin":
-            f.write(
-                f"""
-# These flags are needed to enable openmp
-# Note: -Xclang has to come RIGHT BEFORE -fopenmp
-build --cxxopt=-Xclang 
-build --cxxopt=-fopenmp
-build --linkopt=-Xclang 
-build --linkopt=-fopenmp
-build --linkopt=-lomp
-# Tell Bazel not to use the full Xcode toolchain on Mac OS
-build --repo_env=BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
-"""
-            )
-        else:
-            # Linux
-            f.write(
-                """
-# Linux GCC
-build:gcc --action_env=CC=gcc
-build:gcc --action_env=CXX=g++
-
-# Linux Clang (default)
-build --action_env=CC=clang
-build --action_env=CXX=clang++
-build --cxxopt=-fopenmp
-build --linkopt=-fopenmp
-"""
-            )
-
-        # ORDER MATTERS!
-        # Now write the common configs
+        # TODO: add ubsan + msan builds also
         f.write(
             """
-build --cxxopt=-std=c++14
-build --cxxopt=-Wall
-
+build --cxxopt="-std=c++14"
+build --cxxopt="-Wall"
+build --cxxopt="-fopenmp"
+build --linkopt -fopenmp
 # ASAN build
 # TODO: add ubsan + msan builds also
 build:asan --strip=never
@@ -68,10 +36,42 @@ build:asan --copt -O1
 build:asan --copt -g
 build:asan --copt -fno-omit-frame-pointer
 build:asan --linkopt -fsanitize=address
-
-build:prof --cxxopt=-fno-omit-frame-pointer
-build:prof --linkopt=-lprofiler"""
+"""
         )
+
+        # MacOS
+        if platform == "darwin":
+            # get canonical brew path
+            conda_prefix = os.environ["CONDA_PREFIX"]
+            conda_bin = os.path.join(conda_prefix, "bin")
+            conda_inc = os.path.join(conda_prefix, "include")
+            conda_lib = os.path.join(conda_prefix, "lib")
+
+            # get canonical omp path
+            sdk_path = run_cmd("xcrun --sdk macosx --show-sdk-path")
+            f.write(
+                f"""
+# Use clang from conda-forge
+build --action_env=CC={conda_bin}/clang
+build --action_env=CXX={conda_bin}/clang++
+build --action_env=BAZEL_CXXOPTS=-isystem{conda_inc}
+build --action_env=BAZEL_LINKOPTS=-L{conda_lib}:-Wl,-rpath,{conda_lib}
+build --action_env=SDKROOT={sdk_path}
+# Tell Bazel not to use the full Xcode toolchain on Mac OS
+build --repo_env=BAZEL_USE_CPP_ONLY_TOOLCHAIN=1"""
+            )
+        else:
+            # Linux
+            f.write(
+                """
+# Linux GCC
+build:gcc --action_env=CC=gcc
+build:gcc --action_env=CXX=g++
+# Linux Clang (default)
+build --action_env=CC=clang
+build --action_env=CXX=clang++
+"""
+            )
 
 
 if __name__ == "__main__":

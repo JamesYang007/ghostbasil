@@ -15,6 +15,13 @@ Run the following command to generate machine-specific `.bazelrc`:
 ./generate_bazelrc
 ```
 
+Then, install the developement dependencies:
+```
+mamba update -y conda
+mamba env create
+conda activate ghostbasil
+```
+
 See the following for installations of each of the sub-packages:
 - [R README](R/README.md)
 - [C++ README](ghostbasil/README.md)

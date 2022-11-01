@@ -221,10 +221,10 @@ struct BasilCompareFixture
             const auto& actual_beta_i = actual_betas[i];
             EXPECT_EQ(actual_beta_i.size(), expected_beta_i.size());
             for (size_t j = 0; j < expected_beta_i.size(); ++j) {
-                EXPECT_NEAR(actual_beta_i.coeff(j), expected_beta_i.coeff(j), 4e-15);
+                EXPECT_NEAR(actual_beta_i.coeff(j), expected_beta_i.coeff(j), 1e-13);
             }
-            EXPECT_NEAR(actual_rsqs[i], expected_rsqs[i], 8e-15);
-            EXPECT_DOUBLE_EQ(actual_lmdas[i], expected_lmdas[i]);
+            EXPECT_NEAR(actual_rsqs[i], expected_rsqs[i], 1e-13);
+            EXPECT_NEAR(actual_lmdas[i], expected_lmdas[i], 1e-13);
         }
     }
 };
