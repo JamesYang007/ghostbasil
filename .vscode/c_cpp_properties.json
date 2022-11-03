@@ -4,7 +4,14 @@
             "name": "Mac",
             "includePath": [
                 "${workspaceFolder}/**",
-                "${workspaceFolder}/bazel-ghostbasil/external/eigen"
+                "${workspaceFolder}/ghostbasil/include",
+                "${workspaceFolder}/bazel-ghostbasil/external/eigen",
+                "${workspaceFolder}/bazel-ghostbasil/external/com_github_google_benchmark/include",
+                "${workspaceFolder}/bazel-ghostbasil/external/com_google_googletest/googletest/include",
+                "/Library/Frameworks/R.framework/Resources/include",
+                "/Library/Frameworks/R.framework/Versions/4.2-arm64/Resources/library/Rcpp/include",
+                "/Library/Frameworks/R.framework/Versions/4.2-arm64/Resources/library/RcppEigen/include",
+                "/opt/homebrew/Cellar/suite-sparse/5.13.0/include"
             ],
             "defines": [],
             "macFrameworkPath": [
