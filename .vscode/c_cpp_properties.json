@@ -21,6 +21,21 @@
             "cStandard": "c17",
             "cppStandard": "c++17",
             "intelliSenseMode": "macos-clang-arm64"
+        },
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/ghostbasil/include",
+                "/usr/share/R/include",
+                "/home/jhyang/R/x86_64-pc-linux-gnu-library/4.1/Rcpp/include",
+                "/home/jhyang/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/clang++",
+            "cStandard": "gnu17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-clang-x64"
         }
     ],
     "version": 4

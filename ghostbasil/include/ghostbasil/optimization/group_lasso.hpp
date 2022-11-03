@@ -24,23 +24,34 @@ void solve_sub_coeffs(
     XType& x,
     size_t& iters,
     size_t max_iters=100,
-    double tol=1e-8
+    double tol=1e-10
 )
 {
+    Eigen::VectorXd buffer(x.size());
     Eigen::VectorXd w(x.size());
-    Eigen::VectorXd curr(x.size());
-    Eigen::VectorXd prev = x;
+    Eigen::VectorXd curr = x; 
+    Eigen::VectorXd prev(curr.size());
 
-    iters = 1;
-    for (; iters <= max_iters; ++iters) {
-        w = prev + step_size * (y - C * prev);
-        const auto factor = 1.0 - step_size * lmda / w.norm();
-        curr = std::max(factor, 0) * w;
-        if ((curr - prev).norm() < tol) break;
+    const auto nu_lmda = step_size * lmda;
+
+    iters = 0;
+    for (; iters < max_iters; ++iters) {
+        if (iters) {
+            // convergence measurement is based on
+            // standardizing x.
+            w = curr - prev; // use w as buffer
+            buffer = C * w;
+            const auto convg_measure = w.dot(buffer);
+            if (convg_measure < tol) break;
+        }
+        buffer = C * curr;
+        w = curr + step_size * (y - buffer);
+        const auto w_norm = w.norm();
+        const auto factor = (w_norm <= nu_lmda) ? 0.0 : (1.0 - nu_lmda / w_norm);
         curr.swap(prev);
+        curr = factor * w;
     }
     x = curr;
-    iters = std::min(iters, max_iters);
 }
 
 } // namespace ghostbasil

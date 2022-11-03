@@ -133,6 +133,23 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// solve_sub_coeffs__
+List solve_sub_coeffs__(const Eigen::Map<Eigen::MatrixXd> C, const Eigen::Map<Eigen::VectorXd> y, double lmda, double step_size, const Eigen::Map<Eigen::VectorXd> x, size_t max_iters, double tol);
+RcppExport SEXP _ghostbasil_solve_sub_coeffs__(SEXP CSEXP, SEXP ySEXP, SEXP lmdaSEXP, SEXP step_sizeSEXP, SEXP xSEXP, SEXP max_itersSEXP, SEXP tolSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type C(CSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type lmda(lmdaSEXP);
+    Rcpp::traits::input_parameter< double >::type step_size(step_sizeSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type x(xSEXP);
+    Rcpp::traits::input_parameter< size_t >::type max_iters(max_itersSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    rcpp_result_gen = Rcpp::wrap(solve_sub_coeffs__(C, y, lmda, step_size, x, max_iters, tol));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 RcppExport SEXP _rcpp_module_boot_core_module();
 
@@ -143,6 +160,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_ghostbasil_basil_block_ghost__", (DL_FUNC) &_ghostbasil_basil_block_ghost__, 13},
     {"_ghostbasil_objective_sparse__", (DL_FUNC) &_ghostbasil_objective_sparse__, 5},
     {"_ghostbasil_objective_dense__", (DL_FUNC) &_ghostbasil_objective_dense__, 5},
+    {"_ghostbasil_solve_sub_coeffs__", (DL_FUNC) &_ghostbasil_solve_sub_coeffs__, 7},
     {"_rcpp_module_boot_core_module", (DL_FUNC) &_rcpp_module_boot_core_module, 0},
     {NULL, NULL, 0}
 };

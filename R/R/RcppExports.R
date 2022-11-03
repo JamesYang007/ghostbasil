@@ -25,3 +25,7 @@ objective_dense__ <- function(A, r, s, lmda, beta) {
     .Call(`_ghostbasil_objective_dense__`, A, r, s, lmda, beta)
 }
 
+solve_sub_coeffs__ <- function(C, y, lmda, step_size, x, max_iters = 1000L, tol = 1e-8) {
+    .Call(`_ghostbasil_solve_sub_coeffs__`, C, y, lmda, step_size, x, max_iters, tol)
+}
+
