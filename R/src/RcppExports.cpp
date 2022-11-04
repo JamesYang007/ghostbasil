@@ -133,6 +133,35 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// solve_quartic__
+std::vector<double> solve_quartic__(double a, double b, double c, double d, double e);
+RcppExport SEXP _ghostbasil_solve_quartic__(SEXP aSEXP, SEXP bSEXP, SEXP cSEXP, SEXP dSEXP, SEXP eSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< double >::type a(aSEXP);
+    Rcpp::traits::input_parameter< double >::type b(bSEXP);
+    Rcpp::traits::input_parameter< double >::type c(cSEXP);
+    Rcpp::traits::input_parameter< double >::type d(dSEXP);
+    Rcpp::traits::input_parameter< double >::type e(eSEXP);
+    rcpp_result_gen = Rcpp::wrap(solve_quartic__(a, b, c, d, e));
+    return rcpp_result_gen;
+END_RCPP
+}
+// solve_sub_coord_desc__
+double solve_sub_coord_desc__(double a, double b, double c, double d);
+RcppExport SEXP _ghostbasil_solve_sub_coord_desc__(SEXP aSEXP, SEXP bSEXP, SEXP cSEXP, SEXP dSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< double >::type a(aSEXP);
+    Rcpp::traits::input_parameter< double >::type b(bSEXP);
+    Rcpp::traits::input_parameter< double >::type c(cSEXP);
+    Rcpp::traits::input_parameter< double >::type d(dSEXP);
+    rcpp_result_gen = Rcpp::wrap(solve_sub_coord_desc__(a, b, c, d));
+    return rcpp_result_gen;
+END_RCPP
+}
 // solve_sub_coeffs__
 List solve_sub_coeffs__(const Eigen::Map<Eigen::MatrixXd> C, const Eigen::Map<Eigen::VectorXd> y, double lmda, double step_size, const Eigen::Map<Eigen::VectorXd> x, size_t max_iters, double tol);
 RcppExport SEXP _ghostbasil_solve_sub_coeffs__(SEXP CSEXP, SEXP ySEXP, SEXP lmdaSEXP, SEXP step_sizeSEXP, SEXP xSEXP, SEXP max_itersSEXP, SEXP tolSEXP) {
@@ -160,6 +189,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_ghostbasil_basil_block_ghost__", (DL_FUNC) &_ghostbasil_basil_block_ghost__, 13},
     {"_ghostbasil_objective_sparse__", (DL_FUNC) &_ghostbasil_objective_sparse__, 5},
     {"_ghostbasil_objective_dense__", (DL_FUNC) &_ghostbasil_objective_dense__, 5},
+    {"_ghostbasil_solve_quartic__", (DL_FUNC) &_ghostbasil_solve_quartic__, 5},
+    {"_ghostbasil_solve_sub_coord_desc__", (DL_FUNC) &_ghostbasil_solve_sub_coord_desc__, 4},
     {"_ghostbasil_solve_sub_coeffs__", (DL_FUNC) &_ghostbasil_solve_sub_coeffs__, 7},
     {"_rcpp_module_boot_core_module", (DL_FUNC) &_rcpp_module_boot_core_module, 0},
     {NULL, NULL, 0}

@@ -22,6 +22,12 @@ mamba env create
 conda activate ghostbasil
 ```
 
+Our tools require `omp` to be installed on the system.
+On Mac, it must be installed with Homebrew as our build system assumes:
+```
+brew install libomp
+```
+
 See the following for installations of each of the sub-packages:
 - [R README](R/README.md)
 - [C++ README](ghostbasil/README.md)

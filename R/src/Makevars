@@ -1,10 +1,10 @@
 CXX_STD = CXX14
-MAC_OPENMP_CXXFLAGS = -Xclang -fopenmp
-MAC_OPENMP_LDFLAGS = -lomp
 
 # If mac, add special flags to enable openmp
 IS_MAC=$(shell $(R_HOME)/bin/Rscript -e 'cat(grepl("Darwin", Sys.info()["sysname"]))')
 ifeq ($(IS_MAC),TRUE)
+   MAC_OPENMP_CXXFLAGS = -I/opt/homebrew/opt/libomp/include -Xclang -fopenmp
+   MAC_OPENMP_LDFLAGS = -L/opt/homebrew/opt/libomp/lib -lomp
    PKG_CXXFLAGS = $(MAC_OPENMP_CXXFLAGS)
    PKG_LIBS = $(MAC_OPENMP_LDFLAGS)
 endif
@@ -13,4 +13,5 @@ endif
 PKG_CPPFLAGS = \
     -I../inst/ghostbasil/include \
     -I../inst/include \
+    -DEIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS \
     -DEIGEN_MATRIXBASE_PLUGIN=\"ghostbasil/util/eigen/matrixbase_plugin.hpp\" 
