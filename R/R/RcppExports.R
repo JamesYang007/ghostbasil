@@ -37,3 +37,7 @@ solve_sub_coeffs__ <- function(C, y, lmda, step_size, x, max_iters = 1000L, tol 
     .Call(`_ghostbasil_solve_sub_coeffs__`, C, y, lmda, step_size, x, max_iters, tol)
 }
 
+solve_sub_coeffs_mix__ <- function(C, y, lmda, step_size, x, max_cd_iters = 100L, cd_tol = 1e-6, max_iters = 1000L, tol = 1e-8) {
+    .Call(`_ghostbasil_solve_sub_coeffs_mix__`, C, y, lmda, step_size, x, max_cd_iters, cd_tol, max_iters, tol)
+}
+

@@ -110,6 +110,10 @@ T solve_sub_coord_desc(
     T d    
 )
 {
+    if (c == 0) {
+        const auto sol = (d-b) / a;
+        return (sol >= 0) ? sol : std::numeric_limits<T>::quiet_NaN();
+    }
     T d_sq = d * d;
     T a1 = a * a;
     T b1 = -2 * a * d;
@@ -123,58 +127,162 @@ T solve_sub_coord_desc(
     }
     return std::numeric_limits<T>::quiet_NaN();
 }
-    
+
+template <class CType, class GradType, class BetaType>
+GHOSTBASIL_STRONG_INLINE
+void sub_coord_desc(
+    const CType& C,
+    GradType& grad,
+    BetaType& beta,
+    double& beta_normsq,
+    double& convg_measure,
+    double lmda
+)
+{
+    convg_measure = 0;
+    for (size_t i = 0; i < beta.size(); ++i) {
+        const auto bi = beta[i];
+        const auto gi = grad[i];
+        const auto Cii = C(i,i);
+        
+        // get new coefficient
+        const auto xi_resid = gi + Cii * bi;
+        const auto xi_resid_abs = std::abs(xi_resid);
+        auto& bi_ref = beta[i];
+        beta_normsq -= bi * bi;
+        const auto safe_beta_normsq = std::max(beta_normsq, 0.0);
+        bi_ref = (xi_resid_abs <= lmda) ? 0.0 :
+            std::copysign(1.0, xi_resid) *
+            solve_sub_coord_desc(
+                Cii, lmda, safe_beta_normsq, xi_resid_abs
+            );
+        beta_normsq += bi_ref * bi_ref;
+        
+        // TODO: debug
+        auto h = std::abs(bi_ref);
+        auto debug = h * (Cii + lmda / std::sqrt(h*h + safe_beta_normsq)) - xi_resid_abs;
+        if (std::abs(debug) >= 1e-10) {
+            Rcpp::Rcout << debug << std::endl;
+            Rcpp::Rcout << Cii << std::endl;
+            Rcpp::Rcout << lmda << std::endl;
+            Rcpp::Rcout << safe_beta_normsq << std::endl;
+            Rcpp::Rcout << xi_resid_abs << std::endl;
+        }
+        
+        if (bi_ref == bi) continue;
+        
+        const auto del = bi_ref - bi;
+        
+        // update measure of convergence
+        convg_measure = std::max(convg_measure, Cii * del * del);
+        
+        // update gradient
+        grad -= del * C.col(i);
+    }
+}
 
 /*
  * Solves the solution for the equation (w.r.t. x):
- *      x = (C + lmda / ||x|| * I)^{-1} y
+ *      minimize_x 1/2 [x^T C x - 2 x^T b] + lmda ||x||_2
  */
-template <class CType, class YType, class XType>
+template <class CType, class BType, class YType>
 GHOSTBASIL_STRONG_INLINE 
 void solve_sub_coeffs(
     const CType& C,
-    const YType& y,
+    const BType& b,
     double lmda,
     double step_size,
-    XType& x,
+    YType& y_curr,
     size_t& iters,
     size_t max_iters=100,
     double tol=1e-10
 )
 {
-    const auto p = x.size();
-    Eigen::VectorXd buffer(p);
+    const auto p = y_curr.size();
+    Eigen::VectorXd y_prev(p);
+    Eigen::VectorXd Cy_curr = C * y_curr;
+    Eigen::VectorXd Cy_prev(p);
     Eigen::VectorXd w(p);
-    Eigen::VectorXd curr = x; 
-    Eigen::VectorXd prev = x;
-    Eigen::VectorXd prev2(p);
+    Eigen::VectorXd x_curr = y_curr; 
+    Eigen::VectorXd x_prev(p);
+    Eigen::VectorXd x_diff(p);
 
     const auto nu_lmda = step_size * lmda;
 
     iters = 0;
+    double accel_size = 1.0;
     for (; iters < max_iters; ++iters) {
         if (iters) {
-            // convergence measurement is based on
-            // standardizing x.
-            w = curr - prev; // use w as buffer
-            buffer = C * w;
-            const auto convg_measure = w.dot(buffer) / p;
-            if (convg_measure < tol) break;
+            // adaptive restart
+            if ((y_prev - x_curr).dot(x_diff) > 0) { 
+                y_curr = x_curr;
+
+                // keep invariance
+                Cy_curr.swap(Cy_prev);
+                Cy_curr = C * y_curr;    
+
+                accel_size = 1.0;
+            } 
+            else {
+                // keep invariance
+                Cy_curr.swap(Cy_prev);
+                Cy_curr = C * y_curr;    
+
+                // convergence measurement is based on
+                // standardizing solution vector.
+                w = Cy_curr - Cy_prev; // use w as extra buffer
+                const auto convg_measure = w.dot(y_curr - y_prev) / p;
+                if (convg_measure < tol) break;
+            }
         }
-        // nesterov acceleration 
-        const auto m = (static_cast<double>(iters) - 1) / (iters + 2);
-        prev2 = curr + m * (curr - prev); // use as buffer
+
+        // swap curr and prev to populate new curr
+        x_curr.swap(x_prev);
         
         // proximal gradient descent
-        buffer = C * prev2;
-        w = prev2 + step_size * (y - buffer);
+        w = y_curr + step_size * (b - Cy_curr);
         const auto w_norm = w.norm();
         const auto factor = (w_norm <= nu_lmda) ? 0.0 : (1.0 - nu_lmda / w_norm);
-        prev.swap(prev2);
-        curr.swap(prev);
-        curr = factor * w;
+        x_curr = factor * w;
+
+        // nesterov acceleration 
+        const auto numer = accel_size - 1.0;
+        accel_size = 0.5 * (1.0 + std::sqrt(1.0 + 4 * accel_size * accel_size));
+        const auto m = numer / accel_size;
+        y_curr.swap(y_prev);
+        x_diff = x_curr - x_prev; // use w as buffer
+        y_curr = x_curr + m * x_diff; 
     }
-    x = curr;
 }
 
+template <class CType, class BType, class BetaType>
+GHOSTBASIL_STRONG_INLINE
+void solve_sub_coeffs_mix(
+    const CType& C,
+    const BType& b,
+    BetaType& beta,
+    double lmda,
+    size_t max_cd_iters,
+    double cd_tol,
+    double step_size,
+    size_t& iters,
+    size_t max_iters,
+    double tol
+)
+{
+    // first try coord-desc to get a good guess
+    Eigen::VectorXd grad = b - C * beta;
+    auto beta_normsq = beta.squaredNorm();
+    double convg_measure = 0.0; 
+    for (size_t i = 0; i < max_cd_iters; ++i) {
+        sub_coord_desc(
+            C, grad, beta, beta_normsq, convg_measure, lmda
+        );
+        if (convg_measure < cd_tol) break;
+    }
+    
+    // next finish off with guaranteed method
+    solve_sub_coeffs(C, b, lmda, step_size, beta, iters, max_iters, tol);
+}
+    
 } // namespace ghostbasil

@@ -179,6 +179,25 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// solve_sub_coeffs_mix__
+List solve_sub_coeffs_mix__(const Eigen::Map<Eigen::MatrixXd> C, const Eigen::Map<Eigen::VectorXd> y, double lmda, double step_size, const Eigen::Map<Eigen::VectorXd> x, size_t max_cd_iters, double cd_tol, size_t max_iters, double tol);
+RcppExport SEXP _ghostbasil_solve_sub_coeffs_mix__(SEXP CSEXP, SEXP ySEXP, SEXP lmdaSEXP, SEXP step_sizeSEXP, SEXP xSEXP, SEXP max_cd_itersSEXP, SEXP cd_tolSEXP, SEXP max_itersSEXP, SEXP tolSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type C(CSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type lmda(lmdaSEXP);
+    Rcpp::traits::input_parameter< double >::type step_size(step_sizeSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type x(xSEXP);
+    Rcpp::traits::input_parameter< size_t >::type max_cd_iters(max_cd_itersSEXP);
+    Rcpp::traits::input_parameter< double >::type cd_tol(cd_tolSEXP);
+    Rcpp::traits::input_parameter< size_t >::type max_iters(max_itersSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    rcpp_result_gen = Rcpp::wrap(solve_sub_coeffs_mix__(C, y, lmda, step_size, x, max_cd_iters, cd_tol, max_iters, tol));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 RcppExport SEXP _rcpp_module_boot_core_module();
 
@@ -192,6 +211,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_ghostbasil_solve_quartic__", (DL_FUNC) &_ghostbasil_solve_quartic__, 5},
     {"_ghostbasil_solve_sub_coord_desc__", (DL_FUNC) &_ghostbasil_solve_sub_coord_desc__, 4},
     {"_ghostbasil_solve_sub_coeffs__", (DL_FUNC) &_ghostbasil_solve_sub_coeffs__, 7},
+    {"_ghostbasil_solve_sub_coeffs_mix__", (DL_FUNC) &_ghostbasil_solve_sub_coeffs_mix__, 9},
     {"_rcpp_module_boot_core_module", (DL_FUNC) &_rcpp_module_boot_core_module, 0},
     {NULL, NULL, 0}
 };
