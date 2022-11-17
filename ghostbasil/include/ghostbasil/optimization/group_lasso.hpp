@@ -250,7 +250,7 @@ void solve_sub_coeffs(
         accel_size = 0.5 * (1.0 + std::sqrt(1.0 + 4 * accel_size * accel_size));
         const auto m = numer / accel_size;
         y_curr.swap(y_prev);
-        x_diff = x_curr - x_prev; // use w as buffer
+        x_diff = x_curr - x_prev;
         y_curr = x_curr + m * x_diff; 
     }
 }
