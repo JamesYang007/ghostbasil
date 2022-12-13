@@ -1,0 +1,28 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "C/C++: clang++ build and debug: optimization",
+            "preLaunchTask": "Build Tests",        
+            "type": "cppdbg",
+            "MIMode": "lldb",
+            "targetArchitecture": "arm64",
+            "program": "${workspaceFolder}/bazel-out/darwin_arm64-dbg/bin/ghostbasil/test/optimization",
+            "args": [
+                "--gtest_filter=Group*",
+            ],
+            "cwd": "${workspaceFolder}/bazel-out/darwin_arm64-dbg/bin/ghostbasil/test/optimization.runfiles/__main__/",
+            "stopAtEntry": true,
+            "request": "launch",
+            "externalConsole": false,
+            //"sourceFileMap": { 
+            //    //".": "${workspaceFolder}",
+            //    //"/private/var/tmp/_bazel_jhyang/c6fa5816ba0f663f6782a8136f794ad9/execroot/__main__/" : "${workspaceFolder}",
+            //    //"/var/tmp/_bazel_jhyang/c6fa5816ba0f663f6782a8136f794ad9/execroot/__main__/" : "${workspaceFolder}",
+            //},
+        }
+    ]
+}
