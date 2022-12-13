@@ -9,11 +9,11 @@ namespace {
 struct GroupLassoFixture
     : ::testing::Test
 {
-    const double tol = 5e-6;
-    const double thr = 1e-12;
-    const size_t max_cds = 1000;
-    const double newton_tol = 1e-12;
-    const size_t newton_max_iters = 1000;
+    const double tol = 1e-8;
+    const double thr = 1e-24;
+    const size_t max_cds = 10000;
+    const double newton_tol = 1e-10;
+    const size_t newton_max_iters = 10000;
 
     template <class F>
     auto make_input(F generate_dataset)
