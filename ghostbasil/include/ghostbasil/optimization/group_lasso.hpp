@@ -488,7 +488,7 @@ public:
     {
         //using ao_value_t = typename std::decay_t<AOType>::value_type;
         //using aso_value_t= typename std::decay_t<ASOType>::value_type;
-        using as_value_t= typename std::decay_t<ASType>::value_type;
+        //using as_value_t= typename std::decay_t<ASType>::value_type;
 
         Eigen::Map<const util::vec_type<value_t>> A_diag_map(
             strong_A_diag.data(), strong_A_diag.size()
