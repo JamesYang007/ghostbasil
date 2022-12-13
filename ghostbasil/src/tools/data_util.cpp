@@ -1,5 +1,6 @@
 #include <vector>
 #include <fstream>
+#include <iostream>
 #include "tools/cpp/runfiles/runfiles.h" // must be quotes!
 #include <tools/data_util.hpp>
 
@@ -39,12 +40,18 @@ Eigen::MatrixXd load_csv(const std::string& path)
     //   If this is a test, use Runfiles::CreateForTest(&error).
     //   Otherwise, if you don't have the value for argv[0] for whatever
     //   reason, then use Runfiles::Create(&error).
+    std::string new_path;
 
+    // if runfiles has an error, it is because the user is not
+    // calling the binary under "bazel run" or "bazel test" call.
+    // In this case, we will look relative to current working directory.
     if (runfiles == nullptr) {
-        throw std::runtime_error(error);
+        std::cerr << error << std::endl;
+        new_path = path;
+    } else {
+        new_path = runfiles->Rlocation("__main__/" + path);
     }
 
-    std::string new_path = runfiles->Rlocation("__main__/" + path);
     return load_csv_direct(new_path);
 }
 
