@@ -177,6 +177,31 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// lasso__
+List lasso__(const Eigen::Map<Eigen::MatrixXd> A, double s, const Eigen::Map<Eigen::VectorXi> strong_set, const std::vector<int>& strong_order, const Eigen::Map<Eigen::VectorXd> strong_A_diag, const Eigen::Map<Eigen::VectorXd> lmdas, size_t max_cds, double thr, double rsq, Eigen::Map<Eigen::VectorXd> strong_beta, Eigen::Map<Eigen::VectorXd> strong_grad, std::vector<int> active_set, std::vector<int> active_order, std::vector<int> active_set_ordered, Eigen::Map<Eigen::VectorXi> is_active);
+RcppExport SEXP _ghostbasil_lasso__(SEXP ASEXP, SEXP sSEXP, SEXP strong_setSEXP, SEXP strong_orderSEXP, SEXP strong_A_diagSEXP, SEXP lmdasSEXP, SEXP max_cdsSEXP, SEXP thrSEXP, SEXP rsqSEXP, SEXP strong_betaSEXP, SEXP strong_gradSEXP, SEXP active_setSEXP, SEXP active_orderSEXP, SEXP active_set_orderedSEXP, SEXP is_activeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type A(ASEXP);
+    Rcpp::traits::input_parameter< double >::type s(sSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXi> >::type strong_set(strong_setSEXP);
+    Rcpp::traits::input_parameter< const std::vector<int>& >::type strong_order(strong_orderSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type strong_A_diag(strong_A_diagSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type lmdas(lmdasSEXP);
+    Rcpp::traits::input_parameter< size_t >::type max_cds(max_cdsSEXP);
+    Rcpp::traits::input_parameter< double >::type thr(thrSEXP);
+    Rcpp::traits::input_parameter< double >::type rsq(rsqSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type strong_beta(strong_betaSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type strong_grad(strong_gradSEXP);
+    Rcpp::traits::input_parameter< std::vector<int> >::type active_set(active_setSEXP);
+    Rcpp::traits::input_parameter< std::vector<int> >::type active_order(active_orderSEXP);
+    Rcpp::traits::input_parameter< std::vector<int> >::type active_set_ordered(active_set_orderedSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXi> >::type is_active(is_activeSEXP);
+    rcpp_result_gen = Rcpp::wrap(lasso__(A, s, strong_set, strong_order, strong_A_diag, lmdas, max_cds, thr, rsq, strong_beta, strong_grad, active_set, active_order, active_set_ordered, is_active));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 RcppExport SEXP _rcpp_module_boot_core_module();
 
@@ -189,6 +214,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_ghostbasil_objective_dense__", (DL_FUNC) &_ghostbasil_objective_dense__, 5},
     {"_ghostbasil_update_group_coeffs__", (DL_FUNC) &_ghostbasil_update_group_coeffs__, 6},
     {"_ghostbasil_group_lasso__", (DL_FUNC) &_ghostbasil_group_lasso__, 18},
+    {"_ghostbasil_lasso__", (DL_FUNC) &_ghostbasil_lasso__, 15},
     {"_rcpp_module_boot_core_module", (DL_FUNC) &_rcpp_module_boot_core_module, 0},
     {NULL, NULL, 0}
 };

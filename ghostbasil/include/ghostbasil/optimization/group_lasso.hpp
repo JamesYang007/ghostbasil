@@ -169,8 +169,10 @@ public:
         value_t s
     )
     {
-        const auto sum = 2 * coeff_new - del;
-        rsq += ((-2 * r.array() + ((1-s) * var.array() + s) * sum.array()) * del.array()).sum();
+        const auto sum = 2 * coeff_new.array() - del.array();
+        rsq += (
+            del.array() * (2 * r.array() - ((1-s) * var.array() + s) * sum)
+        ).sum();
     }
 
     /*
@@ -210,14 +212,15 @@ public:
             return;
         }
         
-        //if (v.size() == 1) {
-        //    assert(L.size() == 1);
-        //    assert(x.size() == 1);
-        //    x[0] = std::copysign(1, v[0]) * (std::abs(v[0]) - lmda) / ((1-s) * L[0] + s);
-        //    return;
-        //}
-        
         // Difficult case: ||v||_2 > lmda
+        
+        // optimization for length-1 groups
+        if (v.size() == 1) {
+            assert(L.size() == 1);
+            assert(x.size() == 1);
+            x[0] = std::copysign(1, v[0]) * (std::abs(v[0]) - lmda) / ((1-s) * L[0] + s);
+            return;
+        }
 
         // First solve for h := ||x||_2
         auto buffer = vec_buffer_ugc_.head(L.size());
