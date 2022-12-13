@@ -210,6 +210,13 @@ public:
             return;
         }
         
+        if (v.size() == 1) {
+            assert(L.size() == 1);
+            assert(x.size() == 1);
+            x[0] = std::copysign(1, v[0]) * (std::abs(v[0]) - lmda) / ((1-s) * L[0] + s);
+            return;
+        }
+        
         // Difficult case: ||v||_2 > lmda
 
         // First solve for h := ||x||_2
