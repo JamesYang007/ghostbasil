@@ -6,3 +6,4 @@ bazel-testlogs
 .bazelrc
 
 *.DS_Store
+*__pycache__
