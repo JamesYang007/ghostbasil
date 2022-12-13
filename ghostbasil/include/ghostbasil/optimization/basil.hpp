@@ -509,7 +509,7 @@ inline void basil(
             const auto rsq_u = rsqs[rsqs.size()-1];
             const auto rsq_m = rsqs[rsqs.size()-2];
             const auto rsq_l = rsqs[rsqs.size()-3];
-            if (check_early_stop_rsq(rsq_l, rsq_m, rsq_u)) break;
+            if (LassoBase::check_early_stop_rsq(rsq_l, rsq_m, rsq_u)) break;
         }
 
         /* Screening */
