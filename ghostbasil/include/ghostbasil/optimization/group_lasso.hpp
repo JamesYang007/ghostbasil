@@ -9,6 +9,7 @@
 #include <ghostbasil/util/eigen/map_sparsevector.hpp>
 #include <ghostbasil/matrix/forward_decl.hpp>
 #include <ghostbasil/optimization/lasso_base.hpp>
+#include <ghostbasil/optimization/lasso.hpp>
 
 namespace ghostbasil {
     
@@ -214,14 +215,6 @@ public:
         
         // Difficult case: ||v||_2 > lmda
         
-        // optimization for length-1 groups
-        if (v.size() == 1) {
-            assert(L.size() == 1);
-            assert(x.size() == 1);
-            x[0] = std::copysign(1, v[0]) * (std::abs(v[0]) - lmda) / ((1-s) * L[0] + s);
-            return;
-        }
-
         // First solve for h := ||x||_2
         auto buffer = vec_buffer_ugc_.head(L.size());
 
@@ -343,54 +336,96 @@ public:
             const auto ss_value_begin = strong_begins[ss_idx]; // value begin index at ss_idx
             const auto gsize = groups[k+1] - groups[k]; // group size  
             auto ak = sb_map.segment(ss_value_begin, gsize); // corresponding beta
-            auto ak_old = vec_buffer_bcd_.head(ak.size());
-            ak_old = ak; // save old beta in buffer
             auto gk = sg_map.segment(ss_value_begin, gsize); // corresponding gradient
             const auto A_kk = A_diag_map.segment(ss_value_begin, gsize);  // corresponding A diagonal 
-                                        
-            // update group coefficients
-            size_t iters;
-            update_group_coefficients(
-                A_kk, gk, lmda, s, tol, max_iters, ak, iters
-            );
-            if (iters >= max_iters) {
-                throw util::group_lasso_max_newton_iters();
-            }
 
-            if ((ak_old.array() == ak.array()).all()) continue;
+            // optimization for length-1 groups
+            if (gsize == 1) {
+                const auto ak_old = ak[0];
+                const auto var = sc * A_kk[0] + s;
+                {
+                    // update coefficient
+                    const auto diff = std::abs(gk[0]) - lmda;
+                    ak[0] = (diff > 0.0) ? std::copysign(diff, gk[0]) / var : 0.0;
+                }
+                
+                if (ak_old == ak[0]) continue;
 
-            // use same buffer as ak_old to store difference
-            auto& del = ak_old;
-            del = ak - ak_old;
+                auto del = ak[0] - ak_old;
 
-            // update measure of convergence
-            update_convergence_measure(convg_measure, del, A_kk);
+                // update measure of convergence
+                ghostbasil::update_convergence_measure(convg_measure, del, A_kk[0]);
 
-            // update rsq
-            update_rsq(rsq, del, ak, A_kk, gk, s);
+                ghostbasil::update_rsq(rsq, ak_old, ak[0], A_kk[0], 
+                    gk[0] - var * ak_old, s, sc);
+    
+                // update gradient-like quantity
+                // we split the for-loop to encourage compiler vectorization.
+                del *= sc;
+                for (auto jt = begin; jt != end; ++jt) {
+                    if (jt == it) continue;
+                    const auto ss_idx_j = *jt;
+                    const auto j = strong_set[ss_idx_j];
+                    const auto groupj_size = groups[j+1] - groups[j];
+                    if (groupj_size == 1) {
+                        sg_map[strong_begins[ss_idx_j]] -= A(groups[j], groups[k]) * del;
+                    } else {
+                        const auto A_jk = A.col(groups[k]).segment(
+                            groups[j], groupj_size
+                        );
+                        auto sg_idx_j = sg_map.segment(
+                            strong_begins[ss_idx_j], groupj_size
+                        );
+                        sg_idx_j -= A_jk * del;
+                    }
+                }
+            } 
+            else {
+                // save old beta in buffer
+                auto ak_old = vec_buffer_bcd_.head(ak.size());
+                ak_old = ak; 
 
-            // update gradient-like quantity
-            // we split the for-loop to encourage compiler vectorization.
-            del.array() *= sc;
-            auto loop_body = [&](auto jt) {
-                const auto ss_idx_j = *jt;
-                const auto j = strong_set[ss_idx_j];
-                const auto groupj_size = groups[j+1] - groups[j];
-                const auto A_jk = A.block(
-                    groups[j], groups[k], 
-                    groupj_size, gsize
+                // update group coefficients
+                size_t iters;
+                update_group_coefficients(
+                    A_kk, gk, lmda, s, tol, max_iters, ak, iters
                 );
-                auto sg_idx_j = sg_map.segment(
-                    strong_begins[ss_idx_j], groupj_size
-                );
-                auto buffer = vec_buffer_ugc_.head(groupj_size);
-                buffer.noalias() = A_jk * del;
-                sg_idx_j -= buffer;
-            };
-            auto jt = begin;
-            for (; jt != it; ++jt) { loop_body(jt); }
-            ++jt;
-            for (; jt != end; ++jt) { loop_body(jt); }
+                if (iters >= max_iters) {
+                    throw util::group_lasso_max_newton_iters();
+                }
+
+                if ((ak_old.array() == ak.array()).all()) continue;
+
+                // use same buffer as ak_old to store difference
+                auto& del = ak_old;
+                del = ak - ak_old;
+
+                // update measure of convergence
+                update_convergence_measure(convg_measure, del, A_kk);
+
+                // update rsq
+                update_rsq(rsq, del, ak, A_kk, gk, s);
+
+                // update gradient-like quantity
+                // we split the for-loop to encourage compiler vectorization.
+                del.array() *= sc;
+                for (auto jt = begin; jt != end; ++jt) {
+                    if (jt == it) continue;
+                    const auto ss_idx_j = *jt;
+                    const auto j = strong_set[ss_idx_j];
+                    const auto groupj_size = groups[j+1] - groups[j];
+                    const auto A_jk = A.block(
+                        groups[j], groups[k], 
+                        groupj_size, gsize
+                    );
+                    auto sg_idx_j = sg_map.segment(
+                        strong_begins[ss_idx_j], groupj_size
+                    );
+                    auto buffer = vec_buffer_ugc_.head(groupj_size);
+                    buffer.noalias() = A_jk * del;
+                    sg_idx_j -= buffer;
+                }
+            }                           
             
             // additional step
             additional_step(ss_idx);
@@ -574,16 +609,34 @@ public:
                 if (is_active[j_idx]) continue;
                 const auto j = strong_set[j_idx];
                 const auto groupj_size = groups[j+1] - groups[j];
-                const auto A_ji = A.block(
-                    groups[j], groups[i], 
-                    groupj_size, groupi_size
-                );
-                auto sg_j = sg_map.segment(
-                    strong_begins[j_idx], groupj_size
-                );
-                auto buffer = vec_buffer_bcd_.head(groupj_size);
-                buffer.noalias() = A_ji * ab_diff_view_curr;
-                sg_j -= buffer;
+                
+                if (groupi_size == 1) {
+                    if (groupj_size == 1) {
+                        sg_map[strong_begins[j_idx]] -= A(groups[j], groups[i]) * ab_diff_view_curr[0];
+                    } else {
+                        const auto A_ji = A.col(groups[i]).segment(groups[j], groupj_size);
+                        auto sg_j = sg_map.segment(
+                            strong_begins[j_idx], groupj_size
+                        );
+                        sg_j -= A_ji * ab_diff_view_curr[0];
+                    }
+                } else {
+                    if (groupj_size == 1) {
+                        const auto A_ji = A.row(groups[j]).segment(groups[i], groupi_size);
+                        sg_map[strong_begins[j_idx]] -= A_ji.dot(ab_diff_view_curr);
+                    } else {
+                        const auto A_ji = A.block(
+                            groups[j], groups[i], 
+                            groupj_size, groupi_size
+                        );
+                        auto sg_j = sg_map.segment(
+                            strong_begins[j_idx], groupj_size
+                        );
+                        auto buffer = vec_buffer_bcd_.head(groupj_size);
+                        buffer.noalias() = A_ji * ab_diff_view_curr;
+                        sg_j -= buffer;
+                    }
+                }
             }
         }
     }
