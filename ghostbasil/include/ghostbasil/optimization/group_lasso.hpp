@@ -1025,6 +1025,9 @@ void group_lasso_active(
          
         const auto j = strong_set[j_idx];
         const auto groupj_size = group_sizes[j];
+        auto sg_j = strong_grad.segment(
+            strong_begins[j_idx], groupj_size
+        );
 
         // iterate over the active groups of size 1
         for (auto it = active_g1.begin(); it != active_g1.end(); ++it) {
@@ -1035,9 +1038,6 @@ void group_lasso_active(
             const auto ab_diff_view_curr = ab_diff_view.segment(ab_begin, groupi_size);
             const auto A_ji = A.block(
                 groups[j], groups[i], groupj_size, groupi_size
-            );
-            auto sg_j = strong_grad.segment(
-                strong_begins[j_idx], groupj_size
             );
             update_residual<0, 0>(A_ji, ab_diff_view_curr, sg_j, buffer3);
         }
@@ -1052,9 +1052,6 @@ void group_lasso_active(
             const auto A_ji = A.block(
                 groups[j], groups[i], groupj_size, groupi_size
             );
-            auto sg_j = strong_grad.segment(
-                strong_begins[j_idx], groupj_size
-            );
             update_residual<0, 1>(A_ji, ab_diff_view_curr, sg_j, buffer3);
         }
     }
@@ -1066,6 +1063,9 @@ void group_lasso_active(
 
         const auto j = strong_set[j_idx];
         const auto groupj_size = group_sizes[j];
+        auto sg_j = strong_grad.segment(
+            strong_begins[j_idx], groupj_size
+        );
 
         // iterate over the active groups of size 1
         for (auto it = active_g1.begin(); it != active_g1.end(); ++it) {
@@ -1076,9 +1076,6 @@ void group_lasso_active(
             const auto ab_diff_view_curr = ab_diff_view.segment(ab_begin, groupi_size);
             const auto A_ji = A.block(
                 groups[j], groups[i], groupj_size, groupi_size
-            );
-            auto sg_j = strong_grad.segment(
-                strong_begins[j_idx], groupj_size
             );
             update_residual<1, 0>(A_ji, ab_diff_view_curr, sg_j, buffer3);
         }
@@ -1092,9 +1089,6 @@ void group_lasso_active(
             const auto ab_diff_view_curr = ab_diff_view.segment(ab_begin, groupi_size);
             const auto A_ji = A.block(
                 groups[j], groups[i], groupj_size, groupi_size
-            );
-            auto sg_j = strong_grad.segment(
-                strong_begins[j_idx], groupj_size
             );
             update_residual<1, 1>(A_ji, ab_diff_view_curr, sg_j, buffer3);
         }

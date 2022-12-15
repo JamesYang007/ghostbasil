@@ -61,6 +61,8 @@ List group_lasso__(
     using namespace ghostbasil::group_lasso;
 
     active_set.reserve(strong_set.size());
+    active_g1.reserve(strong_set.size());
+    active_g2.reserve(strong_set.size());
     active_begins.reserve(strong_set.size());
     active_order.reserve(strong_set.size());
 
@@ -77,20 +79,20 @@ List group_lasso__(
         }
     };
 
-    try {
-        GroupLassoParamPack<
-            Eigen::Map<Eigen::MatrixXd>,
-            double,
-            int,
-            int
-        > pack(
-            A, groups, group_sizes, s, strong_set, strong_g1, strong_g2, strong_begins,
-            strong_A_diag, lmdas, max_cds, thr, newton_tol, newton_max_iters,
-            rsq, strong_beta, strong_grad, active_set, active_g1, active_g2,
-            active_begins, active_order,
-            is_active, betas, rsqs, n_cds, n_lmdas
-        );
+    GroupLassoParamPack<
+        Eigen::Map<Eigen::MatrixXd>,
+        double,
+        int,
+        int
+    > pack(
+        A, groups, group_sizes, s, strong_set, strong_g1, strong_g2, strong_begins,
+        strong_A_diag, lmdas, max_cds, thr, newton_tol, newton_max_iters,
+        rsq, strong_beta, strong_grad, active_set, active_g1, active_g2,
+        active_begins, active_order,
+        is_active, betas, rsqs, n_cds, n_lmdas
+    );
 
+    try {
         fit(pack, check_user_interrupt);
     } catch (const std::exception& e) {
         error = e.what();
@@ -98,15 +100,16 @@ List group_lasso__(
 
     // convert the list of sparse vectors into a sparse matrix
     Eigen::SparseMatrix<double> mat_betas;
-    if (betas.size()) {
+    if (pack.n_lmdas) {
         auto p = betas[0].size();
-        mat_betas.resize(p, betas.size());
-        for (size_t i = 0; i < betas.size(); ++i) {
+        mat_betas.resize(p, pack.n_lmdas);
+        for (size_t i = 0; i < pack.n_lmdas; ++i) {
             mat_betas.col(i) = betas[i];
         }
     }
 
     return List::create(
+        Named("n_cds")=pack.n_cds,
         Named("betas")=std::move(mat_betas),
         Named("rsqs")=std::move(rsqs),
         Named("error")=std::move(error)

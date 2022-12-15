@@ -86,7 +86,8 @@ lasso.bench <- function(n, ps, n.lmdas, times, seed, s=0.0, max.cds=100000, thr=
 }
 
 n <- 100
-ps <- c(100, 200, 400, 800, 1600)
+#ps <- c(100, 200, 400, 800, 1600)
+ps <- 3200
 times <- 1
 seed <- 41923
 n.lmdas <- 100
@@ -104,6 +105,8 @@ write.csv.default(l.bench.times, 'lasso_times.csv')
 
 for (i in 1:length(ps)) {
     tmp <- max(abs(gl.out$models[[i]]$beta - l.out$models[[i]]$beta))
+    print(tmp)
+    tmp <- (gl.out$models[[i]]$n_cds - l.out$models[[i]]$n_cds) / l.out$models[[i]]$n_cds * ps[i] ** 1.4
     print(tmp)
 }
 gl.bench.times / l.bench.times

@@ -55,15 +55,16 @@ List lasso__(
     
     // convert the list of sparse vectors into a sparse matrix
     Eigen::SparseMatrix<double> mat_betas;
-    if (betas.size()) {
+    if (n_lmdas) {
         auto p = betas[0].size();
-        mat_betas.resize(p, betas.size());
-        for (size_t i = 0; i < betas.size(); ++i) {
+        mat_betas.resize(p, n_lmdas);
+        for (size_t i = 0; i < n_lmdas; ++i) {
             mat_betas.col(i) = betas[i];
         }
     }
 
     return List::create(
+        Named("n_cds")=n_cds,
         Named("betas")=std::move(mat_betas),
         Named("rsqs")=std::move(rsqs),
         Named("error")=std::move(error)
