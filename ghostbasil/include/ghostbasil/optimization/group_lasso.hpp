@@ -49,8 +49,6 @@ struct GroupLassoBufferPack
 /**
  * Parameter pack for group lasso procedure.
  * 
- * TODO: document g1,g2 new variables.
- *
  * @param   A           PSD matrix (p, p) with diagonal blocks A_{ii}. 
  *                      This matrix only needs to satisfy the properties
  *                      when looking at the sub-matrix of all strong_set groups.
@@ -67,6 +65,8 @@ struct GroupLassoBufferPack
  * @param   strong_set  strong set as a dense vector of indices in [0, I),
  *                      where I is the total number of groups.
  *                      strong_set[i] = ith strong group.
+ * @param   strong_g1   indices into strong_set that correspond to groups of size 1.
+ * @param   strong_g2   indices into strong_set that correspond to groups of size > 1.
  * @param   strong_begins   vector of indices that define the beginning index to values
  *                          corresponding to the strong groups.
  *                          MUST have strong_begins.size() == strong_set.size().
@@ -96,6 +96,8 @@ struct GroupLassoBufferPack
  *                      where the corresponding strong_beta is non-zero, that is,
  *                      if strong_beta[b:(b+p)] != 0, then i is in active_set,
  *                      where i := strong_set[j], b := strong_begins[j], and p := group_sizes[i].
+ * @param   active_g1   indices into active_set that correspond to groups of size 1.
+ * @param   active_g2   indices into active_set that correspond to groups of size > 1.
  * @param   active_begins   vector of indices that define the beginning index to values
  *                          corresponding to the active groups.
  *                          MUST have active_begins.size() == active_set.size().
