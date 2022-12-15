@@ -7,9 +7,9 @@
 #include <ghostbasil/util/functor_iterator.hpp>
 #include <ghostbasil/util/eigen/map_sparsevector.hpp>
 #include <ghostbasil/matrix/forward_decl.hpp>
-#include <ghostbasil/optimization/lasso_base.hpp>
 
 namespace ghostbasil {
+namespace lasso {
 namespace internal {
 
 template <class AType, class ValueType, class SSType, class SOType,
@@ -144,6 +144,35 @@ ForwardIt lower_bound(ForwardIt first, ForwardIt last, F f, T value)
 }
 
 } // namespace internal
+
+/*
+ * Checks early stopping based on R^2 values.
+ * Returns true (early stopping should occur) if both are true:
+ *
+ *      delta_u := (R^2_u - R^2_m)/R^2_u
+ *      delta_m := (R^2_m - R^2_l)/R^2_m 
+ *      delta_u < cond_0_thresh 
+ *      AND
+ *      (delta_u - delta_m) < cond_1_thresh
+ *
+ * @param   rsq_l   third to last R^2 value.
+ * @param   rsq_m   second to last R^2 value.
+ * @param   rsq_u   last R^2 value.
+ */
+template <class ValueType>
+GHOSTBASIL_STRONG_INLINE
+bool check_early_stop_rsq(
+        ValueType rsq_l,
+        ValueType rsq_m,
+        ValueType rsq_u,
+        ValueType cond_0_thresh = 1e-5,
+        ValueType cond_1_thresh = 1e-5)
+{
+    const auto delta_u = (rsq_u-rsq_m);
+    const auto delta_m = (rsq_m-rsq_l);
+    return ((delta_u < cond_0_thresh*rsq_u) &&
+            ((delta_m*rsq_u-delta_u*rsq_m) < cond_1_thresh*rsq_m*rsq_u));
+}
   
 /*
  * Computes the objective that we wish to minimize.
@@ -1015,7 +1044,7 @@ template <class AType, class ValueType,
           class ASType, class AOType, class ASOType, 
           class IAType, class BetasType, class RsqsType,
           class CUIType = util::no_op>
-inline void lasso(
+inline void fit(
     const AType& A, 
     ValueType s, 
     const SSType& strong_set, 
@@ -1156,8 +1185,9 @@ inline void lasso(
         if (l < 2) continue;
 
         // early stop if R^2 criterion is fulfilled.
-        if (LassoBase::check_early_stop_rsq(rsqs[l-2], rsqs[l-1], rsqs[l])) break;
+        if (check_early_stop_rsq(rsqs[l-2], rsqs[l-1], rsqs[l])) break;
     }
 }
 
+} // namespace lasso
 } // namespace ghostbasil

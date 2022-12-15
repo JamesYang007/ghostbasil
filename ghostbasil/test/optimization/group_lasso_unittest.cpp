@@ -4,6 +4,7 @@
 #include <tools/macros.hpp>
 
 namespace ghostbasil {
+namespace group_lasso {
 namespace {
 
 struct GroupLassoFixture
@@ -15,9 +16,10 @@ struct GroupLassoFixture
     const double newton_tol = 1e-10;
     const size_t newton_max_iters = 10000;
 
-    template <class F>
-    auto make_input(F generate_dataset)
+    template <class GenerateFType>
+    void run(GenerateFType generate_dataset)
     {
+        // Generate dataset
         auto dataset = generate_dataset();
         auto&& A = std::get<0>(dataset);
         auto&& r = std::get<1>(dataset);
@@ -27,13 +29,30 @@ struct GroupLassoFixture
         auto&& lmdas = std::get<5>(dataset);
         auto&& expected_betas = std::get<6>(dataset);
         auto&& expected_objs = std::get<7>(dataset);
+        
+        const auto n_groups = groups.size() - 1;
+        util::vec_type<int> group_sizes =
+            groups.tail(n_groups) - groups.head(n_groups);
+            
+        std::vector<int> strong_g1;
+        std::vector<int> strong_g2;
+        strong_g1.reserve(strong_set.size());
+        strong_g2.reserve(strong_set.size());
+        for (size_t i = 0; i < strong_set.size(); ++i) {
+            const auto group = strong_set[i];
+            if (group_sizes[group] == 1) {
+                strong_g1.push_back(i);
+            } else {
+                strong_g2.push_back(i);
+            }
+        }
 
         std::vector<int> strong_begins(strong_set.size());
         int strong_values_size = 0;
         for (size_t i = 0; i < strong_begins.size(); ++i) {
             strong_begins[i] = strong_values_size;
             const auto group = strong_set[i];
-            const auto group_size = groups[group+1] - groups[group];
+            const auto group_size = group_sizes[group];
             strong_values_size += group_size;
         }
 
@@ -41,7 +60,7 @@ struct GroupLassoFixture
         for (size_t i = 0; i < strong_begins.size(); ++i) {
             const auto begin = strong_begins[i];
             const auto group = strong_set[i];
-            const auto group_size = groups[group+1] - groups[group];
+            const auto group_size = group_sizes[group];
             Eigen::Map<util::vec_type<double>> sg_map(
                 strong_grad.data(), strong_grad.size()
             );
@@ -56,7 +75,7 @@ struct GroupLassoFixture
         for (size_t i = 0; i < strong_begins.size(); ++i) {
             const auto begin = strong_begins[i];
             const auto group = strong_set[i];
-            const auto group_size = groups[group+1] - groups[group];
+            const auto group_size = group_sizes[group];
             Eigen::Map<util::vec_type<double>> sad_map(
                 strong_A_diag.data(), strong_A_diag.size()
             );
@@ -66,92 +85,48 @@ struct GroupLassoFixture
 
         using sp_vec_t = Eigen::SparseVector<double>;
         std::vector<int> active_set;
+        std::vector<int> active_g1;
+        std::vector<int> active_g2;
         std::vector<int> active_begins;
         std::vector<int> active_order;
-        std::vector<bool> is_active(strong_set.size(), false);
+        std::vector<int> is_active(strong_set.size(), false);
         std::vector<sp_vec_t> betas(lmdas.size());
         std::vector<double> rsqs(lmdas.size());
         size_t n_cds = 0;
         size_t n_lmdas = 0;
-
         double rsq = 0;
-
-        return std::make_tuple(
-                std::move(A), 
-                std::move(r), 
-                std::move(groups),
-                std::move(s),
-                std::move(strong_set), 
-                std::move(strong_begins),
-                std::move(strong_A_diag), 
-                std::move(lmdas), 
-                rsq, 
-                std::move(strong_beta),
-                std::move(strong_grad),
-                std::move(active_set),
-                std::move(active_begins),
-                std::move(active_order),
-                std::move(is_active),
-                std::move(betas),
-                std::move(rsqs),
-                n_cds, 
-                n_lmdas,
-                std::move(expected_betas),
-                std::move(expected_objs));
-    }
-
-    template <class InputType>
-    auto run(InputType&& input)
-    {
-        auto& A = std::get<0>(input);
-        auto& groups = std::get<2>(input);
-        auto& s = std::get<3>(input);
-        auto& strong_set = std::get<4>(input);
-        auto& strong_begins = std::get<5>(input);
-        auto& strong_A_diag = std::get<6>(input);
-        auto& lmdas = std::get<7>(input);
-        auto& rsq = std::get<8>(input);
-        auto& strong_beta = std::get<9>(input);
-        auto& strong_grad = std::get<10>(input);
-        auto& active_set = std::get<11>(input);
-        auto& active_begins = std::get<12>(input);
-        auto& active_order = std::get<13>(input);
-        auto& is_active = std::get<14>(input);
-        auto& betas = std::get<15>(input);
-        auto& rsqs = std::get<16>(input);
-        auto& n_cds = std::get<17>(input);
-        auto& n_lmdas = std::get<18>(input);
         
-        GroupLasso<double> gl(A.cols(), A.cols());
-        
-        gl.group_lasso(
-            A, groups, s, strong_set, strong_begins, 
+        // run group lasso fitting procedure
+        GroupLassoParamPack<
+            util::mat_type<double>,
+            double,
+            int,
+            int
+        > pack(
+            A, groups, group_sizes, s, strong_set, strong_g1, strong_g2, strong_begins,
             strong_A_diag, lmdas, max_cds, thr, newton_tol, newton_max_iters,
-            rsq, strong_beta, 
-            strong_grad, active_set, active_begins, active_order, 
-            is_active, 
-            betas, rsqs, n_cds, n_lmdas);
-
-        return std::make_tuple(betas, rsqs, n_cds, n_lmdas);
+            rsq, strong_beta, strong_grad, active_set, 
+            active_g1, active_g2, active_begins, active_order,
+            is_active, betas, rsqs, n_cds, n_lmdas
+        );
+        fit(pack);
+        test(pack, r, expected_betas, expected_objs);
     }
-
-    template <class GenerateFType>
-    void test(GenerateFType generate_dataset)
+    
+    template <class PackType, class RType, class EBType, class EOType>
+    void test(const PackType& pack,
+              const RType& r,
+              const EBType& expected_betas,
+              const EOType& expected_objs)
     {
-        auto&& input = make_input(generate_dataset);
-        auto&& output = run(input);
-
-        auto&& A = std::get<0>(input);
-        auto&& r = std::get<1>(input);
-        auto&& groups = std::get<2>(input);
-        auto&& s = std::get<3>(input);
-        auto&& lmdas = std::get<7>(input);
-        auto&& expected_betas = std::get<19>(input);
-        auto&& expected_objs = std::get<20>(input);
-
-        auto&& betas = std::get<0>(output);
-        auto&& n_cds = std::get<2>(output);
-        auto&& n_lmdas = std::get<3>(output);
+        const auto& A = *pack.A;
+        const auto& groups = pack.groups;
+        const auto& group_sizes = pack.group_sizes;
+        const auto& lmdas = pack.lmdas;
+        const auto& betas = *pack.betas;
+        const auto s = pack.s;
+        const auto n_cds = pack.n_cds;
+        const auto n_lmdas = pack.n_lmdas;
 
         EXPECT_LE(n_cds, max_cds);
 
@@ -161,13 +136,12 @@ struct GroupLassoFixture
         EXPECT_LE(0, n_lmdas);
         EXPECT_LE(n_lmdas, lmdas.size());
         
-        GroupLasso<double> gl(A.cols(), A.cols());
-
         for (size_t i = 0; i < n_lmdas; ++i) {
             const auto& actual = betas[i];
             auto expected = expected_betas.col(i);
 
-            EXPECT_NEAR(expected_objs[i], gl.objective(A, r, groups, s, lmdas[i], actual), tol);
+            const auto obj = objective(A, r, groups, group_sizes, s, lmdas[i], actual);
+            EXPECT_NEAR(expected_objs[i], obj, tol);
             EXPECT_EQ(actual.size(), expected.size());
             for (size_t i = 0; i < expected.size(); ++i) {
                 EXPECT_NEAR(expected[i], actual.coeff(i), tol);
@@ -185,20 +159,21 @@ struct GroupLassoFixture
 
 TEST_F(GroupLassoFixture, group_lasso_n_ge_p_full)
 {
-    test(GENERATE_DATASET(1));
+    run(GENERATE_DATASET(1));
 }
 
 TEST_F(GroupLassoFixture, group_lasso_n_le_p_partial)
 {
-    test(GENERATE_DATASET(2));
+    run(GENERATE_DATASET(2));
 }
 
 TEST_F(GroupLassoFixture, group_lasso_n_ge_p_partial)
 {
-    test(GENERATE_DATASET(3));
+    run(GENERATE_DATASET(3));
 }
 
 } // namespace
+} // namespace group_lasso
 } // namespace ghostbasil
 
 #undef GENERATE_DATASET
