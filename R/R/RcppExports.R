@@ -29,8 +29,8 @@ update_group_coeffs__ <- function(L, v, lmda, s, tol = 1e-8, max_iters = 1000L) 
     .Call(`_ghostbasil_update_group_coeffs__`, L, v, lmda, s, tol, max_iters)
 }
 
-group_lasso__ <- function(A, groups, s, strong_set, strong_begins, strong_A_diag, lmdas, max_cds, thr, newton_tol, newton_max_iters, rsq, strong_beta, strong_grad, active_set, active_begins, active_order, is_active) {
-    .Call(`_ghostbasil_group_lasso__`, A, groups, s, strong_set, strong_begins, strong_A_diag, lmdas, max_cds, thr, newton_tol, newton_max_iters, rsq, strong_beta, strong_grad, active_set, active_begins, active_order, is_active)
+group_lasso__ <- function(A, groups, group_sizes, s, strong_set, strong_g1, strong_g2, strong_begins, strong_A_diag, lmdas, max_cds, thr, newton_tol, newton_max_iters, rsq, strong_beta, strong_grad, active_set, active_g1, active_g2, active_begins, active_order, is_active) {
+    .Call(`_ghostbasil_group_lasso__`, A, groups, group_sizes, s, strong_set, strong_g1, strong_g2, strong_begins, strong_A_diag, lmdas, max_cds, thr, newton_tol, newton_max_iters, rsq, strong_beta, strong_grad, active_set, active_g1, active_g2, active_begins, active_order, is_active)
 }
 
 lasso__ <- function(A, s, strong_set, strong_order, strong_A_diag, lmdas, max_cds, thr, rsq, strong_beta, strong_grad, active_set, active_order, active_set_ordered, is_active) {

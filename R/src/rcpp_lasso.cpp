@@ -23,6 +23,8 @@ List lasso__(
     Eigen::Map<Eigen::VectorXi> is_active
 )
 {
+    using namespace ghostbasil::lasso;
+
     active_set.reserve(strong_set.size());
     active_order.reserve(strong_set.size());
     active_set_ordered.reserve(strong_set.size());
@@ -41,7 +43,7 @@ List lasso__(
     };
 
     try {
-        ghostbasil::lasso(
+        fit(
             A, s, strong_set, strong_order, strong_A_diag,
             lmdas, max_cds, thr, rsq,
             strong_beta, strong_grad, active_set, active_order, active_set_ordered,
