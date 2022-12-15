@@ -27,34 +27,30 @@ def analyze(baseline_data_path,
 
         # average out the baseline and new_version since both do the same thing.
         bench_times = np.genfromtxt(
-            os.path.join(baseline_data_path, 'group_lasso_low_groups_times.csv'),
+            os.path.join(baseline_data_path, 'group_lasso_times.csv'),
             delimiter=',') * 1e-9
         bench_times = np.reshape(bench_times, newshape=(-1, n.size))
         bench2_times = np.genfromtxt(
-            os.path.join(baseline_data_path, 'group_lasso_low_groups_times.csv'),
+            os.path.join(baseline_data_path, 'group_lasso_times.csv'),
             delimiter=',') * 1e-9
         bench2_times = np.reshape(bench_times, newshape=(-1, n.size))
-        low_bench_times = 0.5 * (bench_times + bench2_times)
+        gl_bench_times = 0.5 * (bench_times + bench2_times)
 
         bench_times = np.genfromtxt(
-            os.path.join(baseline_data_path, 'group_lasso_high_groups_times.csv'),
+            os.path.join(baseline_data_path, 'lasso_times.csv'),
             delimiter=',') * 1e-9
         bench_times = np.reshape(bench_times, newshape=(-1, n.size))
         bench2_times = np.genfromtxt(
-            os.path.join(baseline_data_path, 'group_lasso_high_groups_times.csv'),
+            os.path.join(baseline_data_path, 'lasso_times.csv'),
             delimiter=',') * 1e-9
         bench2_times = np.reshape(bench_times, newshape=(-1, n.size))
-        high_bench_times = 0.5 * (bench_times + bench2_times)
+        l_bench_times = 0.5 * (bench_times + bench2_times)
 
-        _, axes = plt.subplots(1, 2)
-        axes[0].plot(p, low_bench_times, ls='-', marker='.')
-        axes[0].set_title('$0.2p$ number of groups')
-        axes[0].set_xlabel('p')
-        axes[0].set_ylabel('Time (s)')
-        axes[1].plot(p, high_bench_times, ls='-', marker='.')
-        axes[1].set_title('$0.8p$ number of groups')
-        axes[1].set_xlabel('p')
-        axes[1].set_ylabel('Time (s)')
-        plt.suptitle('Group Lasso Fit Time (100 $\lambda$ values until $0.5 \lambda_{\max}$)')
+        plt.plot(p, gl_bench_times, ls='-', marker='.', label='group-lasso')
+        plt.plot(p, l_bench_times, ls='--', marker='.', label='lasso')
+        plt.xlabel('p')
+        plt.ylabel('Time (s)')
+        plt.suptitle('Group Lasso vs. Lasso (100 $\lambda$ values until $0.5 \lambda_{\max}$)')
+        plt.legend()
         plt.tight_layout()
-        plt.savefig(os.path.join(fig_path, 'group_lasso.png'))
+        plt.savefig(os.path.join(fig_path, 'group_lasso_vs_lasso.png'))
