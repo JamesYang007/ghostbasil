@@ -86,18 +86,19 @@ lasso.bench <- function(n, ps, n.lmdas, times, seed, s=0.0, max.cds=100000, thr=
 }
 
 n <- 100
-#ps <- c(100, 200, 400, 800, 1600, 3200)
 ps <- c(100, 200, 400, 800, 1600)
 times <- 1
+seed <- 41923
+n.lmdas <- 100
 
 write.csv.default(n, 'n.csv')
 write.csv.default(ps, 'p.csv')
 
-gl.out <- bench(n, ps, n.groups.prop=1, n.lmdas=100, times=times, seed=9183, debug=F)
+gl.out <- bench(n, ps, n.groups.prop=1, n.lmdas=n.lmdas, times=times, seed=seed, debug=F)
 gl.bench.times <- gl.out$times
 write.csv.default(gl.bench.times, 'group_lasso_times.csv')
 
-l.out <- lasso.bench(n, ps, n.lmdas=100, times=times, seed=9183, debug=F)
+l.out <- lasso.bench(n, ps, n.lmdas=n.lmdas, times=times, seed=seed, debug=F)
 l.bench.times <- l.out$times
 write.csv.default(l.bench.times, 'lasso_times.csv')
 

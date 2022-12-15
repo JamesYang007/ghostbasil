@@ -137,9 +137,11 @@ bench <- function(
         if (debug) {
             print(head(data$A))
             print(as.integer(data$groups-1))
-            print(data$groups.sizes)
+            print(data$group.sizes)
             print(s)
             print(as.integer(data$strong.set-1))
+            print(data$strong.g1-1)
+            print(data$strong.g2-1)
             print(as.integer(data$strong.begins-1))
             print(data$strong.A.diag)
             print(data$lmdas)
