@@ -86,8 +86,8 @@ lasso.bench <- function(n, ps, n.lmdas, times, seed, s=0.0, max.cds=100000, thr=
 }
 
 n <- 100
-#ps <- c(100, 200, 400, 800, 1600)
-ps <- 3200
+ps <- c(100, 200, 400, 800, 1600)
+#ps <- 3200
 times <- 1
 seed <- 41923
 n.lmdas <- 100

@@ -1288,8 +1288,10 @@ inline void fit(
     }
 }
 
-/*
+/**
  * TODO:
+ *  - Time to think about better use of vectorization!
+ *      - think about splitting the beta/grad values into active and non-active
  *  - (nothing to change in current impl of lasso but basil will need to know this)
  *      modify A to have Q in the diagonal blocks 
  *      and off-diagonals are Q_i^T A_{ij} Q_j among the strong variables.

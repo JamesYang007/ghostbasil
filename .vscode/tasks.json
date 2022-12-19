@@ -12,6 +12,15 @@
         },
         {
             "type": "shell",
+            "label": "Build Benchmarks",
+            "command": "bazel build //ghostbasil/benchmark/... -c opt",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build"
+        },
+        {
+            "type": "shell",
             "label": "Run Tests",
             "command": "bazel test //ghostbasil/test/... -c dbg",
             "group": {
@@ -46,6 +55,14 @@
             "command": "${workspaceFolder}/bazel-bin/ghostbasil/test/util",
             "group": {
                 "kind": "test",
+                "isDefault": false
+            }
+        },
+        {
+            "type": "shell",
+            "label": "Run Benchmark",
+            "command": "bazel run -c opt //ghostbasil/benchmark:mat_swap_bench",
+            "group": {
                 "isDefault": false
             }
         },
