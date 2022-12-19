@@ -4,7 +4,13 @@
         {
             "type": "shell",
             "label": "Build Tests",
-            "command": "bazel build //ghostbasil/test/... -c dbg --spawn_strategy=standalone",
+            "command": "bazel",
+            "args": [
+                "build",
+                "//ghostbasil/test/...",
+                "-c",
+                "dbg"
+            ],
             "options": {
                 "cwd": "${workspaceFolder}"
             },
@@ -13,7 +19,13 @@
         {
             "type": "shell",
             "label": "Build Benchmarks",
-            "command": "bazel build //ghostbasil/benchmark/... -c opt",
+            "command": "bazel",
+            "args": [
+                "build",
+                "//ghostbasil/benchmark/...",
+                "-c",
+                "opt",
+            ],
             "options": {
                 "cwd": "${workspaceFolder}"
             },
@@ -22,7 +34,13 @@
         {
             "type": "shell",
             "label": "Run Tests",
-            "command": "bazel test //ghostbasil/test/... -c dbg",
+            "command": "bazel",
+            "args": [
+                "test",
+                "//ghostbasil/test/...",
+                "-c",
+                "dbg",
+            ],
             "group": {
                 "kind": "test",
                 "isDefault": true
@@ -31,7 +49,13 @@
         {
             "type": "shell",
             "label": "Run Matrix Tests",
-            "command": "${workspaceFolder}/bazel-bin/ghostbasil/test/matrix",
+            "command": "bazel",
+            "args": [
+                "run",
+                "-c", 
+                "dbg",
+                "//ghostbasil/test:matrix",
+            ],
             "group": {
                 "kind": "test",
                 "isDefault": false
@@ -40,8 +64,13 @@
         {
             "type": "shell",
             "label": "Run Optimization Tests",
-            "command": "${workspaceFolder}/bazel-bin/ghostbasil/test/optimization",
-            "args" : [
+            "command": "bazel",
+            "args": [
+                "run",
+                "-c",
+                "dbg",
+                "//ghostbasil/test:optimization",
+                "--",
                 "--gtest_filter='Group*'",
             ],
             "group": {
@@ -52,7 +81,13 @@
         {
             "type": "shell",
             "label": "Run Util Tests",
-            "command": "${workspaceFolder}/bazel-bin/ghostbasil/test/util",
+            "command": "bazel",
+            "args": [
+                "run",
+                "-c",
+                "dbg",
+                "//ghostbasil/test:util",
+            ],
             "group": {
                 "kind": "test",
                 "isDefault": false
@@ -61,7 +96,13 @@
         {
             "type": "shell",
             "label": "Run Benchmark",
-            "command": "bazel run -c opt //ghostbasil/benchmark:mat_swap_bench",
+            "command": "bazel",
+            "args": [
+                "run",
+                "-c",
+                "opt",
+                "//ghostbasil/benchmark:mat_swap_bench",
+            ],
             "group": {
                 "isDefault": false
             }
