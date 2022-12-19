@@ -25,19 +25,15 @@ objective_dense__ <- function(A, r, s, lmda, beta) {
     .Call(`_ghostbasil_objective_dense__`, A, r, s, lmda, beta)
 }
 
-solve_quartic__ <- function(a, b, c, d, e) {
-    .Call(`_ghostbasil_solve_quartic__`, a, b, c, d, e)
+update_group_coeffs__ <- function(L, v, lmda, s, tol = 1e-8, max_iters = 1000L) {
+    .Call(`_ghostbasil_update_group_coeffs__`, L, v, lmda, s, tol, max_iters)
 }
 
-solve_sub_coord_desc__ <- function(a, b, c, d) {
-    .Call(`_ghostbasil_solve_sub_coord_desc__`, a, b, c, d)
+group_lasso__ <- function(A, groups, group_sizes, s, strong_set, strong_g1, strong_g2, strong_begins, strong_A_diag, lmdas, max_cds, thr, newton_tol, newton_max_iters, rsq, strong_beta, strong_grad, active_set, active_g1, active_g2, active_begins, active_order, is_active) {
+    .Call(`_ghostbasil_group_lasso__`, A, groups, group_sizes, s, strong_set, strong_g1, strong_g2, strong_begins, strong_A_diag, lmdas, max_cds, thr, newton_tol, newton_max_iters, rsq, strong_beta, strong_grad, active_set, active_g1, active_g2, active_begins, active_order, is_active)
 }
 
-solve_sub_coeffs__ <- function(C, y, lmda, step_size, x, max_iters = 1000L, tol = 1e-8) {
-    .Call(`_ghostbasil_solve_sub_coeffs__`, C, y, lmda, step_size, x, max_iters, tol)
-}
-
-solve_sub_coeffs_mix__ <- function(C, y, lmda, step_size, x, max_cd_iters = 100L, cd_tol = 1e-6, max_iters = 1000L, tol = 1e-8) {
-    .Call(`_ghostbasil_solve_sub_coeffs_mix__`, C, y, lmda, step_size, x, max_cd_iters, cd_tol, max_iters, tol)
+lasso__ <- function(A, s, strong_set, strong_order, strong_A_diag, lmdas, max_cds, thr, rsq, strong_beta, strong_grad, active_set, active_order, active_set_ordered, is_active) {
+    .Call(`_ghostbasil_lasso__`, A, s, strong_set, strong_order, strong_A_diag, lmdas, max_cds, thr, rsq, strong_beta, strong_grad, active_set, active_order, active_set_ordered, is_active)
 }
 

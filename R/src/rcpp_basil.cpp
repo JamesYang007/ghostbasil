@@ -24,6 +24,8 @@ List basil__(
         double min_ratio,
         size_t n_threads)
 {
+    using namespace ghostbasil::lasso;
+
     std::vector<Eigen::SparseVector<double>> betas;
     std::vector<double> lmdas;
     std::vector<double> rsqs;
@@ -47,7 +49,7 @@ List basil__(
     };
 
     try {
-        ghostbasil::basil(
+        basil(
                 A, r, s, user_lmdas, max_n_lambdas, n_lambdas_iter,
                 strong_size, delta_strong_size, max_strong_size, max_n_cds, thr, 
                 min_ratio, n_threads,
@@ -186,10 +188,12 @@ List objective_sparse__(
         double lmda,
         const Eigen::Map<Eigen::SparseMatrix<double>> beta)
 {
+    using namespace ghostbasil::lasso;
+
     double out = 0;
     std::string error;
     try {
-        out = ghostbasil::objective(A, r, s, lmda, beta.col(0));
+        out = objective(A, r, s, lmda, beta.col(0));
     }
     catch (const std::exception& e) {
         error = e.what();
@@ -208,10 +212,12 @@ List objective_dense__(
         double lmda,
         const Eigen::Map<Eigen::VectorXd> beta)
 {
+    using namespace ghostbasil::lasso;
+
     double out = 0;
     std::string error;
     try {
-        out = ghostbasil::objective(A, r, s, lmda, beta);
+        out = objective(A, r, s, lmda, beta);
     }
     catch (const std::exception& e) {
         error = e.what();

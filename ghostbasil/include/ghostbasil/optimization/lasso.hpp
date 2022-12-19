@@ -9,6 +9,7 @@
 #include <ghostbasil/matrix/forward_decl.hpp>
 
 namespace ghostbasil {
+namespace lasso {
 namespace internal {
 
 template <class AType, class ValueType, class SSType, class SOType,
@@ -143,7 +144,7 @@ ForwardIt lower_bound(ForwardIt first, ForwardIt last, F f, T value)
 }
 
 } // namespace internal
-  
+
 /*
  * Checks early stopping based on R^2 values.
  * Returns true (early stopping should occur) if both are true:
@@ -172,7 +173,7 @@ bool check_early_stop_rsq(
     return ((delta_u < cond_0_thresh*rsq_u) &&
             ((delta_m*rsq_u-delta_u*rsq_m) < cond_1_thresh*rsq_m*rsq_u));
 }
-
+  
 /*
  * Computes the objective that we wish to minimize.
  * The objective is the quadratic loss + regularization:
@@ -337,7 +338,7 @@ void coordinate_descent__(
  *                          The resulting sequence of indices from calling 
  *                          strong_set[*(begin++)] MUST be ordered.
  * @param   end             end iterator to indices into strong set.
- * @praam   strong_set      strong set of indices of features.
+ * @param   strong_set      strong set of indices of features.
  * @param   strong_A_diag   diagonal of A corresponding to strong_set.
  * @param   A               covariance matrix.
  * @param   s               regularization of A towards identity.
@@ -1043,7 +1044,7 @@ template <class AType, class ValueType,
           class ASType, class AOType, class ASOType, 
           class IAType, class BetasType, class RsqsType,
           class CUIType = util::no_op>
-inline void lasso(
+inline void fit(
     const AType& A, 
     ValueType s, 
     const SSType& strong_set, 
@@ -1188,4 +1189,5 @@ inline void lasso(
     }
 }
 
+} // namespace lasso
 } // namespace ghostbasil

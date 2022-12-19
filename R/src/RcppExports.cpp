@@ -133,68 +133,77 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// solve_quartic__
-std::vector<double> solve_quartic__(double a, double b, double c, double d, double e);
-RcppExport SEXP _ghostbasil_solve_quartic__(SEXP aSEXP, SEXP bSEXP, SEXP cSEXP, SEXP dSEXP, SEXP eSEXP) {
+// update_group_coeffs__
+List update_group_coeffs__(const Eigen::Map<Eigen::VectorXd> L, const Eigen::Map<Eigen::VectorXd> v, double lmda, double s, double tol, size_t max_iters);
+RcppExport SEXP _ghostbasil_update_group_coeffs__(SEXP LSEXP, SEXP vSEXP, SEXP lmdaSEXP, SEXP sSEXP, SEXP tolSEXP, SEXP max_itersSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< double >::type a(aSEXP);
-    Rcpp::traits::input_parameter< double >::type b(bSEXP);
-    Rcpp::traits::input_parameter< double >::type c(cSEXP);
-    Rcpp::traits::input_parameter< double >::type d(dSEXP);
-    Rcpp::traits::input_parameter< double >::type e(eSEXP);
-    rcpp_result_gen = Rcpp::wrap(solve_quartic__(a, b, c, d, e));
-    return rcpp_result_gen;
-END_RCPP
-}
-// solve_sub_coord_desc__
-double solve_sub_coord_desc__(double a, double b, double c, double d);
-RcppExport SEXP _ghostbasil_solve_sub_coord_desc__(SEXP aSEXP, SEXP bSEXP, SEXP cSEXP, SEXP dSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< double >::type a(aSEXP);
-    Rcpp::traits::input_parameter< double >::type b(bSEXP);
-    Rcpp::traits::input_parameter< double >::type c(cSEXP);
-    Rcpp::traits::input_parameter< double >::type d(dSEXP);
-    rcpp_result_gen = Rcpp::wrap(solve_sub_coord_desc__(a, b, c, d));
-    return rcpp_result_gen;
-END_RCPP
-}
-// solve_sub_coeffs__
-List solve_sub_coeffs__(const Eigen::Map<Eigen::MatrixXd> C, const Eigen::Map<Eigen::VectorXd> y, double lmda, double step_size, const Eigen::Map<Eigen::VectorXd> x, size_t max_iters, double tol);
-RcppExport SEXP _ghostbasil_solve_sub_coeffs__(SEXP CSEXP, SEXP ySEXP, SEXP lmdaSEXP, SEXP step_sizeSEXP, SEXP xSEXP, SEXP max_itersSEXP, SEXP tolSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type C(CSEXP);
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type L(LSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type v(vSEXP);
     Rcpp::traits::input_parameter< double >::type lmda(lmdaSEXP);
-    Rcpp::traits::input_parameter< double >::type step_size(step_sizeSEXP);
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type x(xSEXP);
-    Rcpp::traits::input_parameter< size_t >::type max_iters(max_itersSEXP);
+    Rcpp::traits::input_parameter< double >::type s(sSEXP);
     Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
-    rcpp_result_gen = Rcpp::wrap(solve_sub_coeffs__(C, y, lmda, step_size, x, max_iters, tol));
+    Rcpp::traits::input_parameter< size_t >::type max_iters(max_itersSEXP);
+    rcpp_result_gen = Rcpp::wrap(update_group_coeffs__(L, v, lmda, s, tol, max_iters));
     return rcpp_result_gen;
 END_RCPP
 }
-// solve_sub_coeffs_mix__
-List solve_sub_coeffs_mix__(const Eigen::Map<Eigen::MatrixXd> C, const Eigen::Map<Eigen::VectorXd> y, double lmda, double step_size, const Eigen::Map<Eigen::VectorXd> x, size_t max_cd_iters, double cd_tol, size_t max_iters, double tol);
-RcppExport SEXP _ghostbasil_solve_sub_coeffs_mix__(SEXP CSEXP, SEXP ySEXP, SEXP lmdaSEXP, SEXP step_sizeSEXP, SEXP xSEXP, SEXP max_cd_itersSEXP, SEXP cd_tolSEXP, SEXP max_itersSEXP, SEXP tolSEXP) {
+// group_lasso__
+List group_lasso__(const Eigen::Map<Eigen::MatrixXd> A, const Eigen::Map<Eigen::VectorXi> groups, const Eigen::Map<Eigen::VectorXi> group_sizes, double s, const Eigen::Map<Eigen::VectorXi> strong_set, const Eigen::Map<Eigen::VectorXi> strong_g1, const Eigen::Map<Eigen::VectorXi> strong_g2, const Eigen::Map<Eigen::VectorXi> strong_begins, const Eigen::Map<Eigen::VectorXd> strong_A_diag, const Eigen::Map<Eigen::VectorXd> lmdas, size_t max_cds, double thr, double newton_tol, size_t newton_max_iters, double rsq, Eigen::Map<Eigen::VectorXd> strong_beta, Eigen::Map<Eigen::VectorXd> strong_grad, std::vector<int> active_set, std::vector<int> active_g1, std::vector<int> active_g2, std::vector<int> active_begins, std::vector<int> active_order, Eigen::Map<Eigen::VectorXi> is_active);
+RcppExport SEXP _ghostbasil_group_lasso__(SEXP ASEXP, SEXP groupsSEXP, SEXP group_sizesSEXP, SEXP sSEXP, SEXP strong_setSEXP, SEXP strong_g1SEXP, SEXP strong_g2SEXP, SEXP strong_beginsSEXP, SEXP strong_A_diagSEXP, SEXP lmdasSEXP, SEXP max_cdsSEXP, SEXP thrSEXP, SEXP newton_tolSEXP, SEXP newton_max_itersSEXP, SEXP rsqSEXP, SEXP strong_betaSEXP, SEXP strong_gradSEXP, SEXP active_setSEXP, SEXP active_g1SEXP, SEXP active_g2SEXP, SEXP active_beginsSEXP, SEXP active_orderSEXP, SEXP is_activeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type C(CSEXP);
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
-    Rcpp::traits::input_parameter< double >::type lmda(lmdaSEXP);
-    Rcpp::traits::input_parameter< double >::type step_size(step_sizeSEXP);
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type x(xSEXP);
-    Rcpp::traits::input_parameter< size_t >::type max_cd_iters(max_cd_itersSEXP);
-    Rcpp::traits::input_parameter< double >::type cd_tol(cd_tolSEXP);
-    Rcpp::traits::input_parameter< size_t >::type max_iters(max_itersSEXP);
-    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
-    rcpp_result_gen = Rcpp::wrap(solve_sub_coeffs_mix__(C, y, lmda, step_size, x, max_cd_iters, cd_tol, max_iters, tol));
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type A(ASEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXi> >::type groups(groupsSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXi> >::type group_sizes(group_sizesSEXP);
+    Rcpp::traits::input_parameter< double >::type s(sSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXi> >::type strong_set(strong_setSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXi> >::type strong_g1(strong_g1SEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXi> >::type strong_g2(strong_g2SEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXi> >::type strong_begins(strong_beginsSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type strong_A_diag(strong_A_diagSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type lmdas(lmdasSEXP);
+    Rcpp::traits::input_parameter< size_t >::type max_cds(max_cdsSEXP);
+    Rcpp::traits::input_parameter< double >::type thr(thrSEXP);
+    Rcpp::traits::input_parameter< double >::type newton_tol(newton_tolSEXP);
+    Rcpp::traits::input_parameter< size_t >::type newton_max_iters(newton_max_itersSEXP);
+    Rcpp::traits::input_parameter< double >::type rsq(rsqSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type strong_beta(strong_betaSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type strong_grad(strong_gradSEXP);
+    Rcpp::traits::input_parameter< std::vector<int> >::type active_set(active_setSEXP);
+    Rcpp::traits::input_parameter< std::vector<int> >::type active_g1(active_g1SEXP);
+    Rcpp::traits::input_parameter< std::vector<int> >::type active_g2(active_g2SEXP);
+    Rcpp::traits::input_parameter< std::vector<int> >::type active_begins(active_beginsSEXP);
+    Rcpp::traits::input_parameter< std::vector<int> >::type active_order(active_orderSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXi> >::type is_active(is_activeSEXP);
+    rcpp_result_gen = Rcpp::wrap(group_lasso__(A, groups, group_sizes, s, strong_set, strong_g1, strong_g2, strong_begins, strong_A_diag, lmdas, max_cds, thr, newton_tol, newton_max_iters, rsq, strong_beta, strong_grad, active_set, active_g1, active_g2, active_begins, active_order, is_active));
+    return rcpp_result_gen;
+END_RCPP
+}
+// lasso__
+List lasso__(const Eigen::Map<Eigen::MatrixXd> A, double s, const Eigen::Map<Eigen::VectorXi> strong_set, const std::vector<int>& strong_order, const Eigen::Map<Eigen::VectorXd> strong_A_diag, const Eigen::Map<Eigen::VectorXd> lmdas, size_t max_cds, double thr, double rsq, Eigen::Map<Eigen::VectorXd> strong_beta, Eigen::Map<Eigen::VectorXd> strong_grad, std::vector<int> active_set, std::vector<int> active_order, std::vector<int> active_set_ordered, Eigen::Map<Eigen::VectorXi> is_active);
+RcppExport SEXP _ghostbasil_lasso__(SEXP ASEXP, SEXP sSEXP, SEXP strong_setSEXP, SEXP strong_orderSEXP, SEXP strong_A_diagSEXP, SEXP lmdasSEXP, SEXP max_cdsSEXP, SEXP thrSEXP, SEXP rsqSEXP, SEXP strong_betaSEXP, SEXP strong_gradSEXP, SEXP active_setSEXP, SEXP active_orderSEXP, SEXP active_set_orderedSEXP, SEXP is_activeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type A(ASEXP);
+    Rcpp::traits::input_parameter< double >::type s(sSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXi> >::type strong_set(strong_setSEXP);
+    Rcpp::traits::input_parameter< const std::vector<int>& >::type strong_order(strong_orderSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type strong_A_diag(strong_A_diagSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type lmdas(lmdasSEXP);
+    Rcpp::traits::input_parameter< size_t >::type max_cds(max_cdsSEXP);
+    Rcpp::traits::input_parameter< double >::type thr(thrSEXP);
+    Rcpp::traits::input_parameter< double >::type rsq(rsqSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type strong_beta(strong_betaSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type strong_grad(strong_gradSEXP);
+    Rcpp::traits::input_parameter< std::vector<int> >::type active_set(active_setSEXP);
+    Rcpp::traits::input_parameter< std::vector<int> >::type active_order(active_orderSEXP);
+    Rcpp::traits::input_parameter< std::vector<int> >::type active_set_ordered(active_set_orderedSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXi> >::type is_active(is_activeSEXP);
+    rcpp_result_gen = Rcpp::wrap(lasso__(A, s, strong_set, strong_order, strong_A_diag, lmdas, max_cds, thr, rsq, strong_beta, strong_grad, active_set, active_order, active_set_ordered, is_active));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -208,10 +217,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_ghostbasil_basil_block_ghost__", (DL_FUNC) &_ghostbasil_basil_block_ghost__, 13},
     {"_ghostbasil_objective_sparse__", (DL_FUNC) &_ghostbasil_objective_sparse__, 5},
     {"_ghostbasil_objective_dense__", (DL_FUNC) &_ghostbasil_objective_dense__, 5},
-    {"_ghostbasil_solve_quartic__", (DL_FUNC) &_ghostbasil_solve_quartic__, 5},
-    {"_ghostbasil_solve_sub_coord_desc__", (DL_FUNC) &_ghostbasil_solve_sub_coord_desc__, 4},
-    {"_ghostbasil_solve_sub_coeffs__", (DL_FUNC) &_ghostbasil_solve_sub_coeffs__, 7},
-    {"_ghostbasil_solve_sub_coeffs_mix__", (DL_FUNC) &_ghostbasil_solve_sub_coeffs_mix__, 9},
+    {"_ghostbasil_update_group_coeffs__", (DL_FUNC) &_ghostbasil_update_group_coeffs__, 6},
+    {"_ghostbasil_group_lasso__", (DL_FUNC) &_ghostbasil_group_lasso__, 23},
+    {"_ghostbasil_lasso__", (DL_FUNC) &_ghostbasil_lasso__, 15},
     {"_rcpp_module_boot_core_module", (DL_FUNC) &_rcpp_module_boot_core_module, 0},
     {NULL, NULL, 0}
 };

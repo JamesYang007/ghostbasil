@@ -7,6 +7,7 @@
 #include <tools/matrix/block_matrix.hpp>
 
 namespace ghostbasil {
+namespace lasso {
 namespace {
 
 struct LassoFixture
@@ -147,7 +148,7 @@ BENCHMARK_DEFINE_F(LassoFixture, dense)(benchmark::State& state)
         reset(orig_strong_grad, strong_beta, strong_grad, active_set,
               active_order, active_set_ordered, is_active, n_cds, n_lmdas, rsq);
         state.ResumeTiming();
-        lasso(A, s, strong_set, strong_order, 
+        fit(A, s, strong_set, strong_order, 
               strong_A_diag, lmdas, max_cds, thr, rsq, strong_beta, 
               strong_grad, active_set, active_order, active_set_ordered,
               is_active, betas, rsqs, 
@@ -228,7 +229,7 @@ BENCHMARK_DEFINE_F(LassoBlockFixture, block_dense)(benchmark::State& state)
         reset(orig_strong_grad, strong_beta, strong_grad, active_set,
               active_order, active_set_ordered, is_active, n_cds, n_lmdas, rsq);
         state.ResumeTiming();
-        lasso(A, s, strong_set, strong_order, 
+        fit(A, s, strong_set, strong_order, 
               strong_A_diag, lmdas, max_cds, thr, rsq, strong_beta, 
               strong_grad, active_set, active_order, active_set_ordered,
               is_active, betas, rsqs, 
@@ -251,4 +252,5 @@ BENCHMARK_REGISTER_F(LassoBlockFixture, block_dense)
     -> Args({64, 100})
     ;
 }
+} // namespace lasso
 } // namespace ghostbasil

@@ -8,6 +8,7 @@
 #include <tools/matrix/ghost_matrix.hpp>
 
 namespace ghostbasil {
+namespace lasso {
 namespace {
 
 struct LassoFixture
@@ -104,7 +105,7 @@ struct LassoFixture
         auto& n_cds = std::get<16>(input);
         auto& n_lmdas = std::get<17>(input);
 
-        lasso(
+        fit(
             A, s, strong_set, strong_order, 
             strong_A_diag, lmdas, max_cds, thr, rsq, strong_beta, 
             strong_grad, active_set, active_order, 
@@ -599,6 +600,7 @@ INSTANTIATE_TEST_SUITE_P(
     );
 
 }
+} // namespace lasso
 } // namespace ghostbasil
   
 #undef GENERATE_DATASET

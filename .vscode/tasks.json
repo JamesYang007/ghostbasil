@@ -1,18 +1,24 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"type": "shell",
-			"label": "Build Tests",
-			"command": "bazel build //ghostbasil/test/... -c dbg",
-			"options": {
-				"cwd": "${workspaceFolder}",
-			},
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			}
-		},
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "shell",
+            "label": "Build Tests",
+            "command": "bazel build //ghostbasil/test/... -c dbg --spawn_strategy=standalone",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build"
+        },
+        {
+            "type": "shell",
+            "label": "Build Benchmarks",
+            "command": "bazel build //ghostbasil/benchmark/... -c opt",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build"
+        },
         {
             "type": "shell",
             "label": "Run Tests",
@@ -35,6 +41,9 @@
             "type": "shell",
             "label": "Run Optimization Tests",
             "command": "${workspaceFolder}/bazel-bin/ghostbasil/test/optimization",
+            "args" : [
+                "--gtest_filter='Group*'",
+            ],
             "group": {
                 "kind": "test",
                 "isDefault": false
@@ -49,5 +58,13 @@
                 "isDefault": false
             }
         },
-	]
+        {
+            "type": "shell",
+            "label": "Run Benchmark",
+            "command": "bazel run -c opt //ghostbasil/benchmark:mat_swap_bench",
+            "group": {
+                "isDefault": false
+            }
+        },
+    ]
 }

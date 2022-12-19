@@ -12,6 +12,7 @@
 #include <vector>
 
 namespace ghostbasil {
+namespace lasso {
 
 /*
  * Computes and stores the next sequence of lambdas.
@@ -478,7 +479,7 @@ inline void basil(
         
         size_t n_lmdas = 0;
         size_t n_cds = 0;
-        lasso(A, s, strong_set, strong_order, strong_A_diag, lmdas_curr, max_n_cds, thr, rsq,
+        fit(A, s, strong_set, strong_order, strong_A_diag, lmdas_curr, max_n_cds, thr, rsq,
               strong_beta, strong_grad, active_set, active_order, active_set_ordered,
               is_active, betas_curr, rsqs_curr, n_cds, n_lmdas, check_user_interrupt);
 
@@ -655,4 +656,5 @@ inline void basil(
     }
 }
 
+} // namespace lasso
 } // namespace ghostbasil

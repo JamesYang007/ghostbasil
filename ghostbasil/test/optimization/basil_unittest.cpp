@@ -9,6 +9,7 @@
 #include <thread>
 
 namespace ghostbasil {
+namespace lasso {
 namespace {
 
 struct BasilFixture
@@ -585,4 +586,5 @@ INSTANTIATE_TEST_SUITE_P(
     );
     
 } // namespace
+} // namespace lasso
 } // namespace ghostbasil

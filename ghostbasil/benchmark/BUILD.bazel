@@ -12,4 +12,6 @@
     "lasso_bench",
     "sp_vec_vs_map_dot_bench",
     "sp_vec_dot_bench",
+    "mat_vec_bench",
+    "mat_swap_bench",
 ]]

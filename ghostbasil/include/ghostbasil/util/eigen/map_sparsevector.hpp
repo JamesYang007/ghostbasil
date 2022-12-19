@@ -1,3 +1,4 @@
+#pragma once
 namespace Eigen{
 
 template<typename MatScalar, int MatOptions, typename MatIndex, int Options, typename StrideType>

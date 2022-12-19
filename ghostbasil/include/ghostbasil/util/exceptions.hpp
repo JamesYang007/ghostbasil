@@ -47,5 +47,18 @@ public:
     }
 };
 
+class group_lasso_max_newton_iters : public ghostbasil_error
+{
+    std::string msg_;
+public:
+    group_lasso_max_newton_iters():
+        msg_{"Max number of Newton iterations reached."}
+    {}
+    
+    const char* what() const noexcept override {
+        return msg_.data(); 
+    }
+};
+
 } // namespace util
 } // namespace ghostbasil
