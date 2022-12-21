@@ -71,7 +71,7 @@
                 "dbg",
                 "//ghostbasil/test:optimization",
                 "--",
-                "--gtest_filter='Group*'",
+                "--gtest_filter='Basil*'",
             ],
             "group": {
                 "kind": "test",
@@ -101,7 +101,7 @@
                 "run",
                 "-c",
                 "opt",
-                "//ghostbasil/benchmark:mat_swap_bench",
+                "//ghostbasil/benchmark:lasso_bench",
             ],
             "group": {
                 "isDefault": false

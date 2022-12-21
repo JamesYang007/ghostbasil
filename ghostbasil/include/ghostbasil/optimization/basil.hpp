@@ -383,6 +383,7 @@ inline void basil(
 {
     using value_t = ValueType;
     using index_t = int32_t;
+    using bool_t = index_t;
     using vec_t = util::vec_type<value_t>;
     using sp_vec_t = util::sp_vec_type<value_t, Eigen::ColMajor, index_t>;
 
@@ -444,7 +445,7 @@ inline void basil(
 
     // map of indices corresponding to strong variables that indicate if they are active or not.
     // invariant: is_active.size() == strong_set.size().
-    std::vector<bool> is_active;
+    std::vector<bool_t> is_active;
     init_is_active(is_active, strong_set, initial_size);
 
     // coefficients for strong set (initialized to 0)
@@ -476,12 +477,16 @@ inline void basil(
         if (lmdas_curr.size() == 0) break;
 
         /* Fit lasso */
-        
-        size_t n_lmdas = 0;
-        size_t n_cds = 0;
-        fit(A, s, strong_set, strong_order, strong_A_diag, lmdas_curr, max_n_cds, thr, rsq,
-              strong_beta, strong_grad, active_set, active_order, active_set_ordered,
-              is_active, betas_curr, rsqs_curr, n_cds, n_lmdas, check_user_interrupt);
+        LassoParamPack<
+            AType, value_t, index_t, bool_t
+        > fit_pack(
+            A, s, strong_set, strong_order, strong_A_diag,
+            lmdas_curr, max_n_cds, thr, rsq, strong_beta, strong_grad,
+            active_set, active_order, active_set_ordered,
+            is_active, betas_curr, rsqs_curr, 0, 0       
+        );
+        auto& n_lmdas = fit_pack.n_lmdas;
+        fit(fit_pack, check_user_interrupt);
 
         /* Checking KKT */
 

@@ -31,8 +31,17 @@ List lasso__(
 
     std::vector<Eigen::SparseVector<double>> betas(lmdas.size());
     std::vector<double> rsqs(lmdas.size());
-    size_t n_cds = 0;
-    size_t n_lmdas = 0;
+
+    LassoParamPack<
+        Eigen::Map<Eigen::MatrixXd>, double, int, int
+    > pack(
+        A, s, strong_set, strong_order, strong_A_diag,
+        lmdas, max_cds, thr, rsq, strong_beta, strong_grad,
+        active_set, active_order, active_set_ordered,
+        is_active, betas, rsqs, 0, 0
+    );
+    const auto& n_cds = pack.n_cds;
+    const auto& n_lmdas = pack.n_lmdas;
     
     std::string error;
 
@@ -43,12 +52,7 @@ List lasso__(
     };
 
     try {
-        fit(
-            A, s, strong_set, strong_order, strong_A_diag,
-            lmdas, max_cds, thr, rsq,
-            strong_beta, strong_grad, active_set, active_order, active_set_ordered,
-            is_active, betas, rsqs, n_cds, n_lmdas, check_user_interrupt
-        );
+        fit(pack, check_user_interrupt);
     } catch (const std::exception& e) {
         error = e.what();
     }

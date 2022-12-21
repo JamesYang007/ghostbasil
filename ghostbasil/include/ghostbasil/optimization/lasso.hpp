@@ -10,26 +10,179 @@
 
 namespace ghostbasil {
 namespace lasso {
+
+/**
+ * Parameter pack for lasso procedure.
+ * 
+ * @param   A           PSD matrix (p, p). 
+ *                      This matrix only needs to satisfy the properties
+ *                      when looking at the sub-matrix of all strong_set features.
+ * @param   s           regularization of A towards identity. 
+ *                      It is undefined behavior is s is not in [0,1].
+ * @param   strong_set  strong set as a dense vector of indices in [0, p).
+ *                      strong_set[i] = ith strong feature.
+ * @param   strong_order    order of strong_set that results in sorted (ascending) values.
+ *                          strong_set[strong_order[i]] < strong_set[strong_order[j]] if i < j.
+ * @param   strong_A_diag       dense vector representing the diagonal of A restricted to strong_set.
+ *                              strong_A_diag[i] = A(i,i) where k := strong_set[i].
+ * @param   lmdas       regularization parameter lambda sequence (recommended to be decreasing).
+ * @param   max_cds     max number of coordinate descents.
+ * @param   thr         convergence threshold.
+ * @param   rsq         unnormalized difference in R^2 estimate from current state to the end of lasso.
+ * @param   strong_beta dense vector of coefficients of size strong_A_diag.size().
+ *                      strong_beta[j] = coefficient for feature i,
+ *                      where i := strong_set[j].
+ *                      The updated coefficients will be stored here.
+ * @param   strong_grad dense vector of gradient estimates.
+ *                      strong_grad[j] = residuals for group i where i := strong_set[j].
+ *                      The updated gradients will be stored here.
+ * @param   active_set  active set as a dense vector of indices in [0, strong_set.size()).
+ *                      strong_set[active_set[i]] = ith active feature.
+ *                      This set must at least contain ALL indices into strong_set 
+ *                      where the corresponding strong_beta is non-zero, that is,
+ *                      if strong_beta[strong_set[i]] != 0, then i is in active_set.
+ * @param   active_order    order of active_set that results in sorted (ascending) 
+ *                          values of strong_set.
+ *                          strong_set[active_set[active_order[i]]] < 
+ *                              strong_set[active_set[active_order[j]]] if i < j.
+ * @param   active_set_ordered  ordered *features corresponding to* active_set.
+ *                              active_set_ordered[i] == strong_set[active_set[active_order[i]]].
+ * @param   is_active   dense vector of bool of size strong_set.size(). 
+ *                      is_active[i] = true if feature strong_set[i] is active.
+ *                      active_set should contain i.
+ * @param   betas       vector of length lmdas.size() of 
+ *                      output coefficient sparse vectors of size (p,).
+ *                      betas[j](i) = ith coefficient for jth lambda
+ *                      j < n_lmdas.
+ * @param   rsqs        vector of length lmdas.size() 
+ *                      to store (unnormalized) R^2 values for each lambda in lmdas
+ *                      up to (non-including) index n_lmdas.
+ * @param   n_cds       number of coordinate descents.
+ * @param   n_lmdas     number of values in lmdas processed.
+ */
+template <class AType, 
+          class ValueType,
+          class IndexType,
+          class BoolType,
+          class DynamicVectorIndexType=std::vector<IndexType>
+          >
+struct LassoParamPack
+{
+    using value_t = ValueType;
+    using index_t = IndexType;
+    using bool_t = BoolType;
+    using sp_vec_value_t = util::sp_vec_type<value_t, Eigen::ColMajor, index_t>;
+    using vec_value_t = util::vec_type<value_t>;
+    using vec_index_t = util::vec_type<index_t>;
+    using map_vec_value_t = Eigen::Map<vec_value_t>;
+    using map_vec_bool_t = Eigen::Map<util::vec_type<bool_t>>;
+    using map_cvec_value_t = Eigen::Map<const vec_value_t>;
+    using map_cvec_index_t = Eigen::Map<const vec_index_t>;
+    using map_vec_sp_vec_value_t = Eigen::Map<util::vec_type<sp_vec_value_t>>;
+    using dyn_vec_index_t = DynamicVectorIndexType;
+
+    const AType* A = nullptr;
+    value_t s;
+    map_cvec_index_t strong_set;
+    map_cvec_index_t strong_order;
+    map_cvec_value_t strong_A_diag;
+    map_cvec_value_t lmdas;
+    size_t max_cds;
+    value_t thr;
+    value_t rsq;
+    map_vec_value_t strong_beta;
+    map_vec_value_t strong_grad;
+    dyn_vec_index_t* active_set = nullptr;
+    dyn_vec_index_t* active_order = nullptr;
+    dyn_vec_index_t* active_set_ordered = nullptr;
+    map_vec_bool_t is_active;
+    map_vec_sp_vec_value_t betas;
+    map_vec_value_t rsqs;
+    size_t n_cds;
+    size_t n_lmdas;
+    
+    explicit LassoParamPack()
+        : strong_set(nullptr, 0),
+          strong_order(nullptr, 0),
+          strong_A_diag(nullptr, 0),
+          lmdas(nullptr, 0),
+          strong_beta(nullptr, 0),
+          strong_grad(nullptr, 0),
+          is_active(nullptr, 0),
+          betas(nullptr, 0),
+          rsqs(nullptr, 0)
+    {}
+         
+    template <class SSType, class SOType, 
+              class SADType, class LmdasType,
+              class SBType, class SGType,
+              class IAType, class BetasType, class RsqsType>
+    explicit LassoParamPack(
+        const AType& A_,
+        value_t s_, 
+        const SSType& strong_set_, 
+        const SOType& strong_order_, 
+        const SADType& strong_A_diag_,
+        const LmdasType& lmdas_, 
+        size_t max_cds_,
+        value_t thr_,
+        value_t rsq_,
+        SBType& strong_beta_, 
+        SGType& strong_grad_,
+        dyn_vec_index_t& active_set_,
+        dyn_vec_index_t& active_order_,
+        dyn_vec_index_t& active_set_ordered_,
+        IAType& is_active_,
+        BetasType& betas_, 
+        RsqsType& rsqs_,
+        size_t n_cds_,
+        size_t n_lmdas_
+    )
+        : A(&A_),
+          s(s_),
+          strong_set(strong_set_.data(), strong_set_.size()),
+          strong_order(strong_order_.data(), strong_order_.size()),
+          strong_A_diag(strong_A_diag_.data(), strong_A_diag_.size()),
+          lmdas(lmdas_.data(), lmdas_.size()),
+          max_cds(max_cds_),
+          thr(thr_),
+          rsq(rsq_),
+          strong_beta(strong_beta_.data(), strong_beta_.size()),
+          strong_grad(strong_grad_.data(), strong_grad_.size()),
+          active_set(&active_set_),
+          active_order(&active_order_),
+          active_set_ordered(&active_set_ordered_),
+          is_active(is_active_.data(), is_active_.size()),
+          betas(betas_.data(), betas_.size()),
+          rsqs(rsqs_.data(), rsqs_.size()),
+          n_cds(n_cds_),
+          n_lmdas(n_lmdas_)
+    {}
+};
+
 namespace internal {
 
-template <class AType, class ValueType, class SSType, class SOType,
-          class ASType, class AOType, class ASOType, class IAType, class ADiagType,
-          class SBType, class SGType>
+template <class PackType>
 GHOSTBASIL_STRONG_INLINE
-void lasso_assert_valid_inputs(
-        const AType& A,
-        ValueType s,
-        const SSType& strong_set,
-        const SOType& strong_order,
-        const ASType& active_set,
-        const AOType& active_order,
-        const ASOType& active_set_ordered,
-        const IAType& is_active,
-        const ADiagType& strong_A_diag,
-        const SBType& strong_beta,
-        const SGType& strong_grad)
+void lasso_assert_valid_inputs(const PackType& pack)
 {
 #ifndef NDEBUG
+    using pack_t = std::decay_t<PackType>;
+    using vec_value_t = typename pack_t::vec_value_t;
+    using vec_index_t = typename pack_t::vec_index_t;
+
+    const auto& A = *pack.A;
+    const auto s = pack.s;
+    const auto& strong_set = pack.strong_set;
+    const auto& strong_order = pack.strong_order;
+    const auto& active_set = *pack.active_set;
+    const auto& active_order = *pack.active_order;
+    const auto& active_set_ordered = *pack.active_set_ordered;
+    const auto& is_active = pack.is_active;
+    const auto& strong_A_diag = pack.strong_A_diag;
+    const auto& strong_beta = pack.strong_beta;
+    const auto& strong_grad = pack.strong_grad;
+
     // check that A is square
     assert((A.rows() == A.cols()) && A.size());
 
@@ -38,18 +191,17 @@ void lasso_assert_valid_inputs(
 
     {
         // check that strong set contains values in [0, p)
-        using ss_value_t = typename std::decay_t<SSType>::value_type;
-        Eigen::Map<const util::vec_type<ss_value_t>> ss_view(
+        Eigen::Map<const vec_index_t> ss_view(
                 strong_set.data(),
                 strong_set.size());
         assert(!ss_view.size() || (0 <= ss_view.minCoeff() && ss_view.maxCoeff() < A.cols()));
 
         // check that strong order results in sorted strong set
-        util::vec_type<ss_value_t> ss_copy = ss_view;
+        vec_index_t ss_copy = ss_view;
         std::sort(ss_copy.data(), ss_copy.data()+ss_copy.size());
         assert(strong_order.size() == strong_set.size());
         assert((ss_copy.array() == 
-                    util::vec_type<ss_value_t>::NullaryExpr(ss_view.size(),
+                    vec_index_t::NullaryExpr(ss_view.size(),
                         [&](auto i) { return ss_view[strong_order[i]]; }
                         ).array()).all());
     }
@@ -66,19 +218,17 @@ void lasso_assert_valid_inputs(
 
     {
         // check that active set is of right size and contains values in [0, strong_set.size()).
-        using as_value_t = typename std::decay_t<ASType>::value_type;
-        Eigen::Map<const util::vec_type<as_value_t>> as_view(
+        Eigen::Map<const vec_index_t> as_view(
                 active_set.data(),
                 active_set.size());
         assert(active_set.size() <= strong_set.size());
         assert(!active_set.size() || (0 <= as_view.minCoeff() && as_view.maxCoeff() < strong_set.size()));
 
         // check that active order is sorted.
-        using ao_value_t = typename std::decay_t<AOType>::value_type;
-        Eigen::Map<const util::vec_type<ao_value_t>> ao_view(
+        Eigen::Map<const vec_index_t> ao_view(
                 active_order.data(),
                 active_order.size());
-        util::vec_type<ao_value_t> ao_copy = ao_view;
+        vec_index_t ao_copy = ao_view;
         std::sort(ao_copy.data(), ao_copy.data()+ao_copy.size(),
                   [&](auto i, auto j) { 
                         return strong_set[active_set[i]] < strong_set[active_set[j]]; 
@@ -93,15 +243,13 @@ void lasso_assert_valid_inputs(
         }
 
         // check that active_set_ordered is truly ordered
-        using aso_value_t = typename std::decay_t<ASOType>::value_type;
-        util::vec_type<aso_value_t> aso_copy =
-            util::vec_type<aso_value_t>::NullaryExpr(
+        vec_index_t aso_copy = vec_index_t::NullaryExpr(
                     active_order.size(),
                     [&](auto i) { return strong_set[active_set[active_order[i]]]; });
-        Eigen::Map<const util::vec_type<aso_value_t>> aso_view(
+        Eigen::Map<const vec_index_t> aso_view(
                 active_set_ordered.data(),
                 active_set_ordered.size());
-        assert((aso_copy.array() == aso_view.template cast<as_value_t>().array()).all());
+        assert((aso_copy.array() == aso_view.array()).all());
     }
 
     // check that is_active is right size and contains correct active set variables.
@@ -145,7 +293,7 @@ ForwardIt lower_bound(ForwardIt first, ForwardIt last, F f, T value)
 
 } // namespace internal
 
-/*
+/**
  * Checks early stopping based on R^2 values.
  * Returns true (early stopping should occur) if both are true:
  *
@@ -158,6 +306,8 @@ ForwardIt lower_bound(ForwardIt first, ForwardIt last, F f, T value)
  * @param   rsq_l   third to last R^2 value.
  * @param   rsq_m   second to last R^2 value.
  * @param   rsq_u   last R^2 value.
+ * @param   cond_0_thresh   threshold for derivative condition.
+ * @param   cond_1_thresh   threshold for second derivative condition.
  */
 template <class ValueType>
 GHOSTBASIL_STRONG_INLINE
@@ -174,12 +324,19 @@ bool check_early_stop_rsq(
             ((delta_m*rsq_u-delta_u*rsq_m) < cond_1_thresh*rsq_m*rsq_u));
 }
   
-/*
+/**
  * Computes the objective that we wish to minimize.
  * The objective is the quadratic loss + regularization:
- *
- *      (1-s)/2 \beta^\top A \beta - \beta^\top r + s/2 ||\beta||_2^2 
+ * \f[
+ *      \frac{1-s}{2} \beta^\top A \beta - \beta^\top r + \frac{s}{2} ||\beta||_2^2 
  *          + \lambda ||\beta||_1
+ * \f]
+ * 
+ * @param   A   any (p,p) matrix.
+ * @param   r   any (p,) vector.
+ * @param   s   PGR regularization.
+ * @param   lmda    lasso regularization.
+ * @param   beta    coefficient vector.
  */
 template <class AType, class RType, class ValueType, class BetaType>
 GHOSTBASIL_STRONG_INLINE 
@@ -194,7 +351,7 @@ auto objective(
         + lmda * beta.cwiseAbs().sum();
 }
 
-/*
+/**
  * Updates the coefficient given the current state via coordinate descent rule.
  *
  * @param   coeff   current coefficient to update.
@@ -220,7 +377,7 @@ void update_coefficient(
     coeff = (v > 0.0) ? std::copysign(v,u)/denom : 0;
 }
 
-/*
+/**
  * Updates the convergence measure using variance of feature and coefficient change.
  *
  * @param   convg_measure   current convergence measure to update.
@@ -238,16 +395,15 @@ void update_convergence_measure(
     convg_measure = std::max(convg_measure_curr, convg_measure);
 }
 
-/*
- * Updates the R^2 under the current state.
+/**
+ * Increments rsq with the difference in R^2.
  *
  * @param   rsq         R^2 to update.
  * @param   old_coeff   old coefficient.
  * @param   new_coeff   new coefficient.
- * @param   x_var       variance of feature. A[k,k].
+ * @param   x_var       variance of feature (A[k,k]).
  * @param   grad        (negative) gradient corresponding to the coefficient.
  * @param   s           regularization of A towards identity.
- * @param   sc          1-s.
  */
 template <class ValueType>
 GHOSTBASIL_STRONG_INLINE
@@ -257,39 +413,48 @@ void update_rsq(
         ValueType new_coeff, 
         ValueType x_var, 
         ValueType grad, 
-        ValueType s, 
-        ValueType sc)
+        ValueType s)
 {
     const auto del = new_coeff - old_coeff;
-    const auto x_var_reg = sc * x_var + s;
+    const auto x_var_reg = (1-s) * x_var + s;
     rsq += del * (2 * grad - del * x_var_reg);
 }
 
-namespace internal {
-
-/*
- * Default behavior of coordinate descent.
+/**
+ * Coordinate descent (one loop) over a subset of strong variables.
+ *
+ * @param   A               see LassoParamPack.
+ * @param   pack            see LassoParamPack.
+ * @param   begin           begin iterator to indices into strong set, i.e.
+ *                          strong_set[*begin] is the current feature to descend.
+ *                          The resulting sequence of indices from calling 
+ *                          strong_set[*(begin++)] MUST be ordered.
+ * @param   end             end iterator to indices into strong set.
+ * @param   lmda_idx        index into current L1 regularization value.
+ * @param   convg_measure   stores the convergence measure of the call.
+ * @param   additional_step any additional step at the end of each iteration.
  */
-template <class Iter, class StrongSetType, 
-          class StrongADiagType, class AType, class ValueType,
-          class StrongBetaType, class StrongGradType,
+template <class DerivedType, class PackType, class Iter, class ValueType,
           class AdditionalStepType=util::no_op>
 GHOSTBASIL_STRONG_INLINE
-void coordinate_descent__(
+void coordinate_descent(
+        const Eigen::DenseBase<DerivedType>& A_base,
+        PackType& pack,
         Iter begin,
         Iter end,
-        const StrongSetType& strong_set,
-        const StrongADiagType& strong_A_diag,
-        const AType& A,
-        ValueType s,
-        ValueType lmda,
-        StrongBetaType& strong_beta,
-        StrongGradType& strong_grad,
+        size_t lmda_idx,
         ValueType& convg_measure,
-        ValueType& rsq,
         AdditionalStepType additional_step=AdditionalStepType())
 {
+    const auto& A = A_base.derived();
+    const auto s = pack.s;
     const auto sc = 1-s;
+    const auto lmda = pack.lmdas[lmda_idx];
+    const auto& strong_set = pack.strong_set;
+    const auto& strong_A_diag = pack.strong_A_diag;
+    auto& strong_beta = pack.strong_beta;
+    auto& strong_grad = pack.strong_grad;
+    auto& rsq = pack.rsq;
 
     convg_measure = 0;
     for (auto it = begin; it != end; ++it) {
@@ -310,7 +475,7 @@ void coordinate_descent__(
         update_convergence_measure(convg_measure, del, A_kk);
 
         // update rsq
-        update_rsq(rsq, ak, ak_ref, A_kk, gk, s, sc);
+        update_rsq(rsq, ak, ak_ref, A_kk, gk, s);
 
         // update gradient
         strong_grad[ss_idx] -= s * del;
@@ -327,73 +492,27 @@ void coordinate_descent__(
     }
 }
 
-} // namespace internal
-
-/*
- * Coordinate descent (one loop) over a possibly subset of strong variables.
- * See "lasso_active" for more descriptions of arguments.
- *
- * @param   begin           begin iterator to indices into strong set, i.e.
- *                          strong_set[*begin] is the current feature to descend.
- *                          The resulting sequence of indices from calling 
- *                          strong_set[*(begin++)] MUST be ordered.
- * @param   end             end iterator to indices into strong set.
- * @param   strong_set      strong set of indices of features.
- * @param   strong_A_diag   diagonal of A corresponding to strong_set.
- * @param   A               covariance matrix.
- * @param   s               regularization of A towards identity.
- * @param   lmda            L1 regularization value.
- * @param   strong_beta     coefficients corresponding to strong_set.
- * @param   strong_grad     (negative) gradient corresponding to strong_beta.
- * @param   convg_measure   stores the convergence measure of the call.
- * @param   rsq             R^2 of current beta. Stores the updated value after the call.
- */
-template <class Iter, class StrongSetType, 
-          class StrongADiagType, class DerivedType, class ValueType,
-          class StrongBetaType, class StrongGradType,
+template <class MatType, class VecType,
+          class PackType, class Iter, class ValueType,
           class AdditionalStepType=util::no_op>
 GHOSTBASIL_STRONG_INLINE
 void coordinate_descent(
-        Iter begin,
-        Iter end,
-        const StrongSetType& strong_set,
-        const StrongADiagType& strong_A_diag,
-        const Eigen::DenseBase<DerivedType>& A_base,
-        ValueType s,
-        ValueType lmda,
-        StrongBetaType& strong_beta,
-        StrongGradType& strong_grad,
-        ValueType& convg_measure,
-        ValueType& rsq,
-        AdditionalStepType additional_step=AdditionalStepType())
-{
-    const auto& A = A_base.derived();
-    internal::coordinate_descent__(
-            begin, end, strong_set, strong_A_diag, A,
-            s, lmda, strong_beta, strong_grad, convg_measure, rsq,
-            additional_step);
-}
-
-template <class Iter, class StrongSetType, 
-          class StrongADiagType, class MatType, class VecType, class ValueType,
-          class StrongBetaType, class StrongGradType,
-          class AdditionalStepType=util::no_op>
-GHOSTBASIL_STRONG_INLINE
-void coordinate_descent(
-        Iter begin,
-        Iter end,
-        const StrongSetType& strong_set,
-        const StrongADiagType& strong_A_diag,
         const GhostMatrix<MatType, VecType>& A,
-        ValueType s,
-        ValueType lmda,
-        StrongBetaType& strong_beta,
-        StrongGradType& strong_grad,
+        PackType& pack,
+        Iter begin,
+        Iter end,
+        size_t lmda_idx,
         ValueType& convg_measure,
-        ValueType& rsq,
         AdditionalStepType additional_step=AdditionalStepType())
 {
+    const auto s = pack.s;
     const auto sc = 1-s;
+    const auto lmda = pack.lmdas[lmda_idx];
+    const auto& strong_set = pack.strong_set;
+    const auto& strong_A_diag = pack.strong_A_diag;
+    auto& strong_beta = pack.strong_beta;
+    auto& strong_grad = pack.strong_grad;
+    auto& rsq = pack.rsq;
 
     convg_measure = 0;
     for (auto it = begin; it != end; ++it) {
@@ -414,7 +533,7 @@ void coordinate_descent(
         update_convergence_measure(convg_measure, del, A_kk);
 
         // update rsq
-        update_rsq(rsq, ak, ak_ref, A_kk, gk, s, sc);
+        update_rsq(rsq, ak, ak_ref, A_kk, gk, s);
 
         // update gradient
         const auto sc_del = sc * del;
@@ -436,26 +555,27 @@ void coordinate_descent(
     }
 }
 
-template <class Iter, class StrongSetType, 
-          class StrongADiagType, class MatType, class ValueType,
-          class StrongBetaType, class StrongGradType,
+template <class MatType, class PackType, class Iter, class ValueType,
           class AdditionalStepType=util::no_op>
 GHOSTBASIL_STRONG_INLINE
 void coordinate_descent(
+        const BlockMatrix<MatType>& A,
+        PackType& pack,
         Iter begin,
         Iter end,
-        const StrongSetType& strong_set,
-        const StrongADiagType& strong_A_diag,
-        const BlockMatrix<MatType>& A,
-        ValueType s,
-        ValueType lmda,
-        StrongBetaType& strong_beta,
-        StrongGradType& strong_grad,
+        size_t lmda_idx,
         ValueType& convg_measure,
-        ValueType& rsq,
         AdditionalStepType additional_step=AdditionalStepType())
 {
+    const auto s = pack.s;
     const auto sc = 1-s;
+    const auto lmda = pack.lmdas[lmda_idx];
+    const auto& strong_set = pack.strong_set;
+    const auto& strong_A_diag = pack.strong_A_diag;
+    auto& strong_beta = pack.strong_beta;
+    auto& strong_grad = pack.strong_grad;
+    auto& rsq = pack.rsq;
+
     const auto get_strong_set = [&](auto i) { return strong_set[i]; };
 
     // Note: here we really assume sorted-ness!
@@ -489,7 +609,7 @@ void coordinate_descent(
         update_convergence_measure(convg_measure, del, A_kk);
 
         // update rsq
-        update_rsq(rsq, ak, ak_ref, A_kk, gk, s, sc);
+        update_rsq(rsq, ak, ak_ref, A_kk, gk, s);
 
         // update outer iterators to preserve invariant
         if (!block_it.is_in_block(k)) {
@@ -520,26 +640,28 @@ void coordinate_descent(
     }
 }
 
-template <class Iter, class StrongSetType, 
-          class StrongADiagType, class MatType, class VecType,
-          class ValueType, class StrongBetaType, class StrongGradType,
+template <class MatType, class VecType,
+          class PackType, class Iter, class ValueType,
           class AdditionalStepType=util::no_op>
 GHOSTBASIL_STRONG_INLINE
 void coordinate_descent(
+        const BlockMatrix<GhostMatrix<MatType, VecType>>& A,
+        PackType& pack,
         Iter begin,
         Iter end,
-        const StrongSetType& strong_set,
-        const StrongADiagType& strong_A_diag,
-        const BlockMatrix<GhostMatrix<MatType, VecType>>& A,
-        ValueType s,
-        ValueType lmda,
-        StrongBetaType& strong_beta,
-        StrongGradType& strong_grad,
+        size_t lmda_idx,
         ValueType& convg_measure,
-        ValueType& rsq,
         AdditionalStepType additional_step=AdditionalStepType())
 {
+    const auto s = pack.s;
     const auto sc = 1-s;
+    const auto lmda = pack.lmdas[lmda_idx];
+    const auto& strong_set = pack.strong_set;
+    const auto& strong_A_diag = pack.strong_A_diag;
+    auto& strong_beta = pack.strong_beta;
+    auto& strong_grad = pack.strong_grad;
+    auto& rsq = pack.rsq;
+
     const auto get_strong_set = [&](auto i) { return strong_set[i]; };
 
     // Note: here we really assume sorted-ness!
@@ -573,7 +695,7 @@ void coordinate_descent(
         update_convergence_measure(convg_measure, del, A_kk);
 
         // update rsq
-        update_rsq(rsq, ak, ak_ref, A_kk, gk, s, sc);
+        update_rsq(rsq, ak, ak_ref, A_kk, gk, s);
 
         // update outer iterators to preserve invariant
         if (!block_it.is_in_block(k)) {
@@ -609,45 +731,13 @@ void coordinate_descent(
     }
 }
 
-/*
+/**
  * Applies multiple coordinate descent on the active set 
  * to minimize the ghostbasil objective.
  * See "objective" function for the objective of interest.
  *
- * @param   A           covariance matrix (p x p). 
- * @param   s           regularization of A towards identity. 
- *                      It is undefined behavior is s is not in [0,1].
- * @param   strong_set  strong set as a dense vector of indices in [0, p).
- *                      strong_set[i] = ith strong feature.
- * @param   strong_order    order of strong_set that results in sorted (ascending) values.
- *                          strong_set[strong_order[i]] < strong_set[strong_order[j]] if i < j.
- * @param   active_set  active set as a dense vector of indices in [0, strong_set.size()).
- *                      strong_set[active_set[i]] = ith active feature.
- *                      This set must at least contain ALL indices into strong_set 
- *                      where the corresponding strong_beta is non-zero, that is,
- *                      if strong_beta[strong_set[i]] != 0, then i is in active_set.
- * @param   active_order    order of active_set that results in sorted (ascending) 
- *                          values of strong_set.
- *                          strong_set[active_set[active_order[i]]] < 
- *                              strong_set[active_set[active_order[j]]] if i < j.
- * @param   active_set_ordered  ordered *features corresponding to* active_set.
- *                              active_set_ordered[i] == strong_set[active_set[active_order[i]]].
- * @param   is_active   dense vector of bool of size strong_set.size(). 
- *                      is_active[i] = true if feature strong_set[i] is active.
- *                      active_set should contain i.
- * @param   strong_A_diag       dense vector representing diagonal of A restricted to strong_set.
- *                              strong_A_diag[i] = A[k,k] where k = strong_set[i].
- *                              It is of size strong_set.size().
+ * @param   pack        see LassoParamPack.
  * @param   lmda_idx    index into the lambda sequence for logging purposes.
- * @param   lmda        L1 regularization of loss.
- * @param   max_cds     max number of coordinate descents.
- * @param   thr         convergence threshold.
- * @param   strong_beta dense vector of coefficients of size strong_set.size().
- *                      strong_beta[i] = coefficient for feature strong_set[i].
- *                      The updated coefficients will be stored here.
- * @param   strong_grad dense vector of (negative) gradient of objective of size strong_set.size().
- *                      strong_grad[i] = (negative) gradient for feature strong_set[i] at beta.
- *                      The updated gradients will be stored here.
  * @param   active_beta_diff_ordered    dense vector to store coefficient difference corresponding
  *                                      to the active set between
  *                                      the new coefficients and the current coefficients
@@ -657,50 +747,35 @@ void coordinate_descent(
  *                                      active_beta_diff_ordered[i] = 
  *                                          (new minus old of) 
  *                                          strong_beta[active_set[active_order[i]]].
- * @param   rsq         unnormalized R^2 estimate (same as negative loss function).
- *                      It is only well-defined if it is (approximately) 
- *                      the R^2 that corresponds to beta.
- *                      The updated R^2 estimate will be stored here.
- * @param   n_cds       stores the number of coordinate descents from this call.
  * @param   sg_update   functor that updates strong_gradient.
+ * @param   check_user_interrupt    functor that checks user interruption and 
+ *                                  takes any user-specified action.
  */
-template <class AType, class ValueType, class SSType, class SOType, 
-          class ASType, class AOType, class ASOType,class IAType, class StrongADiagType, 
-          class SBType, class SGType, class ABDiffOType, class SGUpdateType,
+template <class PackType, class ABDiffOType, class SGUpdateType,
           class CUIType = util::no_op>
 GHOSTBASIL_STRONG_INLINE
 void lasso_active_impl(
-    const AType& A,
-    ValueType s,
-    const SSType& strong_set,
-    const SOType& strong_order,
-    const ASType& active_set,
-    const AOType& active_order,
-    const ASOType& active_set_ordered,
-    const IAType& is_active,
-    const StrongADiagType& strong_A_diag,
+    PackType& pack,
     size_t lmda_idx,
-    ValueType lmda,
-    size_t max_cds,
-    ValueType thr,
-    SBType& strong_beta,
-    SGType& strong_grad,
     ABDiffOType& active_beta_diff_ordered,
-    ValueType& rsq,
-    size_t& n_cds,
     SGUpdateType sg_update,
     CUIType check_user_interrupt = CUIType())
 {
-    using value_t = ValueType;
-    using ao_value_t = typename std::decay_t<AOType>::value_type;
-    using aso_value_t= typename std::decay_t<ASOType>::value_type;
-    using sp_vec_t = util::sp_vec_type<value_t, Eigen::ColMajor, aso_value_t>;
+    using pack_t = std::decay_t<PackType>;
+    using value_t = typename pack_t::value_t;
+    using index_t = typename pack_t::index_t;
+    using sp_vec_value_t = typename pack_t::sp_vec_value_t;
 
-    internal::lasso_assert_valid_inputs(
-            A, s, strong_set, strong_order, 
-            active_set, active_order, active_set_ordered,
-            is_active, strong_A_diag,
-            strong_beta, strong_grad);
+    const auto& A = *pack.A;
+    const auto& strong_beta = pack.strong_beta;
+    const auto thr = pack.thr;
+    const auto max_cds = pack.max_cds;
+    const auto& active_set = *pack.active_set;
+    const auto& active_order = *pack.active_order;
+    const auto& active_set_ordered = *pack.active_set_ordered;
+    auto& n_cds = pack.n_cds;
+
+    internal::lasso_assert_valid_inputs(pack);
 
     assert(active_beta_diff_ordered.size() == active_order.size());
     Eigen::Map<util::vec_type<value_t>> ab_diff_o_view(
@@ -721,20 +796,19 @@ void lasso_active_impl(
         ++n_cds;
         value_t convg_measure;
         coordinate_descent(
-                util::make_functor_iterator<ao_value_t>(
+                A, pack,
+                util::make_functor_iterator<index_t>(
                     0, active_set_iter_f),
-                util::make_functor_iterator<ao_value_t>(
+                util::make_functor_iterator<index_t>(
                     active_order.size(), active_set_iter_f),
-                strong_set, strong_A_diag, A, s, lmda,
-                strong_beta, strong_grad,
-                convg_measure, rsq);
+                lmda_idx, convg_measure);
         if (convg_measure < thr) break;
         if (n_cds >= max_cds) throw util::max_cds_error(lmda_idx);
     }
     
     ab_diff_o_view = active_beta_ordered_expr - ab_diff_o_view;
 
-    Eigen::Map<const sp_vec_t> active_beta_diff_map(
+    Eigen::Map<const sp_vec_value_t> active_beta_diff_map(
             A.cols(),
             active_set_ordered.size(),
             active_set_ordered.data(),
@@ -744,37 +818,28 @@ void lasso_active_impl(
     sg_update(active_beta_diff_map);
 }
 
-namespace internal {
-
-/*
- * Default dispatcher for fitting lasso on active set.
+/**
+ * Calls lasso_active_impl with a specialized gradient update routine
+ * given the matrix type of A. For parameter descriptions,
+ * see lasso_active_impl.
  */
-template <class AType, class ValueType, class SSType, class SOType,
-          class ASType, class AOType, class ASOType, class IAType, 
-          class StrongADiagType, class SBType, class SGType,
+template <class DerivedType, class PackType,
           class ABDiffOType, class CUIType = util::no_op>
 GHOSTBASIL_STRONG_INLINE 
-void lasso_active__(
-    const AType& A,
-    ValueType s,
-    const SSType& strong_set,
-    const SOType& strong_order,
-    const ASType& active_set,
-    const AOType& active_order,
-    const ASOType& active_set_ordered,
-    const IAType& is_active,
-    const StrongADiagType& strong_A_diag,
+void lasso_active(
+    const Eigen::DenseBase<DerivedType>& A_base,
+    PackType& pack,
     size_t lmda_idx,
-    ValueType lmda,
-    size_t max_cds,
-    ValueType thr,
-    SBType& strong_beta,
-    SGType& strong_grad,
     ABDiffOType& active_beta_diff_ordered,
-    ValueType& rsq,
-    size_t& n_cds,
     CUIType check_user_interrupt = CUIType())
 {
+    const auto& A = A_base.derived();
+    const auto& strong_set = pack.strong_set;
+    const auto& is_active = pack.is_active;
+    const auto& active_set = *pack.active_set;
+    const auto s = pack.s;
+    auto& strong_grad = pack.strong_grad;
+
     const auto sg_update = [&](const auto& sp_beta_diff) {
         if ((sp_beta_diff.nonZeros() == 0) ||
             (active_set.size() == strong_set.size())) return;
@@ -789,87 +854,34 @@ void lasso_active__(
     };
 
     lasso_active_impl(
-            A, s, strong_set, strong_order, 
-            active_set, active_order, active_set_ordered,
-            is_active, strong_A_diag,
-            lmda_idx, lmda, max_cds, thr, 
-            strong_beta, strong_grad, 
-            active_beta_diff_ordered, rsq, n_cds, sg_update,
+            pack, lmda_idx, active_beta_diff_ordered, sg_update,
             check_user_interrupt);
 }
 
-} // namespace internal
-
-/*
- * Calls lasso_active_impl with a specialized gradient update routine
- * for a generic matrix.
- */
-template <class DerivedType, class ValueType, class SSType, class SOType,
-          class ASType, class AOType, class ASOType, class IAType, 
-          class StrongADiagType, class SBType, class SGType,
-          class ABDiffOType, class CUIType = util::no_op>
-GHOSTBASIL_STRONG_INLINE 
-void lasso_active(
-    const Eigen::DenseBase<DerivedType>& A_base,
-    ValueType s,
-    const SSType& strong_set,
-    const SOType& strong_order,
-    const ASType& active_set,
-    const AOType& active_order,
-    const ASOType& active_set_ordered,
-    const IAType& is_active,
-    const StrongADiagType& strong_A_diag,
-    size_t lmda_idx,
-    ValueType lmda,
-    size_t max_cds,
-    ValueType thr,
-    SBType& strong_beta,
-    SGType& strong_grad,
-    ABDiffOType& active_beta_diff_ordered,
-    ValueType& rsq,
-    size_t& n_cds,
-    CUIType check_user_interrupt = CUIType())
-{
-    const auto& A = A_base.derived();
-    internal::lasso_active__(
-        A, s, strong_set, strong_order, active_set,
-        active_order, active_set_ordered, is_active,
-        strong_A_diag, lmda_idx, lmda, max_cds, thr,
-        strong_beta, strong_grad, active_beta_diff_ordered,
-        rsq, n_cds, check_user_interrupt);
-}
-
-template <class MatType, class VecType, class ValueType, class SSType, class SOType,
-          class ASType, class AOType, class ASOType, class IAType, 
-          class StrongADiagType, class SBType, class SGType,
+template <class MatType, class VecType, class PackType,
           class ABDiffOType, class CUIType = util::no_op>
 GHOSTBASIL_STRONG_INLINE 
 void lasso_active(
     const GhostMatrix<MatType, VecType>& A,
-    ValueType s,
-    const SSType& strong_set,
-    const SOType& strong_order,
-    const ASType& active_set,
-    const AOType& active_order,
-    const ASOType& active_set_ordered,
-    const IAType& is_active,
-    const StrongADiagType& strong_A_diag,
+    PackType& pack,
     size_t lmda_idx,
-    ValueType lmda,
-    size_t max_cds,
-    ValueType thr,
-    SBType& strong_beta,
-    SGType& strong_grad,
     ABDiffOType& active_beta_diff_ordered,
-    ValueType& rsq,
-    size_t& n_cds,
     CUIType check_user_interrupt = CUIType())
 {
+    using pack_t = std::decay_t<PackType>;
+    using value_t = typename pack_t::value_t;
+    
+    const auto& strong_set = pack.strong_set;
+    const auto& strong_order = pack.strong_order;
+    const auto& is_active = pack.is_active;
+    const auto& active_set = *pack.active_set;
+    const auto s = pack.s;
+    auto& strong_grad = pack.strong_grad;
+
     const auto sg_update = [&](const auto& sp_beta_diff) {
         if ((sp_beta_diff.nonZeros() == 0) || 
             (active_set.size() == strong_set.size())) return;
 
-        using beta_value_t = typename std::decay_t<SBType>::value_type;
         const auto sc = 1-s;
         const auto& S = A.matrix();
         const auto& D = A.vector();
@@ -878,12 +890,12 @@ void lasso_active(
         const auto v_nnz = sp_beta_diff.nonZeros();
         auto v_begin = 0;
 
-        util::vec_type<beta_value_t> sum_vs(S.cols());
-        util::vec_type<beta_value_t> S_sum_vs(S.cols());
+        util::vec_type<value_t> sum_vs(S.cols());
+        util::vec_type<value_t> S_sum_vs(S.cols());
         sum_vs.setZero();
 
-        static constexpr beta_value_t inf = 
-            std::numeric_limits<beta_value_t>::infinity();
+        static constexpr value_t inf = 
+            std::numeric_limits<value_t>::infinity();
         S_sum_vs.fill(inf);
 
         // compute sum of v blocks
@@ -894,7 +906,8 @@ void lasso_active(
         }
 
         // update gradient in non-active positions
-        for (size_t ss_idx : strong_order) {
+        for (size_t ii = 0; ii < strong_order.size(); ++ii) {
+            const auto ss_idx = strong_order[ii];
             if (is_active[ss_idx]) continue;
             const auto k = strong_set[ss_idx];
             const auto k_shifted = A.shift(k);
@@ -911,46 +924,34 @@ void lasso_active(
     };
 
     lasso_active_impl(
-            A, s, strong_set, strong_order, 
-            active_set, active_order, active_set_ordered,
-            is_active, strong_A_diag,
-            lmda_idx, lmda, max_cds, thr, 
-            strong_beta, strong_grad, 
-            active_beta_diff_ordered, rsq, n_cds, sg_update,
+            pack, lmda_idx, active_beta_diff_ordered, sg_update,
             check_user_interrupt);
 }
 
-template <class MatType, class ValueType, class SSType, class SOType, 
-          class ASType, class AOType, class ASOType, class IAType, 
-          class StrongADiagType, class SBType, class SGType,
+template <class MatType, class PackType, 
           class ABDiffOType, class CUIType=util::no_op>
 GHOSTBASIL_STRONG_INLINE 
 void lasso_active(
     const BlockMatrix<MatType>& A,
-    ValueType s,
-    const SSType& strong_set,
-    const SOType& strong_order,
-    const ASType& active_set,
-    const AOType& active_order,
-    const ASOType& active_set_ordered,
-    const IAType& is_active,
-    const StrongADiagType& strong_A_diag,
+    PackType& pack,
     size_t lmda_idx,
-    ValueType lmda,
-    size_t max_cds,
-    ValueType thr,
-    SBType& strong_beta,
-    SGType& strong_grad,
     ABDiffOType& active_beta_diff_ordered,
-    ValueType& rsq,
-    size_t& n_cds,
     CUIType check_user_interrupt = CUIType())
 {
+    using pack_t = std::decay_t<PackType>;
+    using value_t = typename pack_t::value_t;
+    
+    const auto& strong_set = pack.strong_set;
+    const auto& strong_order = pack.strong_order;
+    const auto& is_active = pack.is_active;
+    const auto& active_set = *pack.active_set;
+    const auto s = pack.s;
+    auto& strong_grad = pack.strong_grad;
+
     auto sg_update = [&](const auto& sp_beta_diff) {
         if ((sp_beta_diff.nonZeros() == 0) || 
             (active_set.size() == strong_set.size())) return;
 
-        using value_t = ValueType;
         const auto sc = 1-s;
 
         auto block_it = A.block_begin();
@@ -980,7 +981,8 @@ void lasso_active(
         }
 
         // update gradient in non-active positions
-        for (size_t ss_idx : strong_order) {
+        for (size_t ii = 0; ii < strong_order.size(); ++ii) {
+            const auto ss_idx = strong_order[ii];
             if (is_active[ss_idx]) continue;
             const auto k = strong_set[ss_idx];
             // update A block stride pointer if current feature is not in the block.
@@ -1013,76 +1015,58 @@ void lasso_active(
     };
 
     lasso_active_impl(
-            A, s, strong_set, strong_order, 
-            active_set, active_order, active_set_ordered,
-            is_active, strong_A_diag,
-            lmda_idx, lmda, max_cds, thr, 
-            strong_beta, strong_grad, 
-            active_beta_diff_ordered, rsq, n_cds, sg_update,
+            pack, lmda_idx, active_beta_diff_ordered, sg_update,
             check_user_interrupt);
 }
 
-/*
+/**
  * Minimizes the objective described in the function "objective"
  * with the additional constraint:
- * \[
- *      \beta_{i} = 0, \, \forall i \notin \{strong_set\}
- * \]
- * i.e. all betas not in strong_set are fixed to be 0.
+ * \f[
+ *      \beta_{i} = 0, \, \forall i \notin \{S\}
+ * \f]
+ * i.e. all betas not in the strong set, \f$S\f$, are fixed to be 0.
  *
- * See lasso_active for parameter descriptions.
- *
- * @param   lmdas       regularization parameter lambda sequence.
- * @param   betas       output coefficient sparse matrix (p x lmdas.size()).
- *                      betas(i,j) = ith coefficient for jth lambda.
- * @param   rsqs        dense vector to store R^2 values for each lambda in lmdas.
+ * @param   pack    see LassoParamPack.
+ * @param   check_user_interrupt    see lasso_active_impl().
  */
-template <class AType, class ValueType,
-          class SSType, class SOType,
-          class SADType, class LmdasType,
-          class SBType, class SGType,
-          class ASType, class AOType, class ASOType, 
-          class IAType, class BetasType, class RsqsType,
+template <class PackType,
           class CUIType = util::no_op>
 inline void fit(
-    const AType& A, 
-    ValueType s, 
-    const SSType& strong_set, 
-    const SOType& strong_order,
-    const SADType& strong_A_diag,
-    const LmdasType& lmdas, 
-    size_t max_cds,
-    ValueType thr,
-    ValueType rsq,
-    SBType& strong_beta, 
-    SGType& strong_grad,
-    ASType& active_set,
-    AOType& active_order,
-    ASOType& active_set_ordered,
-    IAType& is_active,
-    BetasType& betas, 
-    RsqsType& rsqs,
-    size_t& n_cds,
-    size_t& n_lmdas,
+    PackType&& pack,
     CUIType check_user_interrupt = CUIType())
 {
-    internal::lasso_assert_valid_inputs(
-            A, s, strong_set, strong_order, 
-            active_set, active_order, active_set_ordered, 
-            is_active, strong_A_diag,
-            strong_beta, strong_grad);
+    using pack_t = typename std::decay_t<PackType>;
+    using value_t = typename pack_t::value_t;
+    using vec_index_t = typename pack_t::vec_index_t;
+    using vec_value_t = typename pack_t::vec_value_t;
+    using sp_vec_value_t = typename pack_t::sp_vec_value_t;
+
+    const auto& A = *pack.A;
+    const auto& strong_set = pack.strong_set;
+    const auto& strong_order = pack.strong_order;
+    const auto& strong_beta = pack.strong_beta;
+    const auto& lmdas = pack.lmdas;
+    const auto thr = pack.thr;
+    const auto max_cds = pack.max_cds;
+    const auto& rsq = pack.rsq;
+    auto& active_set = *pack.active_set;
+    auto& active_order = *pack.active_order;
+    auto& active_set_ordered = *pack.active_set_ordered;
+    auto& is_active = pack.is_active;
+    auto& betas = pack.betas;
+    auto& rsqs = pack.rsqs;
+    auto& n_cds = pack.n_cds;
+    auto& n_lmdas = pack.n_lmdas;
+
+    internal::lasso_assert_valid_inputs(pack);
 
     assert(betas.size() == lmdas.size());
     assert(rsqs.size() == lmdas.size());
 
-    using value_t = ValueType;
-    using aso_value_t = typename std::decay_t<ASOType>::value_type;
-    using beta_value_t = typename std::decay_t<SBType>::value_type;
-    using sp_vec_t = util::sp_vec_type<beta_value_t, Eigen::ColMajor, aso_value_t>;
-
     // common buffers for the routine
-    std::vector<beta_value_t> active_beta_ordered;
-    std::vector<beta_value_t> active_beta_diff_ordered;
+    std::vector<value_t> active_beta_ordered;
+    std::vector<value_t> active_beta_diff_ordered;
     active_beta_ordered.reserve(strong_set.size());
     active_beta_diff_ordered.reserve(strong_set.size());
     active_beta_diff_ordered.resize(active_order.size());
@@ -1098,36 +1082,26 @@ inline void fit(
         }
     };
 
-    const auto lasso_active_and_update = [&](size_t l, auto lmda) {
+    const auto lasso_active_and_update = [&](size_t l) {
         lasso_active(
-                A, s, strong_set, strong_order, 
-                active_set, active_order, active_set_ordered,
-                is_active, strong_A_diag,
-                l, lmda, max_cds, thr, 
-                strong_beta, strong_grad, 
-                active_beta_diff_ordered, rsq, n_cds,
+                A, pack, l, active_beta_diff_ordered, 
                 check_user_interrupt);
         lasso_active_called = true;
     };
 
     for (size_t l = 0; l < lmdas.size(); ++l) {
-        const auto lmda = lmdas[l];
-
         if (lasso_active_called) {
-            lasso_active_and_update(l, lmda);
+            lasso_active_and_update(l);
         }
 
-        size_t old_active_size;
         while (1) {
             check_user_interrupt(n_cds);
             ++n_cds;
             value_t convg_measure;
-            old_active_size = active_set.size();
+            size_t old_active_size = active_set.size();
             coordinate_descent(
-                    strong_order.begin(), strong_order.end(),
-                    strong_set, strong_A_diag, A, s, lmda,
-                    strong_beta, strong_grad,
-                    convg_measure, rsq, add_active_set);
+                    A, pack, strong_order.data(), strong_order.data() + strong_order.size(),
+                    l, convg_measure, add_active_set);
             const bool new_active_added = (old_active_size < active_set.size());
 
             // since coordinate descent could have added new active variables,
@@ -1146,10 +1120,10 @@ inline void fit(
                             });
 
                 active_set_ordered.resize(active_set.size());
-                Eigen::Map<util::vec_type<aso_value_t>> aso_map(
+                Eigen::Map<vec_index_t> aso_map(
                         active_set_ordered.data(),
                         active_set_ordered.size());
-                aso_map = util::vec_type<aso_value_t>::NullaryExpr(
+                aso_map = vec_index_t::NullaryExpr(
                         active_order.size(),
                         [&](auto i) { return strong_set[active_set[active_order[i]]]; });
 
@@ -1159,19 +1133,19 @@ inline void fit(
             if (convg_measure < thr) break;
             if (n_cds >= max_cds) throw util::max_cds_error(l);
 
-            lasso_active_and_update(l, lmda);
+            lasso_active_and_update(l);
         }
 
         // order the strong betas 
         active_beta_ordered.resize(active_order.size());
-        Eigen::Map<util::vec_type<beta_value_t>> ab_o_view(
+        Eigen::Map<vec_value_t> ab_o_view(
                 active_beta_ordered.data(),
                 active_beta_ordered.size());
-        ab_o_view = util::vec_type<beta_value_t>::NullaryExpr(
+        ab_o_view = vec_value_t::NullaryExpr(
                 active_order.size(),
                 [&](auto i) { return strong_beta[active_set[active_order[i]]]; });
         assert(active_set_ordered.size() == active_order.size());
-        Eigen::Map<const sp_vec_t> beta_map(
+        Eigen::Map<const sp_vec_value_t> beta_map(
                 A.cols(),
                 active_set_ordered.size(),
                 active_set_ordered.data(),
