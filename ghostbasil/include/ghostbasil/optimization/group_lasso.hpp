@@ -780,7 +780,7 @@ void coordinate_descent(
         // update measure of convergence
         lasso::update_convergence_measure(convg_measure, del, A_kk[0]);
 
-        lasso::update_rsq(rsq, ak_old, ak[0], A_kk[0], gk_shifted, s, sc);
+        lasso::update_rsq(rsq, ak_old, ak[0], A_kk[0], gk_shifted, s);
 
         // update gradient-like quantity
         del *= sc;

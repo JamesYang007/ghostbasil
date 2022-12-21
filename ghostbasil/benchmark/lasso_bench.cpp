@@ -45,7 +45,7 @@ struct LassoFixture
             lmdas[i] = lmdas[i-1] * factor;
         }
 
-        std::vector<uint32_t> strong_set(p);
+        std::vector<int32_t> strong_set(p);
         std::iota(strong_set.begin(), strong_set.end(), 0);
 
         auto strong_order = strong_set;
@@ -60,10 +60,10 @@ struct LassoFixture
         for (size_t i = 0; i < strong_grad.size(); ++i) {
             strong_grad[i] = r[strong_set[i]];
         }
-        std::vector<uint32_t> active_set;
-        std::vector<uint32_t> active_order;
-        std::vector<uint32_t> active_set_ordered;
-        std::vector<bool> is_active(strong_set.size(), false);
+        std::vector<int32_t> active_set;
+        std::vector<int32_t> active_order;
+        std::vector<int32_t> active_set_ordered;
+        std::vector<int32_t> is_active(strong_set.size(), false);
 
         const auto orig_strong_grad = strong_grad;
 
@@ -147,12 +147,17 @@ BENCHMARK_DEFINE_F(LassoFixture, dense)(benchmark::State& state)
         state.PauseTiming();
         reset(orig_strong_grad, strong_beta, strong_grad, active_set,
               active_order, active_set_ordered, is_active, n_cds, n_lmdas, rsq);
+        LassoParamPack<
+            std::decay_t<decltype(A)>, double, int, int
+        > pack(
+            A, s, strong_set, strong_order, strong_A_diag,
+            lmdas, max_cds, thr, rsq, strong_beta, strong_grad,
+            active_set, active_order, active_set_ordered,
+            is_active, betas, rsqs, n_cds, n_lmdas            
+        );
         state.ResumeTiming();
-        fit(A, s, strong_set, strong_order, 
-              strong_A_diag, lmdas, max_cds, thr, rsq, strong_beta, 
-              strong_grad, active_set, active_order, active_set_ordered,
-              is_active, betas, rsqs, 
-              n_cds, n_lmdas);
+        fit(pack);
+        n_cds = pack.n_cds;
     }
 
     state.counters["n_cds"] = n_cds;
@@ -228,12 +233,17 @@ BENCHMARK_DEFINE_F(LassoBlockFixture, block_dense)(benchmark::State& state)
         state.PauseTiming();
         reset(orig_strong_grad, strong_beta, strong_grad, active_set,
               active_order, active_set_ordered, is_active, n_cds, n_lmdas, rsq);
+        LassoParamPack<
+            std::decay_t<decltype(A)>, double, int, int
+        > pack(
+            A, s, strong_set, strong_order, strong_A_diag,
+            lmdas, max_cds, thr, rsq, strong_beta, strong_grad,
+            active_set, active_order, active_set_ordered,
+            is_active, betas, rsqs, n_cds, n_lmdas            
+        );
         state.ResumeTiming();
-        fit(A, s, strong_set, strong_order, 
-              strong_A_diag, lmdas, max_cds, thr, rsq, strong_beta, 
-              strong_grad, active_set, active_order, active_set_ordered,
-              is_active, betas, rsqs, 
-              n_cds, n_lmdas);
+        fit(pack);
+        n_cds = pack.n_cds;
     }
 
     state.counters["n_cds"] = n_cds;

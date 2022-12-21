@@ -15,11 +15,11 @@ struct LassoFixture
     : ::testing::Test
 {
     const double tol = 1e-8;
-    const double thr = 1e-16;
-    const size_t max_cds = 1000;
+    const double thr = 1e-24;
+    const size_t max_cds = 10000;
 
     template <class F>
-    auto make_input(F generate_dataset)
+    auto run(F generate_dataset)
     {
         auto dataset = generate_dataset();
         auto&& A = std::get<0>(dataset);
@@ -40,97 +40,57 @@ struct LassoFixture
             strong_grad[i] = r[strong_set[i]];
         }
 
-        Eigen::Vector<double, Eigen::Dynamic> strong_beta(strong_set.size());
+        util::vec_type<double> strong_beta(strong_set.size());
         strong_beta.setZero();
         
-        Eigen::Vector<double, Eigen::Dynamic> strong_A_diag(strong_set.size());
+        util::vec_type<double> strong_A_diag(strong_set.size());
         for (int i = 0; i < strong_A_diag.size(); ++i) {
             auto k = strong_set[i];
             strong_A_diag[i] = A.coeff(k,k);
         }
 
-        using sp_vec_t = Eigen::SparseVector<double>;
-        std::vector<sp_vec_t> betas(lmdas.size());
-        std::vector<uint32_t> active_set;
-        std::vector<uint32_t> active_order;
-        std::vector<uint32_t> active_set_ordered;
-        std::vector<bool> is_active(strong_set.size(), false);
+        using sp_vec_value_t = Eigen::SparseVector<double>;
+        std::vector<sp_vec_value_t> betas(lmdas.size());
+        std::vector<int> active_set;
+        std::vector<int> active_order;
+        std::vector<int> active_set_ordered;
+        std::vector<int> is_active(strong_set.size(), false);
         std::vector<double> rsqs(lmdas.size());
         size_t n_cds = 0;
         size_t n_lmdas = 0;
-
         double rsq = 0;
 
+        LassoParamPack<
+            std::decay_t<decltype(A)>, double, int, int
+        > pack(
+            A, s, strong_set, strong_order, strong_A_diag,
+            lmdas, max_cds, thr, rsq, strong_beta, strong_grad,
+            active_set, active_order, active_set_ordered,
+            is_active, betas, rsqs, n_cds, n_lmdas
+        );
+
+        fit(pack);
+
         return std::make_tuple(
-                std::move(A), 
-                std::move(r), 
-                std::move(s),
-                std::move(strong_set), 
-                std::move(strong_order),
-                std::move(strong_A_diag), 
-                std::move(lmdas), 
-                rsq, 
-                std::move(strong_beta),
-                std::move(strong_grad),
-                std::move(active_set),
-                std::move(active_order),
-                std::move(active_set_ordered),
-                std::move(is_active),
-                std::move(betas),
-                std::move(rsqs),
-                n_cds, 
-                n_lmdas,
-                std::move(expected_betas),
-                std::move(expected_objs));
+            A, r, s, lmdas, betas, rsqs,
+            n_cds, n_lmdas, expected_betas, expected_objs
+        );
     }
 
-    template <class InputType>
-    auto run(InputType&& input)
+    template <class F>
+    void test(F generate_data)
     {
-        auto& A = std::get<0>(input);
-        auto& s = std::get<2>(input);
-        auto& strong_set = std::get<3>(input);
-        auto& strong_order = std::get<4>(input);
-        auto& strong_A_diag = std::get<5>(input);
-        auto& lmdas = std::get<6>(input);
-        auto& rsq = std::get<7>(input);
-        auto& strong_beta = std::get<8>(input);
-        auto& strong_grad = std::get<9>(input);
-        auto& active_set = std::get<10>(input);
-        auto& active_order = std::get<11>(input);
-        auto& active_set_ordered = std::get<12>(input);
-        auto& is_active = std::get<13>(input);
-        auto& betas = std::get<14>(input);
-        auto& rsqs = std::get<15>(input);
-        auto& n_cds = std::get<16>(input);
-        auto& n_lmdas = std::get<17>(input);
+        const auto& pack = run(generate_data);
 
-        fit(
-            A, s, strong_set, strong_order, 
-            strong_A_diag, lmdas, max_cds, thr, rsq, strong_beta, 
-            strong_grad, active_set, active_order, 
-            active_set_ordered, is_active, 
-            betas, rsqs, n_cds, n_lmdas);
-
-        return std::make_tuple(betas, rsqs, n_cds, n_lmdas);
-    }
-
-    template <class GenerateFType>
-    void test(GenerateFType generate_dataset)
-    {
-        auto&& input = make_input(generate_dataset);
-        auto&& output = run(input);
-
-        auto&& A = std::get<0>(input);
-        auto&& r = std::get<1>(input);
-        auto&& s = std::get<2>(input);
-        auto&& lmdas = std::get<6>(input);
-        auto&& expected_betas = std::get<18>(input);
-        auto&& expected_objs = std::get<19>(input);
-
-        auto&& betas = std::get<0>(output);
-        auto&& n_cds = std::get<2>(output);
-        auto&& n_lmdas = std::get<3>(output);
+        const auto& A = std::get<0>(pack);
+        const auto& r = std::get<1>(pack);
+        const auto s = std::get<2>(pack);
+        const auto& lmdas = std::get<3>(pack);
+        const auto& betas = std::get<4>(pack);
+        const auto n_cds = std::get<6>(pack);
+        const auto n_lmdas = std::get<7>(pack);
+        const auto& expected_betas = std::get<8>(pack);
+        const auto& expected_objs = std::get<9>(pack);
 
         EXPECT_LE(n_cds, max_cds);
 
@@ -144,7 +104,8 @@ struct LassoFixture
             const auto& actual = betas[i];
             auto expected = expected_betas.col(i);
 
-            EXPECT_NEAR(expected_objs[i], objective(A, r, s, lmdas[i], actual), tol);
+            const auto obj = objective(A, r, s, lmdas[i], actual);
+            EXPECT_NEAR(expected_objs[i], obj, tol);
             EXPECT_EQ(actual.size(), expected.size());
             for (size_t i = 0; i < expected.size(); ++i) {
                 EXPECT_NEAR(expected[i], actual.coeff(i), tol);
@@ -199,20 +160,17 @@ struct LassoCompareFixture
               double coeff_tol = 1e-12,
               double rsq_tol = 1e-12)
     {
-        auto&& actual_dataset = make_input(generate_dataset_actual);
-        auto&& expected_dataset = make_input(generate_dataset_expected);
+        auto&& actual = run(generate_dataset_actual);
+        auto&& expected = run(generate_dataset_expected);
 
-        auto&& expected = run(expected_dataset);
-        auto&& actual = run(actual_dataset);
-
-        auto&& expected_betas = std::get<0>(expected);
-        auto&& expected_rsqs = std::get<1>(expected);
-        auto&& expected_n_cds = std::get<2>(expected);
-        auto&& expected_n_lmdas = std::get<3>(expected);
-        auto&& actual_betas = std::get<0>(actual);
-        auto&& actual_rsqs = std::get<1>(actual);
-        auto&& actual_n_cds = std::get<2>(actual);
-        auto&& actual_n_lmdas = std::get<3>(actual);
+        auto&& expected_betas = std::get<4>(expected);
+        auto&& expected_rsqs = std::get<5>(expected);
+        auto&& expected_n_cds = std::get<6>(expected);
+        auto&& expected_n_lmdas = std::get<7>(expected);
+        auto&& actual_betas = std::get<4>(actual);
+        auto&& actual_rsqs = std::get<5>(actual);
+        auto&& actual_n_cds = std::get<6>(actual);
+        auto&& actual_n_lmdas = std::get<7>(actual);
         
         EXPECT_EQ(actual_betas.size(), expected_betas.size());
         EXPECT_EQ(actual_rsqs.size(), expected_rsqs.size());
@@ -277,7 +235,7 @@ struct LassoBlockFixture
 
         value_t s = 0.1;
 
-        std::vector<uint32_t> strong_set(n_cols);
+        std::vector<int> strong_set(n_cols);
         std::iota(strong_set.begin(), strong_set.end(), 0);
 
         util::vec_type<value_t> lmdas(3);
@@ -395,7 +353,7 @@ struct LassoGhostFixture
 
         value_t s = 0.1;
 
-        std::vector<uint32_t> strong_set(n_cols);
+        std::vector<int> strong_set(n_cols);
         std::iota(strong_set.begin(), strong_set.end(), 0);
 
         util::vec_type<value_t> lmdas(3);
@@ -524,7 +482,7 @@ struct LassoBlockGhostFixture
 
         value_t s = 0.1;
 
-        std::vector<uint32_t> strong_set(n_cols);
+        std::vector<int> strong_set(n_cols);
         std::iota(strong_set.begin(), strong_set.end(), 0);
 
         util::vec_type<value_t> lmdas(3);
