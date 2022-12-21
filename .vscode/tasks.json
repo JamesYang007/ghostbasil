@@ -71,7 +71,7 @@
                 "dbg",
                 "//ghostbasil/test:optimization",
                 "--",
-                "--gtest_filter='Basil*'",
+                "--gtest_filter='Lasso*'",
             ],
             "group": {
                 "kind": "test",

@@ -17,7 +17,8 @@ namespace lasso {
  * @param   A           PSD matrix (p, p). 
  *                      This matrix only needs to satisfy the properties
  *                      when looking at the sub-matrix of all strong_set features.
- * @param   s           regularization of A towards identity. 
+ * @param   alpha       elastic net proportion. 
+ * @param   penalty     penalty factor for each feature.
  *                      It is undefined behavior is s is not in [0,1].
  * @param   strong_set  strong set as a dense vector of indices in [0, p).
  *                      strong_set[i] = ith strong feature.
@@ -82,7 +83,8 @@ struct LassoParamPack
     using dyn_vec_index_t = DynamicVectorIndexType;
 
     const AType* A = nullptr;
-    value_t s;
+    value_t alpha;
+    map_cvec_value_t penalty;
     map_cvec_index_t strong_set;
     map_cvec_index_t strong_order;
     map_cvec_value_t strong_A_diag;
@@ -102,7 +104,8 @@ struct LassoParamPack
     size_t n_lmdas;
     
     explicit LassoParamPack()
-        : strong_set(nullptr, 0),
+        : penalty(nullptr, 0),
+          strong_set(nullptr, 0),
           strong_order(nullptr, 0),
           strong_A_diag(nullptr, 0),
           lmdas(nullptr, 0),
@@ -113,13 +116,14 @@ struct LassoParamPack
           rsqs(nullptr, 0)
     {}
          
-    template <class SSType, class SOType, 
+    template <class PenaltyType, class SSType, class SOType, 
               class SADType, class LmdasType,
               class SBType, class SGType,
               class IAType, class BetasType, class RsqsType>
     explicit LassoParamPack(
         const AType& A_,
-        value_t s_, 
+        value_t alpha_, 
+        const PenaltyType& penalty_,
         const SSType& strong_set_, 
         const SOType& strong_order_, 
         const SADType& strong_A_diag_,
@@ -139,7 +143,8 @@ struct LassoParamPack
         size_t n_lmdas_
     )
         : A(&A_),
-          s(s_),
+          alpha(alpha_),
+          penalty(penalty_.data(), penalty_.size()),
           strong_set(strong_set_.data(), strong_set_.size()),
           strong_order(strong_order_.data(), strong_order_.size()),
           strong_A_diag(strong_A_diag_.data(), strong_A_diag_.size()),
@@ -172,7 +177,7 @@ void lasso_assert_valid_inputs(const PackType& pack)
     using vec_index_t = typename pack_t::vec_index_t;
 
     const auto& A = *pack.A;
-    const auto s = pack.s;
+    const auto alpha = pack.alpha;
     const auto& strong_set = pack.strong_set;
     const auto& strong_order = pack.strong_order;
     const auto& active_set = *pack.active_set;
@@ -186,8 +191,8 @@ void lasso_assert_valid_inputs(const PackType& pack)
     // check that A is square
     assert((A.rows() == A.cols()) && A.size());
 
-    // check that s is in [0,1]
-    assert((0 <= s) && (s <= 1));
+    // check that alpha is in [0,1]
+    assert((0 <= alpha) && (alpha <= 1));
 
     {
         // check that strong set contains values in [0, p)
@@ -328,27 +333,35 @@ bool check_early_stop_rsq(
  * Computes the objective that we wish to minimize.
  * The objective is the quadratic loss + regularization:
  * \f[
- *      \frac{1-s}{2} \beta^\top A \beta - \beta^\top r + \frac{s}{2} ||\beta||_2^2 
- *          + \lambda ||\beta||_1
+ *      \frac{1}{2} \beta^\top A \beta - \beta^\top r
+ *          + \lambda \sum\limits_{i} p_i \left(
+ *              \frac{1-\alpha}{2} \beta_i^2 + \alpha |\beta_i|
+ *            \right)
  * \f]
  * 
  * @param   A   any (p,p) matrix.
  * @param   r   any (p,) vector.
- * @param   s   PGR regularization.
+ * @param   penalty penalty factor on each coefficient.
+ * @param   alpha   elastic net proportion.
  * @param   lmda    lasso regularization.
  * @param   beta    coefficient vector.
  */
-template <class AType, class RType, class ValueType, class BetaType>
+template <class AType, class RType, class PenaltyType,
+          class ValueType, class BetaType>
 GHOSTBASIL_STRONG_INLINE 
 auto objective(
         const AType& A,
         const RType& r,
-        ValueType s,
+        const PenaltyType& penalty,
+        ValueType alpha,
         ValueType lmda,
         const BetaType& beta)
 {
-    return (1-s)/2 * A.quad_form(beta) - beta.dot(r) + s/2 * beta.squaredNorm()
-        + lmda * beta.cwiseAbs().sum();
+    return A.quad_form(beta) - beta.dot(r) 
+        + lmda * (
+            (1-alpha)/2 * beta.cwiseProduct(penalty).cwiseProduct(beta).sum()
+            + alpha * beta.cwiseAbs().cwiseProduct(penalty).sum()
+        );
 }
 
 /**
@@ -356,24 +369,24 @@ auto objective(
  *
  * @param   coeff   current coefficient to update.
  * @param   x_var   variance of feature. A[k,k] where k is the feature corresponding to coeff.
+ * @param   l1      L1 regularization part in elastic net.
+ * @param   l2      L2 regularization part in elastic net.
+ * @param   penalty penalty value for current coefficient.
  * @param   grad    current (negative) gradient for coeff.
- * @param   s       regularization of A towards identity.
- * @param   sc      1-s (for optimization purposes, assume user can provide pre-computed value).
- * @param   lmda    L1 regularization value.
  */
 template <class ValueType>
 GHOSTBASIL_STRONG_INLINE
 void update_coefficient(
         ValueType& coeff,
         ValueType x_var,
-        ValueType grad,
-        ValueType s,
-        ValueType sc,
-        ValueType lmda)
+        ValueType l1,
+        ValueType l2,
+        ValueType penalty,
+        ValueType grad)
 {
-    const auto denom = sc * x_var + s;
-    const auto u = grad + coeff * denom;
-    const auto v = std::abs(u) - lmda;
+    const auto denom = x_var + l2 * penalty;
+    const auto u = grad + coeff * x_var;
+    const auto v = std::abs(u) - l1 * penalty;
     coeff = (v > 0.0) ? std::copysign(v,u)/denom : 0;
 }
 
@@ -412,12 +425,10 @@ void update_rsq(
         ValueType old_coeff, 
         ValueType new_coeff, 
         ValueType x_var, 
-        ValueType grad, 
-        ValueType s)
+        ValueType grad)
 {
     const auto del = new_coeff - old_coeff;
-    const auto x_var_reg = (1-s) * x_var + s;
-    rsq += del * (2 * grad - del * x_var_reg);
+    rsq += del * (2 * grad - del * x_var);
 }
 
 /**
@@ -447,9 +458,11 @@ void coordinate_descent(
         AdditionalStepType additional_step=AdditionalStepType())
 {
     const auto& A = A_base.derived();
-    const auto s = pack.s;
-    const auto sc = 1-s;
+    const auto alpha = pack.alpha;
     const auto lmda = pack.lmdas[lmda_idx];
+    const auto l1 = lmda * alpha;
+    const auto l2 = lmda * (1-alpha);
+    const auto& penalty = pack.penalty;
     const auto& strong_set = pack.strong_set;
     const auto& strong_A_diag = pack.strong_A_diag;
     auto& strong_beta = pack.strong_beta;
@@ -463,9 +476,10 @@ void coordinate_descent(
         const auto ak = strong_beta[ss_idx];  // corresponding beta
         const auto gk = strong_grad[ss_idx];  // corresponding gradient
         const auto A_kk = strong_A_diag[ss_idx];  // corresponding A diagonal element
+        const auto pk = penalty[k]; 
                                     
         auto& ak_ref = strong_beta[ss_idx];
-        update_coefficient(ak_ref, A_kk, gk, s, sc, lmda);
+        update_coefficient(ak_ref, A_kk, l1, l2, pk, gk);
 
         if (ak_ref == ak) continue;
 
@@ -475,16 +489,14 @@ void coordinate_descent(
         update_convergence_measure(convg_measure, del, A_kk);
 
         // update rsq
-        update_rsq(rsq, ak, ak_ref, A_kk, gk, s);
+        update_rsq(rsq, ak, ak_ref, A_kk, gk);
 
         // update gradient
-        strong_grad[ss_idx] -= s * del;
-        const auto sc_del = sc * del;
         for (auto jt = begin; jt != end; ++jt) {
             const auto ss_idx_j = *jt;
             const auto j = strong_set[ss_idx_j];
             const auto A_jk = A.coeff(j, k);
-            strong_grad[ss_idx_j] -= sc_del * A_jk;
+            strong_grad[ss_idx_j] -= del * A_jk;
         }
 
         // additional step
@@ -505,9 +517,11 @@ void coordinate_descent(
         ValueType& convg_measure,
         AdditionalStepType additional_step=AdditionalStepType())
 {
-    const auto s = pack.s;
-    const auto sc = 1-s;
+    const auto alpha = pack.alpha;
     const auto lmda = pack.lmdas[lmda_idx];
+    const auto l1 = lmda * alpha;
+    const auto l2 = lmda * (1-alpha);
+    const auto& penalty = pack.penalty;
     const auto& strong_set = pack.strong_set;
     const auto& strong_A_diag = pack.strong_A_diag;
     auto& strong_beta = pack.strong_beta;
@@ -521,9 +535,10 @@ void coordinate_descent(
         const auto ak = strong_beta[ss_idx];  // corresponding beta
         const auto gk = strong_grad[ss_idx];  // corresponding gradient
         const auto A_kk = strong_A_diag[ss_idx];  // corresponding A diagonal element
+        const auto pk = penalty[k]; 
                                     
         auto& ak_ref = strong_beta[ss_idx];
-        update_coefficient(ak_ref, A_kk, gk, s, sc, lmda);
+        update_coefficient(ak_ref, A_kk, l1, l2, pk, gk);
 
         if (ak_ref == ak) continue;
 
@@ -533,21 +548,20 @@ void coordinate_descent(
         update_convergence_measure(convg_measure, del, A_kk);
 
         // update rsq
-        update_rsq(rsq, ak, ak_ref, A_kk, gk, s);
+        update_rsq(rsq, ak, ak_ref, A_kk, gk);
 
         // update gradient
-        const auto sc_del = sc * del;
         const auto& S = A.matrix();
         const auto& D = A.vector();
         const auto k_shift = A.shift(k);
         const auto D_kk = D[k_shift];
-        strong_grad[ss_idx] -= s * del + sc_del * D_kk;
+        strong_grad[ss_idx] -= del * D_kk;
         for (auto jt = begin; jt != end; ++jt) {
             const auto ss_idx_j = *jt;
             const auto j = strong_set[ss_idx_j];
             const auto j_shift = A.shift(j);
             const auto S_jk = S.coeff(j_shift, k_shift);
-            strong_grad[ss_idx_j] -= sc_del * S_jk;
+            strong_grad[ss_idx_j] -= del * S_jk;
         }
 
         // additional step
@@ -567,9 +581,11 @@ void coordinate_descent(
         ValueType& convg_measure,
         AdditionalStepType additional_step=AdditionalStepType())
 {
-    const auto s = pack.s;
-    const auto sc = 1-s;
+    const auto alpha = pack.alpha;
     const auto lmda = pack.lmdas[lmda_idx];
+    const auto l1 = lmda * alpha;
+    const auto l2 = lmda * (1-alpha);
+    const auto& penalty = pack.penalty;
     const auto& strong_set = pack.strong_set;
     const auto& strong_A_diag = pack.strong_A_diag;
     auto& strong_beta = pack.strong_beta;
@@ -597,9 +613,10 @@ void coordinate_descent(
         const auto ak = strong_beta[ss_idx];  // corresponding beta
         const auto gk = strong_grad[ss_idx];  // corresponding gradient
         const auto A_kk = strong_A_diag[ss_idx];  // corresponding A diagonal element
+        const auto pk = penalty[k]; 
                                     
         auto& ak_ref = strong_beta[ss_idx];
-        update_coefficient(ak_ref, A_kk, gk, s, sc, lmda);
+        update_coefficient(ak_ref, A_kk, l1, l2, pk, gk);
 
         if (ak_ref == ak) continue;
 
@@ -609,7 +626,7 @@ void coordinate_descent(
         update_convergence_measure(convg_measure, del, A_kk);
 
         // update rsq
-        update_rsq(rsq, ak, ak_ref, A_kk, gk, s);
+        update_rsq(rsq, ak, ak_ref, A_kk, gk);
 
         // update outer iterators to preserve invariant
         if (!block_it.is_in_block(k)) {
@@ -625,14 +642,12 @@ void coordinate_descent(
         const auto& block = block_it.block();
         
         // update gradient
-        strong_grad[ss_idx] -= s * del;
-        const auto sc_del = sc * del;
         for (auto jt = range_begin; jt != range_end; ++jt) {
             const auto ss_idx_j = *jt;
             const auto j = strong_set[ss_idx_j];
             const auto j_shifted = block_it.shift(j);
             const auto A_jk = block.coeff(j_shifted, k_shifted);
-            strong_grad[ss_idx_j] -= sc_del * A_jk;
+            strong_grad[ss_idx_j] -= del * A_jk;
         }
 
         // additional step
@@ -653,9 +668,11 @@ void coordinate_descent(
         ValueType& convg_measure,
         AdditionalStepType additional_step=AdditionalStepType())
 {
-    const auto s = pack.s;
-    const auto sc = 1-s;
+    const auto alpha = pack.alpha;
     const auto lmda = pack.lmdas[lmda_idx];
+    const auto l1 = lmda * alpha;
+    const auto l2 = lmda * (1-alpha);
+    const auto& penalty = pack.penalty;
     const auto& strong_set = pack.strong_set;
     const auto& strong_A_diag = pack.strong_A_diag;
     auto& strong_beta = pack.strong_beta;
@@ -683,9 +700,10 @@ void coordinate_descent(
         const auto ak = strong_beta[ss_idx];  // corresponding beta
         const auto gk = strong_grad[ss_idx];  // corresponding gradient
         const auto A_kk = strong_A_diag[ss_idx];  // corresponding A diagonal element
+        const auto pk = penalty[k]; 
                                     
         auto& ak_ref = strong_beta[ss_idx];
-        update_coefficient(ak_ref, A_kk, gk, s, sc, lmda);
+        update_coefficient(ak_ref, A_kk, l1, l2, pk, gk);
 
         if (ak_ref == ak) continue;
 
@@ -695,7 +713,7 @@ void coordinate_descent(
         update_convergence_measure(convg_measure, del, A_kk);
 
         // update rsq
-        update_rsq(rsq, ak, ak_ref, A_kk, gk, s);
+        update_rsq(rsq, ak, ak_ref, A_kk, gk);
 
         // update outer iterators to preserve invariant
         if (!block_it.is_in_block(k)) {
@@ -711,19 +729,18 @@ void coordinate_descent(
         const auto& block = block_it.block();
         
         // update gradient
-        const auto sc_del = sc * del;
         const auto& S = block.matrix();
         const auto& D = block.vector();
         const auto k_shift = block.shift(k_block_shift);
         const auto D_kk = D[k_shift];
-        strong_grad[ss_idx] -= s * del + sc_del * D_kk;
+        strong_grad[ss_idx] -= del * D_kk;
         for (auto jt = range_begin; jt != range_end; ++jt) {
             const auto ss_idx_j = *jt;
             const auto j = strong_set[ss_idx_j];
             const auto j_block_shift = block_it.shift(j);
             const auto j_shift = block.shift(j_block_shift);
             const auto S_jk = S.coeff(j_shift, k_shift);
-            strong_grad[ss_idx_j] -= sc_del * S_jk;
+            strong_grad[ss_idx_j] -= del * S_jk;
         }
 
         // additional step
@@ -837,19 +854,17 @@ void lasso_active(
     const auto& strong_set = pack.strong_set;
     const auto& is_active = pack.is_active;
     const auto& active_set = *pack.active_set;
-    const auto s = pack.s;
     auto& strong_grad = pack.strong_grad;
 
     const auto sg_update = [&](const auto& sp_beta_diff) {
         if ((sp_beta_diff.nonZeros() == 0) ||
             (active_set.size() == strong_set.size())) return;
 
-        const auto sc = 1-s;
         // update gradient in non-active positions
         for (size_t ss_idx = 0; ss_idx < strong_set.size(); ++ss_idx) {
             if (is_active[ss_idx]) continue;
             const auto k = strong_set[ss_idx];
-            strong_grad[ss_idx] -= sc * A.col_dot(k, sp_beta_diff);
+            strong_grad[ss_idx] -= A.col_dot(k, sp_beta_diff);
         }
     };
 
@@ -875,14 +890,12 @@ void lasso_active(
     const auto& strong_order = pack.strong_order;
     const auto& is_active = pack.is_active;
     const auto& active_set = *pack.active_set;
-    const auto s = pack.s;
     auto& strong_grad = pack.strong_grad;
 
     const auto sg_update = [&](const auto& sp_beta_diff) {
         if ((sp_beta_diff.nonZeros() == 0) || 
             (active_set.size() == strong_set.size())) return;
 
-        const auto sc = 1-s;
         const auto& S = A.matrix();
         const auto& D = A.vector();
         const auto v_inner = sp_beta_diff.innerIndexPtr();
@@ -919,7 +932,7 @@ void lasso_active(
                     v_inner+v_begin, v_inner+v_nnz, k)-v_inner;
             const auto D_kk_v_k = ((v_begin != v_nnz) && (v_inner[v_begin] == k)) ?
                 D_kk*v_value[v_begin] : 0;
-            strong_grad[ss_idx] -= sc * (S_sum_vs[k_shifted] + D_kk_v_k);
+            strong_grad[ss_idx] -= (S_sum_vs[k_shifted] + D_kk_v_k);
         }
     };
 
@@ -945,14 +958,11 @@ void lasso_active(
     const auto& strong_order = pack.strong_order;
     const auto& is_active = pack.is_active;
     const auto& active_set = *pack.active_set;
-    const auto s = pack.s;
     auto& strong_grad = pack.strong_grad;
 
     auto sg_update = [&](const auto& sp_beta_diff) {
         if ((sp_beta_diff.nonZeros() == 0) || 
             (active_set.size() == strong_set.size())) return;
-
-        const auto sc = 1-s;
 
         auto block_it = A.block_begin();
         const auto bd_inner = sp_beta_diff.innerIndexPtr();
@@ -1010,7 +1020,7 @@ void lasso_active(
             for (auto i = bd_seg_begin; i < bd_seg_end; ++i) {
                 dp += A_block.coeff(block_it.shift(bd_inner[i]), k_shifted) * bd_value[i];
             }
-            strong_grad[ss_idx] -= sc * dp;
+            strong_grad[ss_idx] -= dp;
         }
     };
 

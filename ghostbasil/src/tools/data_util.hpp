@@ -21,7 +21,8 @@ inline auto generate_dataset(const std::string& suffix)
     assert((A.size() > 0) && (A.rows() == A.cols()));
     Eigen::VectorXd r = load_data_path_csv("r_" + suffix + ".csv");
     assert(r.size() == A.cols());
-    Eigen::VectorXd s = load_data_path_csv("s_" + suffix + ".csv");
+    Eigen::VectorXd alpha = load_data_path_csv("alpha_" + suffix + ".csv");
+    Eigen::VectorXd penalty = load_data_path_csv("penalty_" + suffix + ".csv");
     Eigen::VectorXi strong_set = load_data_path_csv("strong_set_" + suffix + ".csv").template cast<int>();
     assert((strong_set.minCoeff() >= 0) && (strong_set.maxCoeff() < r.size()));
     Eigen::VectorXd expected_lmdas = load_data_path_csv("lmda_" + suffix + ".csv");
@@ -29,7 +30,7 @@ inline auto generate_dataset(const std::string& suffix)
     Eigen::VectorXd expected_objs = load_data_path_csv("obj_" + suffix + ".csv");
     assert(expected_lmdas.size() == expected_betas.cols());
     assert(expected_lmdas.size() == expected_objs.size());
-    return std::make_tuple(A, r, s[0], strong_set, expected_lmdas, expected_betas, expected_objs);
+    return std::make_tuple(A, r, alpha[0], penalty, strong_set, expected_lmdas, expected_betas, expected_objs);
 }
 
 /*

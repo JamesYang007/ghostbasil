@@ -24,11 +24,12 @@ struct LassoFixture
         auto dataset = generate_dataset();
         auto&& A = std::get<0>(dataset);
         auto&& r = std::get<1>(dataset);
-        auto&& s = std::get<2>(dataset);
-        auto&& strong_set = std::get<3>(dataset);
-        auto&& lmdas = std::get<4>(dataset);
-        auto&& expected_betas = std::get<5>(dataset);
-        auto&& expected_objs = std::get<6>(dataset);
+        auto&& alpha = std::get<2>(dataset);
+        auto&& penalty = std::get<3>(dataset);
+        auto&& strong_set = std::get<4>(dataset);
+        auto&& lmdas = std::get<5>(dataset);
+        auto&& expected_betas = std::get<6>(dataset);
+        auto&& expected_objs = std::get<7>(dataset);
 
         std::vector<int> strong_order(strong_set.size());
         std::iota(strong_order.begin(), strong_order.end(), 0);
@@ -63,7 +64,7 @@ struct LassoFixture
         LassoParamPack<
             std::decay_t<decltype(A)>, double, int, int
         > pack(
-            A, s, strong_set, strong_order, strong_A_diag,
+            A, alpha, penalty, strong_set, strong_order, strong_A_diag,
             lmdas, max_cds, thr, rsq, strong_beta, strong_grad,
             active_set, active_order, active_set_ordered,
             is_active, betas, rsqs, n_cds, n_lmdas
@@ -72,7 +73,7 @@ struct LassoFixture
         fit(pack);
 
         return std::make_tuple(
-            A, r, s, lmdas, betas, rsqs,
+            A, r, alpha, penalty, lmdas, betas, rsqs,
             n_cds, n_lmdas, expected_betas, expected_objs
         );
     }
@@ -84,13 +85,14 @@ struct LassoFixture
 
         const auto& A = std::get<0>(pack);
         const auto& r = std::get<1>(pack);
-        const auto s = std::get<2>(pack);
-        const auto& lmdas = std::get<3>(pack);
-        const auto& betas = std::get<4>(pack);
-        const auto n_cds = std::get<6>(pack);
-        const auto n_lmdas = std::get<7>(pack);
-        const auto& expected_betas = std::get<8>(pack);
-        const auto& expected_objs = std::get<9>(pack);
+        const auto alpha = std::get<2>(pack);
+        const auto& penalty = std::get<3>(pack);
+        const auto& lmdas = std::get<4>(pack);
+        const auto& betas = std::get<5>(pack);
+        const auto n_cds = std::get<7>(pack);
+        const auto n_lmdas = std::get<8>(pack);
+        const auto& expected_betas = std::get<9>(pack);
+        const auto& expected_objs = std::get<10>(pack);
 
         EXPECT_LE(n_cds, max_cds);
 
@@ -104,7 +106,7 @@ struct LassoFixture
             const auto& actual = betas[i];
             auto expected = expected_betas.col(i);
 
-            const auto obj = objective(A, r, s, lmdas[i], actual);
+            const auto obj = objective(A, r, penalty, alpha, lmdas[i], actual);
             EXPECT_NEAR(expected_objs[i], obj, tol);
             EXPECT_EQ(actual.size(), expected.size());
             for (size_t i = 0; i < expected.size(); ++i) {
@@ -163,14 +165,14 @@ struct LassoCompareFixture
         auto&& actual = run(generate_dataset_actual);
         auto&& expected = run(generate_dataset_expected);
 
-        auto&& expected_betas = std::get<4>(expected);
-        auto&& expected_rsqs = std::get<5>(expected);
-        auto&& expected_n_cds = std::get<6>(expected);
-        auto&& expected_n_lmdas = std::get<7>(expected);
-        auto&& actual_betas = std::get<4>(actual);
-        auto&& actual_rsqs = std::get<5>(actual);
-        auto&& actual_n_cds = std::get<6>(actual);
-        auto&& actual_n_lmdas = std::get<7>(actual);
+        auto&& expected_betas = std::get<5>(expected);
+        auto&& expected_rsqs = std::get<6>(expected);
+        auto&& expected_n_cds = std::get<7>(expected);
+        auto&& expected_n_lmdas = std::get<8>(expected);
+        auto&& actual_betas = std::get<5>(actual);
+        auto&& actual_rsqs = std::get<6>(actual);
+        auto&& actual_n_cds = std::get<7>(actual);
+        auto&& actual_n_lmdas = std::get<8>(actual);
         
         EXPECT_EQ(actual_betas.size(), expected_betas.size());
         EXPECT_EQ(actual_rsqs.size(), expected_rsqs.size());
@@ -233,7 +235,10 @@ struct LassoBlockFixture
         Eigen::VectorXd r = A_dense * beta + Eigen::VectorXd::NullaryExpr(n_cols,
                 [&](auto) { return 0.2 * norm(gen); });
 
-        value_t s = 0.1;
+        value_t alpha = 0.1;
+        
+        Eigen::VectorXd penalty(n_cols);
+        penalty.setOnes();
 
         std::vector<int> strong_set(n_cols);
         std::iota(strong_set.begin(), strong_set.end(), 0);
@@ -241,7 +246,7 @@ struct LassoBlockFixture
         util::vec_type<value_t> lmdas(3);
         lmdas[0] = r.array().abs().maxCoeff();
         for (int i = 1; i < lmdas.size(); ++i) {
-            lmdas[i] = lmdas[i-1] * 0.001;
+            lmdas[i] = lmdas[i-1] * 0.7;
         }
 
         return std::make_tuple(
@@ -249,7 +254,8 @@ struct LassoBlockFixture
                 std::move(A),
                 std::move(A_dense),
                 std::move(r),
-                std::move(s),
+                std::move(alpha),
+                std::move(penalty),
                 std::move(strong_set),
                 std::move(lmdas),
                 0, 0); // dummy variables for expected betas and objs
@@ -262,22 +268,24 @@ struct LassoBlockFixture
             return std::make_tuple(
                 std::get<1>(dataset), // A (block)
                 std::get<3>(dataset), // r
-                std::get<4>(dataset), // s
-                std::get<5>(dataset), // strong_set
-                std::get<6>(dataset), // lmdas
-                std::get<7>(dataset), // dummy: expected_betas
-                std::get<8>(dataset)  // dummy: expected_objs
+                std::get<4>(dataset), // alpha
+                std::get<5>(dataset), // penalty
+                std::get<6>(dataset), // strong_set
+                std::get<7>(dataset), // lmdas
+                std::get<8>(dataset), // dummy: expected_betas
+                std::get<9>(dataset)  // dummy: expected_objs
                 );
         };
         auto generate_expected_pack = [&]() {
             return std::make_tuple(
                 std::get<2>(dataset), // A_dense
                 std::get<3>(dataset), // r
-                std::get<4>(dataset), // s
-                std::get<5>(dataset), // strong_set
-                std::get<6>(dataset), // lmdas
-                std::get<7>(dataset), // dummy: expected_betas
-                std::get<8>(dataset)  // dummy: expected_objs
+                std::get<4>(dataset), // alpha
+                std::get<5>(dataset), // penalty
+                std::get<6>(dataset), // strong_set
+                std::get<7>(dataset), // lmdas
+                std::get<8>(dataset), // dummy: expected_betas
+                std::get<9>(dataset)  // dummy: expected_objs
                 );
         };
         return std::make_tuple(generate_actual_pack, generate_expected_pack);
@@ -351,7 +359,10 @@ struct LassoGhostFixture
         Eigen::VectorXd r = A_dense * beta + Eigen::VectorXd::NullaryExpr(n_cols,
                 [&](auto) { return 0.2 * norm(gen); });
 
-        value_t s = 0.1;
+        value_t alpha = 0.1;
+        
+        Eigen::VectorXd penalty(n_cols);
+        penalty.setOnes();
 
         std::vector<int> strong_set(n_cols);
         std::iota(strong_set.begin(), strong_set.end(), 0);
@@ -359,7 +370,7 @@ struct LassoGhostFixture
         util::vec_type<value_t> lmdas(3);
         lmdas[0] = r.array().abs().maxCoeff();
         for (int i = 1; i < lmdas.size(); ++i) {
-            lmdas[i] = lmdas[i-1] * 0.001;
+            lmdas[i] = lmdas[i-1] * 0.7;
         }
 
         return std::make_tuple(
@@ -368,7 +379,8 @@ struct LassoGhostFixture
                 std::move(A),
                 std::move(A_dense),
                 std::move(r),
-                std::move(s),
+                std::move(alpha),
+                std::move(penalty),
                 std::move(strong_set),
                 std::move(lmdas)); 
     }
@@ -380,9 +392,10 @@ struct LassoGhostFixture
             return std::make_tuple(
                 std::get<2>(dataset), // A (block)
                 std::get<4>(dataset), // r
-                std::get<5>(dataset), // s
-                std::get<6>(dataset), // strong_set
-                std::get<7>(dataset), // lmdas
+                std::get<5>(dataset), // alpha
+                std::get<6>(dataset), // penalty
+                std::get<7>(dataset), // strong_set
+                std::get<8>(dataset), // lmdas
                 0, // dummy: expected_betas
                 0  // dummy: expected_objs
                 );
@@ -391,9 +404,10 @@ struct LassoGhostFixture
             return std::make_tuple(
                 std::get<3>(dataset), // A (block)
                 std::get<4>(dataset), // r
-                std::get<5>(dataset), // s
-                std::get<6>(dataset), // strong_set
-                std::get<7>(dataset), // lmdas
+                std::get<5>(dataset), // alpha
+                std::get<6>(dataset), // penalty
+                std::get<7>(dataset), // strong_set
+                std::get<8>(dataset), // lmdas
                 0, // dummy: expected_betas
                 0  // dummy: expected_objs
                 );
@@ -480,7 +494,10 @@ struct LassoBlockGhostFixture
         Eigen::VectorXd r = A_dense * beta + Eigen::VectorXd::NullaryExpr(n_cols,
                 [&](auto) { return 0.2 * norm(gen); });
 
-        value_t s = 0.1;
+        value_t alpha = 0.1;
+        
+        Eigen::VectorXd penalty(n_cols);
+        penalty.setOnes();
 
         std::vector<int> strong_set(n_cols);
         std::iota(strong_set.begin(), strong_set.end(), 0);
@@ -488,7 +505,7 @@ struct LassoBlockGhostFixture
         util::vec_type<value_t> lmdas(3);
         lmdas[0] = r.array().abs().maxCoeff();
         for (int i = 1; i < lmdas.size(); ++i) {
-            lmdas[i] = lmdas[i-1] * 0.001;
+            lmdas[i] = lmdas[i-1] * 0.7;
         }
 
         return std::make_tuple(
@@ -498,7 +515,8 @@ struct LassoBlockGhostFixture
                 std::move(A),
                 std::move(A_dense),
                 std::move(r),
-                std::move(s),
+                std::move(alpha),
+                std::move(penalty),
                 std::move(strong_set),
                 std::move(lmdas)); 
     }
@@ -510,9 +528,10 @@ struct LassoBlockGhostFixture
             return std::make_tuple(
                 std::get<3>(dataset), // A (block)
                 std::get<5>(dataset), // r
-                std::get<6>(dataset), // s
-                std::get<7>(dataset), // strong_set
-                std::get<8>(dataset), // lmdas
+                std::get<6>(dataset), // alpha
+                std::get<7>(dataset), // penalty
+                std::get<8>(dataset), // strong_set
+                std::get<9>(dataset), // lmdas
                 0, // dummy: expected_betas
                 0  // dummy: expected_objs
                 );
@@ -521,9 +540,10 @@ struct LassoBlockGhostFixture
             return std::make_tuple(
                 std::get<4>(dataset), // A (dense)
                 std::get<5>(dataset), // r
-                std::get<6>(dataset), // s
-                std::get<7>(dataset), // strong_set
-                std::get<8>(dataset), // lmdas
+                std::get<6>(dataset), // alpha
+                std::get<7>(dataset), // penalty
+                std::get<8>(dataset), // strong_set
+                std::get<9>(dataset), // lmdas
                 0, // dummy: expected_betas
                 0  // dummy: expected_objs
                 );
