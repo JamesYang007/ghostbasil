@@ -4,7 +4,8 @@
 #'              It must be one of four types: matrix, GhostMatrix__, BlockMatrix__, BlockGhostMatrix__.
 #'              For types of the form xxx__, see the function xxx.
 #' @param   r   correlation vector.
-#' @param   s   regularization to shrink A towards identity ((1-s) * A + s * I).
+#' @param   alpha   elastic net proportion.
+#' @param   penalty         penalty factor for each coefficient.
 #' @param   user.lambdas    user-specified sequence of lambdas. Will be sorted in decreasing order if not sorted already.
 #' @param   max.lambdas     maximum number of lambdas to compute solutions for.
 #'                          This defines the granularity of the lambda sequence 
@@ -35,7 +36,8 @@
 #'                          Note that if this value is too high, performance may worsen.
 #'                          A general rule of thumb is to use the number of physical (not logical) cores.
 #' @export
-ghostbasil <- function(A, r, s, 
+ghostbasil <- function(A, r, alpha=1,
+                      penalty=rep(1, times=length(r)),
                       user.lambdas=c(), 
                       max.lambdas=100,
                       lambdas.iter=10, 
@@ -48,6 +50,7 @@ ghostbasil <- function(A, r, s,
                       n.threads=0)
 {
     # proper casting of inputs
+    penalty <- as.numeric(penalty)
     user.lambdas <- as.numeric(user.lambdas)
     max.lambas <- as.integer(max.lambdas)
     lambdas.iter <- as.integer(lambdas.iter)
@@ -60,6 +63,15 @@ ghostbasil <- function(A, r, s,
     n.threads <- as.integer(n.threads)
 
     # input checking
+    if ((alpha < 0) | (alpha > 1)) {
+        stop("alpha must be in [0,1].")
+    }
+    if (length(penalty) != length(r)) {
+        stop("Penalty length must be same as that of r.")
+    }
+    if (sum(penalty < 0) > 0) {
+        stop("Penalty must all be non-negative.") 
+    }
     if (length(user.lambdas) != 0) {
         user.lambdas <- sort(user.lambdas, decreasing=T)
     }
@@ -106,7 +118,8 @@ ghostbasil <- function(A, r, s,
     out <- basil_cpp(
                     A=A,
                     r=r,
-                    s=s,
+                    alpha=alpha,
+                    penalty=penalty,
                     user_lmdas=user.lambdas,
                     max_n_lambdas=max.lambdas,
                     n_lambdas_iter=lambdas.iter,

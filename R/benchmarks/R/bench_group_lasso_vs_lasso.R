@@ -8,7 +8,7 @@ lasso.process.data <- function(data)
     data
 }
 
-lasso.bench <- function(n, ps, n.lmdas, times, seed, s=0.0, max.cds=100000, thr=1e-20, debug=F, ...)
+lasso.bench <- function(n, ps, n.lmdas, times, seed, alpha=1.0, max.cds=100000, thr=1e-20, debug=F, ...)
 {
     n.ps <- length(ps)
     out <- rep(0, times=n.ps)
@@ -16,6 +16,7 @@ lasso.bench <- function(n, ps, n.lmdas, times, seed, s=0.0, max.cds=100000, thr=
     for (i in 1:n.ps) {
         p <- ps[i]
         n.groups <- as.integer(p)
+        penalty <- rep(1, n.groups)
 
         print(paste("Iteration ", i, ": ", p, sep=''))
 
@@ -40,7 +41,7 @@ lasso.bench <- function(n, ps, n.lmdas, times, seed, s=0.0, max.cds=100000, thr=
         if (debug) {
             print(head(data$A))
             print(as.integer(data$groups-1))
-            print(s)
+            print(alpha)
             print(as.integer(data$strong.set-1))
             print(as.integer(data$strong.order-1))
             print(data$strong.A.diag)
@@ -58,7 +59,8 @@ lasso.bench <- function(n, ps, n.lmdas, times, seed, s=0.0, max.cds=100000, thr=
             {
                 models[[i]] <- lasso__(
                     data$A,
-                    s,
+                    alpha,
+                    penalty,
                     as.integer(data$strong.set-1),
                     as.integer(data$strong.order-1),
                     data$strong.A.diag,
