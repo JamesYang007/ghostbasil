@@ -108,7 +108,7 @@ write.csv.default(l.bench.times, 'lasso_times.csv')
 for (i in 1:length(ps)) {
     tmp <- max(abs(gl.out$models[[i]]$beta - l.out$models[[i]]$beta))
     print(tmp)
-    tmp <- (gl.out$models[[i]]$n_cds - l.out$models[[i]]$n_cds) / l.out$models[[i]]$n_cds * ps[i] ** 1.4
+    tmp <- (gl.out$models[[i]]$n_cds - l.out$models[[i]]$n_cds) 
     print(tmp)
 }
 gl.bench.times / l.bench.times

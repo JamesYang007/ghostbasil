@@ -779,45 +779,46 @@ void coordinate_descent(
         const auto ss_idx = *it;              // index to strong set
         const auto k = strong_set[ss_idx];    // actual group index
         const auto ss_value_begin = strong_begins[ss_idx]; // value begin index at ss_idx
-        const auto gsize = group_sizes[k]; // group size  
-        auto ak = strong_beta.segment(ss_value_begin, gsize); // corresponding beta
-        auto gk = strong_grad.segment(ss_value_begin, gsize); // corresponding residuals
-        const auto A_kk = strong_A_diag.segment(ss_value_begin, gsize);  // corresponding A diagonal 
+        auto& ak = strong_beta[ss_value_begin]; // corresponding beta
+        const auto gk = strong_grad[ss_value_begin]; // corresponding residuals
+        const auto A_kk = strong_A_diag[ss_value_begin];  // corresponding A diagonal 
         const auto pk = penalty[k];
 
-        const auto ak_old = ak[0];
-        const auto gk_shifted = gk[0] - A_kk[0] * ak_old;
+        const auto ak_old = ak;
+        const auto gk_shifted = gk - A_kk * ak_old;
 
         // update coefficient
         lasso::update_coefficient(
-            ak[0], A_kk[0], l1, l2, pk, gk_shifted
+            ak, A_kk, l1, l2, pk, gk_shifted
         );
 
-        if (ak_old == ak[0]) continue;
+        if (ak_old == ak) continue;
 
-        auto del = ak[0] - ak_old;
+        auto del = ak - ak_old;
 
         // update measure of convergence
-        lasso::update_convergence_measure(convg_measure, del, A_kk[0]);
+        lasso::update_convergence_measure(convg_measure, del, A_kk);
 
-        lasso::update_rsq(rsq, ak_old, ak[0], A_kk[0], gk_shifted);
+        lasso::update_rsq(rsq, ak_old, ak, A_kk, gk_shifted);
 
         // update gradient-like quantity
         
         // iterate over the groups of size 1
-        for (auto jt = g1_begin; jt != g1_end; ++jt) {
-            // TODO: optimize out if-else?
-            if (jt == it) continue;
+        for (auto jt = g1_begin; jt != it; ++jt) {
             const auto ss_idx_j = *jt;
             const auto j = strong_set[ss_idx_j];
-            const auto groupj_size = group_sizes[j];
-            const auto A_jk = A.block(
-                groups[j], groups[k], groupj_size, gsize
-            );
+            const auto A_jk = A.template block<1, 1>(groups[j], groups[k]);
             const util::vec_type<value_t, 1> del_k(del);
-            auto sg_j = strong_grad.segment(
-                strong_begins[ss_idx_j], groupj_size
-            );
+            auto sg_j = strong_grad.template segment<1>(strong_begins[ss_idx_j]);
+            update_residual<0, 0>(A_jk, del_k, sg_j, buffer1);
+        }
+        
+        for (auto jt = std::next(it); jt != g1_end; ++jt) {
+            const auto ss_idx_j = *jt;
+            const auto j = strong_set[ss_idx_j];
+            const auto A_jk = A.template block<1, 1>(groups[j], groups[k]);
+            const util::vec_type<value_t, 1> del_k(del);
+            auto sg_j = strong_grad.template segment<1>(strong_begins[ss_idx_j]);
             update_residual<0, 0>(A_jk, del_k, sg_j, buffer1);
         }
 
@@ -826,9 +827,7 @@ void coordinate_descent(
             const auto ss_idx_j = *jt;
             const auto j = strong_set[ss_idx_j];
             const auto groupj_size = group_sizes[j];
-            const auto A_jk = A.block(
-                groups[j], groups[k], groupj_size, gsize
-            );
+            const auto A_jk = A.col(groups[k]).segment(groups[j], groupj_size);
             const util::vec_type<value_t, 1> del_k(del);
             auto sg_j = strong_grad.segment(
                 strong_begins[ss_idx_j], groupj_size
@@ -884,6 +883,15 @@ void coordinate_descent(
         for (auto jt = g1_begin; jt != g1_end; ++jt) {
             const auto ss_idx_j = *jt;
             const auto j = strong_set[ss_idx_j];
+            const auto A_jk = A.row(groups[j]).segment(groups[k], gsize);
+            auto sg_j = strong_grad.template segment<1>(strong_begins[ss_idx_j]);
+            update_residual<0, 1>(A_jk, del, sg_j, buffer1);
+        }
+
+        // iterate over the groups of dynamic size
+        for (auto jt = g2_begin; jt != it; ++jt) {
+            const auto ss_idx_j = *jt;
+            const auto j = strong_set[ss_idx_j];
             const auto groupj_size = group_sizes[j];
             const auto A_jk = A.block(
                 groups[j], groups[k], groupj_size, gsize
@@ -891,12 +899,10 @@ void coordinate_descent(
             auto sg_j = strong_grad.segment(
                 strong_begins[ss_idx_j], groupj_size
             );
-            update_residual<0, 1>(A_jk, del, sg_j, buffer1);
+            update_residual<1, 1>(A_jk, del, sg_j, buffer1);
         }
 
-        // iterate over the groups of dynamic size
-        for (auto jt = g2_begin; jt != g2_end; ++jt) {
-            if (jt == it) continue;
+        for (auto jt = std::next(it); jt != g2_end; ++jt) {
             const auto ss_idx_j = *jt;
             const auto j = strong_set[ss_idx_j];
             const auto groupj_size = group_sizes[j];
