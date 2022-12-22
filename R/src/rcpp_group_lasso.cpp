@@ -8,8 +8,8 @@ using namespace Rcpp;
 List update_group_coeffs__(
     const Eigen::Map<Eigen::VectorXd> L,
     const Eigen::Map<Eigen::VectorXd> v,
-    double lmda,
-    double s,
+    double l1,
+    double l2,
     double tol=1e-8,
     size_t max_iters=1000
 )
@@ -22,7 +22,7 @@ List update_group_coeffs__(
         L.size(), L.size(), L.size()
     );
     update_coefficients(
-        L, v, lmda, s, tol, max_iters, x_sol, iters, 
+        L, v, l1, l2, tol, max_iters, x_sol, iters, 
         buffer_pack.buffer1, buffer_pack.buffer2
     );
     return List::create(
@@ -36,7 +36,8 @@ List group_lasso__(
     const Eigen::Map<Eigen::MatrixXd> A,
     const Eigen::Map<Eigen::VectorXi> groups,
     const Eigen::Map<Eigen::VectorXi> group_sizes,
-    double s,
+    double alpha,
+    const Eigen::Map<Eigen::VectorXd> penalty,
     const Eigen::Map<Eigen::VectorXi> strong_set,
     const Eigen::Map<Eigen::VectorXi> strong_g1,
     const Eigen::Map<Eigen::VectorXi> strong_g2,
@@ -85,7 +86,7 @@ List group_lasso__(
         int,
         int
     > pack(
-        A, groups, group_sizes, s, strong_set, strong_g1, strong_g2, strong_begins,
+        A, groups, group_sizes, alpha, penalty, strong_set, strong_g1, strong_g2, strong_begins,
         strong_A_diag, lmdas, max_cds, thr, newton_tol, newton_max_iters,
         rsq, strong_beta, strong_grad, active_set, active_g1, active_g2,
         active_begins, active_order,

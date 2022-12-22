@@ -35,9 +35,21 @@ def get_lasso_input(suffix):
 
 
 def get_group_lasso_input(suffix):
-    out = get_lasso_input(suffix) 
+    n = np.loadtxt(os.path.join(prefix, f"n_{suffix}.csv"), delimiter=',', dtype=int)
+    p = np.loadtxt(os.path.join(prefix, f"p_{suffix}.csv"), delimiter=',', dtype=int)
+    alpha = np.loadtxt(os.path.join(prefix, f"alpha_{suffix}.csv"), delimiter=',')
+    penalty = np.loadtxt(os.path.join(prefix, f"penalty_{suffix}.csv"), delimiter=',')
     groups = np.loadtxt(os.path.join(prefix, f"groups_{suffix}.csv"), delimiter=',', dtype=int)
-    return out + (groups,)
+    n_groups = len(groups) - 1
+    if penalty.size == 0:
+        penalty = np.ones(n_groups)
+    lmdas = np.loadtxt(os.path.join(prefix, f"lmda_{suffix}.csv"), delimiter=',')
+    lmdas.resize(lmdas.size)
+    strong_set = np.loadtxt(os.path.join(prefix, f"strong_set_{suffix}.csv"), delimiter=',', dtype=int)
+    if strong_set.size == 0:
+        strong_set = np.arange(0, n_groups, 1)
+
+    return n, p, alpha, lmdas, penalty, strong_set, groups
 
 
 def generate_lasso_data(n, p, seed=0):
@@ -110,19 +122,19 @@ def generate_lasso_solution(A, r, alpha, lmda, penalty, strong_set):
     return result, beta.value
 
 
-def generate_group_lasso_solution(A, r, groups, s, lmda, strong_set):
+def generate_group_lasso_solution(A, r, groups, alpha, penalty, lmda, strong_set):
     '''
     Generates solution for the group lasso problem.
     '''
     p = len(r)
     beta = cp.Variable(p)
     expr = (
-        ((1-s)/2) * cp.quad_form(beta, cp.Parameter(shape=A.shape, value=A, PSD=True))
+        0.5 * cp.quad_form(beta, cp.Parameter(shape=A.shape, value=A, PSD=True))
         - beta @ r
-        + s/2 * cp.sum(cp.square(beta))
     )
     for j in range(len(groups) - 1):
-        expr += lmda * cp.norm2(beta[groups[j]:groups[j+1]])
+        expr += lmda * (1-alpha) / 2 * penalty[j] * cp.sum(cp.square(beta[groups[j]:groups[j+1]]))
+        expr += lmda * alpha * penalty[j] * cp.norm2(beta[groups[j]:groups[j+1]])
     objective = cp.Minimize(expr)
     constraints = [
         beta[groups[j] : groups[j+1]] == 0
@@ -133,7 +145,7 @@ def generate_group_lasso_solution(A, r, groups, s, lmda, strong_set):
     result = prob.solve(
         solver=cp.SCS, 
         max_iters=10000,
-        eps=1e-16,
+        eps=1e-20,
     )
     return result, beta.value
 
@@ -148,40 +160,41 @@ def save_solution(A, r, penalty, strong_set, objs, betas, suffix=''):
 
 
 if __name__ == '__main__':
-    #n, p, s, lmdas, strong_set, groups = get_group_lasso_input(suffix)
-    #print(f'n: {n}')
-    #print(f'p: {p}')
-    #print(f's: {s}')
-    #print(f'lmdas: {lmdas}')
-    #print(f'strong_set: {strong_set}')
-    #print(f'groups: {groups}')
-    #print(f'suffix: {suffix}')
-    #A, r = generate_group_lasso_data(n, p, groups)
-    #print(A)
-    #print(r)
-    #objs = np.zeros(lmdas.size)
-    #betas = np.zeros((p, lmdas.size))
-    #for i in range(lmdas.size):
-    #    obj, beta = generate_group_lasso_solution(A, r, groups, s, lmdas[i], strong_set)
-    #    objs[i] = obj
-    #    betas[:, i] = beta
-    #save_solution(A, r, strong_set, objs, betas, suffix)
-
-    n, p, alpha, lmdas, penalty, strong_set = get_lasso_input(suffix)
+    n, p, alpha, lmdas, penalty, strong_set, groups = get_group_lasso_input(suffix)
     print(f'n: {n}')
     print(f'p: {p}')
     print(f'alpha: {alpha}')
     print(f'lmdas: {lmdas}')
     print(f'penalty: {penalty}')
     print(f'strong_set: {strong_set}')
+    print(f'groups: {groups}')
     print(f'suffix: {suffix}')
-    A, r = generate_lasso_data(n, p)
+    A, r = generate_group_lasso_data(n, p, groups)
     print(A)
     print(r)
     objs = np.zeros(lmdas.size)
     betas = np.zeros((p, lmdas.size))
     for i in range(lmdas.size):
-        obj, beta = generate_lasso_solution(A, r, alpha, lmdas[i], penalty, strong_set)
+        obj, beta = generate_group_lasso_solution(A, r, groups, alpha, penalty, lmdas[i], strong_set)
         objs[i] = obj
         betas[:, i] = beta
     save_solution(A, r, penalty, strong_set, objs, betas, suffix)
+
+    #n, p, alpha, lmdas, penalty, strong_set = get_lasso_input(suffix)
+    #print(f'n: {n}')
+    #print(f'p: {p}')
+    #print(f'alpha: {alpha}')
+    #print(f'lmdas: {lmdas}')
+    #print(f'penalty: {penalty}')
+    #print(f'strong_set: {strong_set}')
+    #print(f'suffix: {suffix}')
+    #A, r = generate_lasso_data(n, p)
+    #print(A)
+    #print(r)
+    #objs = np.zeros(lmdas.size)
+    #betas = np.zeros((p, lmdas.size))
+    #for i in range(lmdas.size):
+    #    obj, beta = generate_lasso_solution(A, r, alpha, lmdas[i], penalty, strong_set)
+    #    objs[i] = obj
+    #    betas[:, i] = beta
+    #save_solution(A, r, penalty, strong_set, objs, betas, suffix)

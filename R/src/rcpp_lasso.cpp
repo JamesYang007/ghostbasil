@@ -7,7 +7,8 @@ using namespace Rcpp;
 // [[Rcpp::export]]
 List lasso__(
     const Eigen::Map<Eigen::MatrixXd> A, 
-    double s, 
+    double alpha,
+    const Eigen::Map<Eigen::VectorXd> penalty,
     const Eigen::Map<Eigen::VectorXi> strong_set, 
     const std::vector<int>& strong_order,
     const Eigen::Map<Eigen::VectorXd> strong_A_diag,
@@ -35,7 +36,7 @@ List lasso__(
     LassoParamPack<
         Eigen::Map<Eigen::MatrixXd>, double, int, int
     > pack(
-        A, s, strong_set, strong_order, strong_A_diag,
+        A, alpha, penalty, strong_set, strong_order, strong_A_diag,
         lmdas, max_cds, thr, rsq, strong_beta, strong_grad,
         active_set, active_order, active_set_ordered,
         is_active, betas, rsqs, 0, 0

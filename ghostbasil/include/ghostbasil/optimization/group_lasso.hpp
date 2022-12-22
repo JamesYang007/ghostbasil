@@ -60,8 +60,9 @@ struct GroupLassoBufferPack
  *                      Must be of size I+1 where groups[I] = p.
  * @param   group_sizes vector of sizes of each group.
  *                      group_sizes[i] = size of group i.
- * @param   s           regularization of A towards identity. 
- *                      It is undefined behavior is s is not in [0,1].
+ * @param   alpha       elastic net proportion. 
+ *                      It is undefined behavior if alpha is not in [0,1].
+ * @param   penalty     penalty factor for each group.
  * @param   strong_set  strong set as a dense vector of indices in [0, I),
  *                      where I is the total number of groups.
  *                      strong_set[i] = ith strong group.
@@ -146,7 +147,8 @@ struct GroupLassoParamPack
     const AType* A = nullptr;
     map_cvec_index_t groups;
     map_cvec_index_t group_sizes;
-    value_t s;
+    value_t alpha;
+    map_cvec_value_t penalty;
     map_cvec_index_t strong_set;
     map_cvec_index_t strong_g1;
     map_cvec_index_t strong_g2;
@@ -174,6 +176,7 @@ struct GroupLassoParamPack
     explicit GroupLassoParamPack()
         : groups(nullptr, 0),
           group_sizes(nullptr, 0),
+          penalty(nullptr, 0),
           strong_set(nullptr, 0),
           strong_g1(nullptr, 0),
           strong_g2(nullptr, 0),
@@ -187,7 +190,7 @@ struct GroupLassoParamPack
     {}
          
     template <class GroupsType, class GroupSizesType,
-              class SSType, class SG1Type,
+              class PenaltyType, class SSType, class SG1Type,
               class SG2Type, class SBeginsType, 
               class SADType, class LmdasType,
               class SBType, class SGType,
@@ -196,7 +199,8 @@ struct GroupLassoParamPack
         const AType& A_,
         const GroupsType& groups_, 
         const GroupSizesType& group_sizes_,
-        value_t s_, 
+        value_t alpha_, 
+        const PenaltyType& penalty_,
         const SSType& strong_set_, 
         const SG1Type& strong_g1_,
         const SG2Type& strong_g2_,
@@ -224,7 +228,8 @@ struct GroupLassoParamPack
         : A(&A_),
           groups(groups_.data(), groups_.size()),
           group_sizes(group_sizes_.data(), group_sizes_.size()),
-          s(s_),
+          alpha(alpha_),
+          penalty(penalty_.data(), penalty_.size()),
           strong_set(strong_set_.data(), strong_set_.size()),
           strong_g1(strong_g1_.data(), strong_g1_.size()),
           strong_g2(strong_g2_.data(), strong_g2_.size()),
@@ -329,40 +334,46 @@ void get_active_values(
  * Computes the objective that we wish to minimize.
  * The objective is the quadratic loss + group-lasso regularization:
  * \f[
- *      \frac{1-s}{2} \sum_{ij} x_i^\top A_{ij} x_j - \sum_{i} x_i^\top r 
- *          + \lambda \sum_i ||x_i||_2 + \frac{s}{2} \sum_i ||x_i||_2^2
+ *      \frac{1}{2} \sum_{ij} x_i^\top A_{ij} x_j - \sum_{i} x_i^\top r 
+ *          + \lambda \sum_i p_i \left(
+ *              \alpha ||x_i||_2 + \frac{1-\alpha}{2} ||x_i||_2^2
+ *              \right)
  * \f]
  *          
  * @param   A       any square (p, p) matrix. 
  * @param   r       any vector (p,).
  * @param   groups  see description in GroupLassoParamPack.
  * @param   group_sizes see description in GroupLassoParamPack.
- * @param   s       PGR regularization.
+ * @param   alpha       elastic net proportion.
+ * @param   penalty penalty factor for each group.
  * @param   lmda    group-lasso regularization.
  * @param   beta    coefficient vector.
  */
 template <class AType, class RType, 
           class GroupsType, class GroupSizesType,
-          class ValueType, class BetaType>
+          class ValueType, class PenaltyType, class BetaType>
 GHOSTBASIL_STRONG_INLINE 
 auto objective(
     const AType& A,
     const RType& r,
     const GroupsType& groups,
     const GroupSizesType& group_sizes,
-    ValueType s,
+    ValueType alpha,
+    const PenaltyType& penalty,
     ValueType lmda,
     const BetaType& beta)
 {
-    ValueType penalty = 0.0;
+    ValueType p_ = 0.0;
     for (size_t j = 0; j < groups.size()-1; ++j) {
         const auto begin = groups[j];
         const auto size = group_sizes[j];
-        penalty += beta.segment(begin, size).norm();
+        const auto b_norm2 = beta.segment(begin, size).norm();
+        p_ += penalty[j] * b_norm2 * (
+            alpha + (1-alpha) / 2 * b_norm2
+        );
     }
-    penalty *= lmda;
-    return (1-s)/2 * A.quad_form(beta) - beta.dot(r) 
-            + s/2 * beta.squaredNorm() + penalty;
+    p_ *= lmda;
+    return 0.5 * A.quad_form(beta) - beta.dot(r) + p_;
 }
 
 /**
@@ -403,30 +414,29 @@ void update_rsq(
     const DelType& del,
     const CoeffNewType& coeff_new,
     const VarType& var,
-    const RType& r,
-    ValueType s
+    const RType& r
 )
 {
     const auto sum = 2 * coeff_new.array() - del.array();
     rsq += (
-        del.array() * (2 * r.array() - ((1-s) * var.array() + s) * sum)
+        del.array() * (2 * r.array() - var.array() * sum)
     ).sum();
 }
 
 /**
  * Solves the solution for the equation (w.r.t. \f$x\f$):
  * \f[
- *      minimize \frac{1-s}{2} x^\top L x - x^\top v 
- *          + \lambda ||x||_2 + \frac{s}{2} ||x||_2^2
+ *      minimize \frac{1}{2} x^\top L x - x^\top v 
+ *          + l_1 ||x||_2 + \frac{l_2}{2} ||x||_2^2
  * \f]
  *      
  * @param   L       vector representing a diagonal PSD matrix.
  *                  Must have max(L + s) > 0. 
  *                  L.size() <= buffer1.size().
  * @param   v       any vector.  
- * @param   lmda    group-lasso regularization value. Must be >= 0.
- * @param   s       PGR regularization value. Must be in [0,1].
- * @param   tol     Newton's method tolerance of closeness to 0.
+ * @param   l1      L2-norm penalty. Must be >= 0.
+ * @param   l2      L2 penalty. Must be >= 0.
+ * @param   tol         Newton's method tolerance of closeness to 0.
  * @param   max_iters   maximum number of iterations of Newton's method.
  * @param   x           solution vector.
  * @param   iters       number of Newton's method iterations taken.
@@ -439,8 +449,8 @@ GHOSTBASIL_STRONG_INLINE
 void update_coefficients(
     const LType& L,
     const VType& v,
-    ValueType lmda,
-    ValueType s,
+    ValueType l1,
+    ValueType l2,
     ValueType tol,
     size_t max_iters,
     XType& x,
@@ -453,14 +463,18 @@ void update_coefficients(
 
     iters = 0;
 
-    // Easy case: ||v||_2 <= lmda -> x = 0
+    // Easy case: ||v||_2 <= l1 -> x = 0
     const auto v_l2 = v.norm();
-    if (v_l2 <= lmda) {
+    if (v_l2 <= l1) {
         x.setZero();
         return;
     }
     
-    // Difficult case: ||v||_2 > lmda
+    // Difficult case: ||v||_2 > l1
+    if (l1 <= 0.0) {
+        x.array() = v.array() / (L.array() + l2);
+        return;
+    }
     
     // First solve for h := ||x||_2
     auto vbuffer1 = buffer1.head(L.size());
@@ -468,11 +482,11 @@ void update_coefficients(
 
     // Find good initialization
     // The following helps tremendously if the resulting h > 0.
-    vbuffer1.array() = ((1-s) * L.array() + s);
-    const value_t b = lmda * vbuffer1.sum();
+    vbuffer1.array() = (L.array() + l2);
+    const value_t b = l1 * vbuffer1.sum();
     const value_t a = vbuffer1.squaredNorm();
     const value_t v_l1 = v.template lpNorm<1>();
-    const value_t c = lmda * lmda * L.size() - v_l1 * v_l1;
+    const value_t c = l1 * l1 * L.size() - v_l1 * v_l1;
     const value_t zero = 0.0;
     const value_t discr = b*b - a*c;
     auto h = (discr > -1e-12) ? 
@@ -487,7 +501,7 @@ void update_coefficients(
     value_t dfh;
 
     const auto newton_update = [&]() {
-        vbuffer2.array() = vbuffer1.array() * h + lmda;
+        vbuffer2.array() = vbuffer1.array() * h + l1;
         x.array() = (v.array() / vbuffer2.array()).square();
         fh = x.sum() - 1;
         dfh = -2 * (
@@ -607,6 +621,7 @@ struct UpdateResidual<1, 1>
         BufferType& buffer
     )
     {
+        // TODO: performance may be boosted with grad_i.noalias()
         auto buffer_ = buffer.head(A_ij.rows());
         buffer_.noalias() = A_ij * del_j;
         grad_i -= buffer_;
@@ -672,7 +687,7 @@ struct UpdateResidual<-1, j_pol>
  * This function assumes that i != j.
  * The current residual vector for block i is:
  * \f[
- *      r_i - (1-s) \sum_{k\neq i} A_{ik} \beta_k
+ *      r_i - \sum_{k\neq i} A_{ik} \beta_k
  * \f]
  *
  * The template parameters denote policies for the two group sizes.
@@ -684,7 +699,7 @@ struct UpdateResidual<-1, j_pol>
  * @tparam  i_pol       policy for group i based on size.
  * @tparam  j_pol       policy for group j based on size.
  * @param   A_ij        matrix in objective.
- * @param   del_j       (1-s) * (\beta_j^{new} - \beta_j^{old}).
+ * @param   del_j       \beta_j^{new} - \beta_j^{old}.
  * @param   grad_i      vector of current residual vector for block i.
  */
 template <int i_pol=-1, int j_pol=-1,
@@ -707,10 +722,13 @@ void update_residual(
  * One blockwise coordinate descent loop to solve the objective.
  *  
  * @param   pack            see GroupLassoParamPack.
- * @param   begin           begin iterator to indices into strong set, i.e.
+ * @param   g1_begin        begin iterator to indices into strong set of group type 1, i.e.
  *                          strong_set[*begin] is the current group to descend.
- * @param   end             end iterator to indices into strong set.
- * @param   lmda    group-lasso regularization value. Must be >= 0.
+ * @param   g1_end          end iterator to indices into strong set of group type 1.
+ * @param   g2_begin        begin iterator to indices into strong set of group type 2, i.e.
+ *                          strong_set[*begin] is the current group to descend.
+ * @param   g2_end          end iterator to indices into strong set of group type 2.
+ * @param   lmda_idx        index into lambda sequence.
  * @param   convg_measure   stores the convergence measure of the call.
  * @param   buffer1         see update_coefficient.
  * @param   buffer2         see update_coefficient.
@@ -727,7 +745,7 @@ void coordinate_descent(
     G1Iter g1_end,
     G2Iter g2_begin,
     G2Iter g2_end,
-    ValueType lmda,
+    size_t lmda_idx,
     ValueType& convg_measure,
     BufferType& buffer1,
     BufferType& buffer2,
@@ -739,19 +757,21 @@ void coordinate_descent(
     using value_t = typename pack_t::value_t;
 
     const auto& A = *pack.A;
+    const auto& penalty = pack.penalty;
     const auto& strong_set = pack.strong_set;
     const auto& strong_begins = pack.strong_begins;
     const auto& strong_A_diag = pack.strong_A_diag;
     const auto& groups = pack.groups;
     const auto& group_sizes = pack.group_sizes;
-    const auto s = pack.s;
+    const auto alpha = pack.alpha;
+    const auto lmda = pack.lmdas[lmda_idx];
+    const auto l1 = lmda * alpha;
+    const auto l2 = lmda * (1-alpha);
     const auto newton_tol = pack.newton_tol;
     const auto newton_max_iters = pack.newton_max_iters;
     auto& strong_beta = pack.strong_beta;
     auto& strong_grad = pack.strong_grad;
     auto& rsq = pack.rsq;
-
-    const auto sc = 1-s;
 
     convg_measure = 0;
     // iterate over the groups of size 1
@@ -763,14 +783,14 @@ void coordinate_descent(
         auto ak = strong_beta.segment(ss_value_begin, gsize); // corresponding beta
         auto gk = strong_grad.segment(ss_value_begin, gsize); // corresponding residuals
         const auto A_kk = strong_A_diag.segment(ss_value_begin, gsize);  // corresponding A diagonal 
+        const auto pk = penalty[k];
 
         const auto ak_old = ak[0];
-        const auto var = sc * A_kk[0] + s;
-        const auto gk_shifted = gk[0] - var * ak_old;
+        const auto gk_shifted = gk[0] - A_kk[0] * ak_old;
 
         // update coefficient
         lasso::update_coefficient(
-            ak[0], A_kk[0], gk_shifted, s, sc, lmda
+            ak[0], A_kk[0], l1, l2, pk, gk_shifted
         );
 
         if (ak_old == ak[0]) continue;
@@ -780,13 +800,13 @@ void coordinate_descent(
         // update measure of convergence
         lasso::update_convergence_measure(convg_measure, del, A_kk[0]);
 
-        lasso::update_rsq(rsq, ak_old, ak[0], A_kk[0], gk_shifted, s);
+        lasso::update_rsq(rsq, ak_old, ak[0], A_kk[0], gk_shifted);
 
         // update gradient-like quantity
-        del *= sc;
-
+        
         // iterate over the groups of size 1
         for (auto jt = g1_begin; jt != g1_end; ++jt) {
+            // TODO: optimize out if-else?
             if (jt == it) continue;
             const auto ss_idx_j = *jt;
             const auto j = strong_set[ss_idx_j];
@@ -829,6 +849,7 @@ void coordinate_descent(
         auto ak = strong_beta.segment(ss_value_begin, gsize); // corresponding beta
         auto gk = strong_grad.segment(ss_value_begin, gsize); // corresponding residuals
         const auto A_kk = strong_A_diag.segment(ss_value_begin, gsize);  // corresponding A diagonal 
+        const auto pk = penalty[k];
 
         // save old beta in buffer
         auto ak_old = buffer3.head(ak.size());
@@ -837,7 +858,7 @@ void coordinate_descent(
         // update group coefficients
         size_t iters;
         update_coefficients(
-            A_kk, gk, lmda, s, 
+            A_kk, gk, l1 * pk, l2 * pk, 
             newton_tol, newton_max_iters, 
             ak, iters, buffer1, buffer2
         );
@@ -855,10 +876,9 @@ void coordinate_descent(
         update_convergence_measure(convg_measure, del, A_kk);
 
         // update rsq
-        update_rsq(rsq, del, ak, A_kk, gk, s);
+        update_rsq(rsq, del, ak, A_kk, gk);
 
         // update gradient-like quantity
-        del.array() *= sc;
         
         // iterate over the groups of size 1
         for (auto jt = g1_begin; jt != g1_end; ++jt) {
@@ -939,10 +959,8 @@ void group_lasso_active(
     const auto& active_begins = *pack.active_begins;
     const auto& strong_beta = pack.strong_beta;
     const auto& is_active = pack.is_active;
-    const auto s = pack.s;
     const auto thr = pack.thr;
     const auto max_cds = pack.max_cds;
-    const auto lmda = pack.lmdas[lmda_idx];
     auto& strong_grad = pack.strong_grad;
     auto& n_cds = pack.n_cds;
 
@@ -986,7 +1004,7 @@ void group_lasso_active(
         value_t convg_measure;
         coordinate_descent(
             pack, ag1_begin, ag1_end, ag2_begin, ag2_end,
-            lmda, convg_measure, buffer1, buffer2, buffer3
+            lmda_idx, convg_measure, buffer1, buffer2, buffer3
         );
         if (convg_measure < thr) break;
         if (n_cds >= max_cds) throw util::max_cds_error(lmda_idx);
@@ -1010,9 +1028,6 @@ void group_lasso_active(
     if ((ab_diff_view.size() == 0) ||
         (active_set.size() == strong_set.size())) return;
 
-    const auto sc = 1-s;
-    ab_diff_view.array() *= sc;
-    
     const auto sg1_begin = strong_g1.data();
     const auto sg1_end = strong_g1.data() + strong_g1.size();
     const auto sg2_begin = strong_g2.data();
@@ -1207,8 +1222,6 @@ inline void fit(
     };
 
     for (size_t l = 0; l < lmdas.size(); ++l) {
-        const auto lmda = lmdas[l];
-
         if (lasso_active_called) {
             lasso_active_and_update(l);
         }
@@ -1222,7 +1235,7 @@ inline void fit(
                     pack,
                     strong_g1.data(), strong_g1.data() + strong_g1.size(),
                     strong_g2.data(), strong_g2.data() + strong_g2.size(),
-                    lmda, convg_measure,
+                    l, convg_measure,
                     buffer_pack.buffer1,
                     buffer_pack.buffer2,
                     buffer_pack.buffer3,
@@ -1290,8 +1303,6 @@ inline void fit(
 
 /**
  * TODO:
- *  - Time to think about better use of vectorization!
- *      - think about splitting the beta/grad values into active and non-active
  *  - (nothing to change in current impl of lasso but basil will need to know this)
  *      modify A to have Q in the diagonal blocks 
  *      and off-diagonals are Q_i^T A_{ij} Q_j among the strong variables.

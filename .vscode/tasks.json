@@ -71,7 +71,7 @@
                 "dbg",
                 "//ghostbasil/test:optimization",
                 //"--",
-                //"--gtest_filter='BasilFixture.basil_n_le_p'",
+                //"--gtest_filter='GroupLassoFixture.group_lasso_n_le_p_partial'",
             ],
             "group": {
                 "kind": "test",

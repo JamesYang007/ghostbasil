@@ -18,8 +18,8 @@ namespace lasso {
  *                      This matrix only needs to satisfy the properties
  *                      when looking at the sub-matrix of all strong_set features.
  * @param   alpha       elastic net proportion. 
+ *                      It is undefined behavior if alpha is not in [0,1].
  * @param   penalty     penalty factor for each feature.
- *                      It is undefined behavior is s is not in [0,1].
  * @param   strong_set  strong set as a dense vector of indices in [0, p).
  *                      strong_set[i] = ith strong feature.
  * @param   strong_order    order of strong_set that results in sorted (ascending) values.
