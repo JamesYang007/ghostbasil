@@ -12,7 +12,8 @@ template <class AType>
 List basil__(
         const AType& A, 
         const Eigen::Map<Eigen::VectorXd> r,
-        double s,
+        double alpha,
+        const Eigen::Map<Eigen::VectorXd> penalty,
         const Eigen::Map<Eigen::VectorXd> user_lmdas,
         size_t max_n_lambdas,
         size_t n_lambdas_iter,
@@ -50,7 +51,7 @@ List basil__(
 
     try {
         basil(
-                A, r, s, user_lmdas, max_n_lambdas, n_lambdas_iter,
+                A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter,
                 strong_size, delta_strong_size, max_strong_size, max_n_cds, thr, 
                 min_ratio, n_threads,
                 betas, lmdas, rsqs,
@@ -82,7 +83,8 @@ List basil__(
 List basil_dense__(
         const Eigen::Map<Eigen::MatrixXd> A,
         const Eigen::Map<Eigen::VectorXd> r,
-        double s,
+        double alpha,
+        const Eigen::Map<Eigen::VectorXd> penalty,
         const Eigen::Map<Eigen::VectorXd> user_lmdas,
         size_t max_n_lambdas,
         size_t n_lambdas_iter,
@@ -94,7 +96,7 @@ List basil_dense__(
         double min_ratio,
         size_t n_threads)
 {
-    return basil__(A, r, s, user_lmdas, max_n_lambdas,
+    return basil__(A, r, alpha, penalty, user_lmdas, max_n_lambdas,
             n_lambdas_iter, strong_size, delta_strong_size,
             max_strong_size, max_n_cds, thr, min_ratio, n_threads);
 }
@@ -103,7 +105,8 @@ List basil_dense__(
 List basil_block_dense__(
         SEXP A,
         const Eigen::Map<Eigen::VectorXd> r,
-        double s,
+        double alpha,
+        const Eigen::Map<Eigen::VectorXd> penalty,
         const Eigen::Map<Eigen::VectorXd> user_lmdas,
         size_t max_n_lambdas,
         size_t n_lambdas_iter,
@@ -121,7 +124,7 @@ List basil_block_dense__(
     const auto& bm = bmw.internal();
     
     return basil__(
-            bm, r, s, user_lmdas, max_n_lambdas,
+            bm, r, alpha, penalty, user_lmdas, max_n_lambdas,
             n_lambdas_iter, strong_size, delta_strong_size,
             max_strong_size, max_n_cds, thr, min_ratio, n_threads);
 }
@@ -130,7 +133,8 @@ List basil_block_dense__(
 List basil_ghost__(
         SEXP A,
         const Eigen::Map<Eigen::VectorXd> r,
-        double s,
+        double alpha,
+        const Eigen::Map<Eigen::VectorXd> penalty,
         const Eigen::Map<Eigen::VectorXd> user_lmdas,
         size_t max_n_lambdas,
         size_t n_lambdas_iter,
@@ -148,7 +152,7 @@ List basil_ghost__(
     const auto& gm = gmw.internal();
     
     return basil__(
-            gm, r, s, user_lmdas, max_n_lambdas,
+            gm, r, alpha, penalty, user_lmdas, max_n_lambdas,
             n_lambdas_iter, strong_size, delta_strong_size,
             max_strong_size, max_n_cds, thr, min_ratio, n_threads);
 }
@@ -157,7 +161,8 @@ List basil_ghost__(
 List basil_block_ghost__(
         SEXP A,
         const Eigen::Map<Eigen::VectorXd> r,
-        double s,
+        double alpha,
+        const Eigen::Map<Eigen::VectorXd> penalty,
         const Eigen::Map<Eigen::VectorXd> user_lmdas,
         size_t max_n_lambdas,
         size_t n_lambdas_iter,
@@ -175,7 +180,7 @@ List basil_block_ghost__(
     const auto& bgm = bgmw.internal();
     
     return basil__(
-            bgm, r, s, user_lmdas, max_n_lambdas,
+            bgm, r, alpha, penalty, user_lmdas, max_n_lambdas,
             n_lambdas_iter, strong_size, delta_strong_size,
             max_strong_size, max_n_cds, thr, min_ratio, n_threads);
 }
@@ -184,7 +189,8 @@ List basil_block_ghost__(
 List objective_sparse__(
         const Eigen::Map<Eigen::MatrixXd> A,
         const Eigen::Map<Eigen::VectorXd> r,
-        double s,
+        const Eigen::Map<Eigen::VectorXd> penalty,
+        double alpha,
         double lmda,
         const Eigen::Map<Eigen::SparseMatrix<double>> beta)
 {
@@ -193,7 +199,7 @@ List objective_sparse__(
     double out = 0;
     std::string error;
     try {
-        out = objective(A, r, s, lmda, beta.col(0));
+        out = objective(A, r, penalty, alpha, lmda, beta.col(0));
     }
     catch (const std::exception& e) {
         error = e.what();
@@ -208,7 +214,8 @@ List objective_sparse__(
 List objective_dense__(
         const Eigen::Map<Eigen::MatrixXd> A,
         const Eigen::Map<Eigen::VectorXd> r,
-        double s,
+        const Eigen::Map<Eigen::VectorXd> penalty,
+        double alpha,
         double lmda,
         const Eigen::Map<Eigen::VectorXd> beta)
 {
@@ -217,7 +224,7 @@ List objective_dense__(
     double out = 0;
     std::string error;
     try {
-        out = objective(A, r, s, lmda, beta);
+        out = objective(A, r, penalty, alpha, lmda, beta);
     }
     catch (const std::exception& e) {
         error = e.what();

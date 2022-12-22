@@ -13,7 +13,7 @@ struct GroupLassoFixture
     const double tol = 1e-8;
     const double thr = 1e-24;
     const size_t max_cds = 10000;
-    const double newton_tol = 1e-10;
+    const double newton_tol = 1e-12;
     const size_t newton_max_iters = 10000;
 
     template <class GenerateFType>
@@ -24,11 +24,12 @@ struct GroupLassoFixture
         auto&& A = std::get<0>(dataset);
         auto&& r = std::get<1>(dataset);
         auto&& groups = std::get<2>(dataset);
-        auto&& s = std::get<3>(dataset);
-        auto&& strong_set = std::get<4>(dataset);
-        auto&& lmdas = std::get<5>(dataset);
-        auto&& expected_betas = std::get<6>(dataset);
-        auto&& expected_objs = std::get<7>(dataset);
+        auto&& alpha = std::get<3>(dataset);
+        auto&& penalty = std::get<4>(dataset);
+        auto&& strong_set = std::get<5>(dataset);
+        auto&& lmdas = std::get<6>(dataset);
+        auto&& expected_betas = std::get<7>(dataset);
+        auto&& expected_objs = std::get<8>(dataset);
         
         const auto n_groups = groups.size() - 1;
         util::vec_type<int> group_sizes =
@@ -103,7 +104,7 @@ struct GroupLassoFixture
             int,
             int
         > pack(
-            A, groups, group_sizes, s, strong_set, strong_g1, strong_g2, strong_begins,
+            A, groups, group_sizes, alpha, penalty, strong_set, strong_g1, strong_g2, strong_begins,
             strong_A_diag, lmdas, max_cds, thr, newton_tol, newton_max_iters,
             rsq, strong_beta, strong_grad, active_set, 
             active_g1, active_g2, active_begins, active_order,
@@ -124,7 +125,8 @@ struct GroupLassoFixture
         const auto& group_sizes = pack.group_sizes;
         const auto& lmdas = pack.lmdas;
         const auto& betas = *pack.betas;
-        const auto s = pack.s;
+        const auto alpha = pack.alpha;
+        const auto& penalty = pack.penalty;
         const auto n_cds = pack.n_cds;
         const auto n_lmdas = pack.n_lmdas;
 
@@ -140,7 +142,7 @@ struct GroupLassoFixture
             const auto& actual = betas[i];
             auto expected = expected_betas.col(i);
 
-            const auto obj = objective(A, r, groups, group_sizes, s, lmdas[i], actual);
+            const auto obj = objective(A, r, groups, group_sizes, alpha, penalty, lmdas[i], actual);
             EXPECT_NEAR(expected_objs[i], obj, tol);
             EXPECT_EQ(actual.size(), expected.size());
             for (size_t i = 0; i < expected.size(); ++i) {

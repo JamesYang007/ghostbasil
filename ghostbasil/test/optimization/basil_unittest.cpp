@@ -16,7 +16,7 @@ struct BasilFixture
     : ::testing::Test
 {
     const double tol = 2e-8;
-    const double thr = 1e-16;
+    const double thr = 1e-24;
     const size_t max_cds = 10000;
     const size_t max_n_lambdas = 3;
     const size_t n_lambdas_iter = 2;
@@ -31,10 +31,11 @@ struct BasilFixture
         auto dataset = generate_dataset();
         auto& A = std::get<0>(dataset);
         auto& r = std::get<1>(dataset);
-        auto& s = std::get<2>(dataset);
-        auto& expected_lmdas = std::get<4>(dataset);
-        auto& expected_betas = std::get<5>(dataset);
-        auto& expected_objs = std::get<6>(dataset);
+        auto& alpha = std::get<2>(dataset);
+        auto& penalty = std::get<3>(dataset);
+        auto& expected_lmdas = std::get<5>(dataset);
+        auto& expected_betas = std::get<6>(dataset);
+        auto& expected_objs = std::get<7>(dataset);
 
         std::vector<double> user_lmdas;
         size_t max_strong_size_local = max_strong_size;
@@ -49,7 +50,7 @@ struct BasilFixture
         std::vector<double> lmdas;
         std::vector<double> rsqs;
         return std::make_tuple(
-                A, r, s, user_lmdas, max_strong_size_local,
+                A, r, alpha, penalty, user_lmdas, max_strong_size_local,
                 betas, lmdas, rsqs,
                 expected_betas, expected_lmdas, expected_objs);
     }
@@ -61,23 +62,24 @@ struct BasilFixture
             size_t strong_size = 1,
             size_t delta_strong_size = 1,
             double min_ratio = 1e-6,
-            bool do_user = false)
+            bool do_user = true)
     {
         auto input = make_input(generate_dataset, max_strong_size, do_user);
         auto& A = std::get<0>(input);
         auto& r = std::get<1>(input);
-        auto& s = std::get<2>(input);
-        auto& user_lmdas = std::get<3>(input);
-        max_strong_size = std::get<4>(input);
-        auto& betas = std::get<5>(input);
-        auto& lmdas = std::get<6>(input);
-        auto& rsqs = std::get<7>(input);
-        auto& expected_betas = std::get<8>(input);
-        auto& expected_lmdas = std::get<9>(input);
-        auto& expected_objs = std::get<10>(input);
+        auto& alpha = std::get<2>(input);
+        auto& penalty = std::get<3>(input);
+        auto& user_lmdas = std::get<4>(input);
+        max_strong_size = std::get<5>(input);
+        auto& betas = std::get<6>(input);
+        auto& lmdas = std::get<7>(input);
+        auto& rsqs = std::get<8>(input);
+        auto& expected_betas = std::get<9>(input);
+        auto& expected_lmdas = std::get<10>(input);
+        auto& expected_objs = std::get<11>(input);
 
         try {
-            basil(A, r, s, user_lmdas, max_n_lambdas, n_lambdas_iter,
+            basil(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter,
                   strong_size, delta_strong_size, max_strong_size, max_cds, thr, 
                   min_ratio, n_threads,
                   betas, lmdas, rsqs);
@@ -102,7 +104,8 @@ struct BasilFixture
             auto expected = expected_betas.col(i);
 
             EXPECT_DOUBLE_EQ(lmdas_i, expected_lmdas[i]);
-            EXPECT_NEAR(expected_objs[i], objective(A, r, s, lmdas_i, betas_i), tol);
+            const auto obj = objective(A, r, penalty, alpha, lmdas_i, betas_i);
+            EXPECT_NEAR(expected_objs[i], obj, tol);
             EXPECT_EQ(betas_i.size(), expected.size());
             for (size_t i = 0; i < expected.size(); ++i) {
                 EXPECT_NEAR(expected[i], betas_i.coeff(i), tol);
@@ -155,11 +158,12 @@ struct BasilCompareFixture
         auto dataset = generate_dataset();
         auto&& A = std::get<0>(dataset);
         auto&& r = std::get<1>(dataset);
-        auto&& s = std::get<2>(dataset);
-        auto&& strong_size = std::get<3>(dataset);
-        auto&& delta_strong_size = std::get<4>(dataset);
-        auto&& max_strong_size = std::get<5>(dataset);
-        auto&& min_ratio = std::get<6>(dataset);
+        auto&& alpha = std::get<2>(dataset);
+        auto&& penalty = std::get<3>(dataset);
+        auto&& strong_size = std::get<4>(dataset);
+        auto&& delta_strong_size = std::get<5>(dataset);
+        auto&& max_strong_size = std::get<6>(dataset);
+        auto&& min_ratio = std::get<7>(dataset);
 
         std::vector<double> user_lmdas;
         std::vector<Eigen::SparseVector<double>> betas;
@@ -167,7 +171,7 @@ struct BasilCompareFixture
         std::vector<double> rsqs;
 
         return std::make_tuple(
-                A, r, s, user_lmdas, strong_size, delta_strong_size, 
+                A, r, alpha, penalty, user_lmdas, strong_size, delta_strong_size, 
                 max_strong_size, min_ratio,
                 betas, lmdas, rsqs);
     }
@@ -177,17 +181,18 @@ struct BasilCompareFixture
     {
         auto&& A = std::get<0>(dataset);
         auto&& r = std::get<1>(dataset);
-        auto&& s = std::get<2>(dataset);
-        auto&& user_lmdas = std::get<3>(dataset);
-        auto&& strong_size = std::get<4>(dataset);
-        auto&& delta_strong_size = std::get<5>(dataset);
-        auto&& max_strong_size = std::get<6>(dataset);
-        auto&& min_ratio = std::get<7>(dataset);
-        auto betas = std::get<8>(dataset);
-        auto lmdas = std::get<9>(dataset);
-        auto rsqs = std::get<10>(dataset);
+        auto&& alpha = std::get<2>(dataset);
+        auto&& penalty = std::get<3>(dataset);
+        auto&& user_lmdas = std::get<4>(dataset);
+        auto&& strong_size = std::get<5>(dataset);
+        auto&& delta_strong_size = std::get<6>(dataset);
+        auto&& max_strong_size = std::get<7>(dataset);
+        auto&& min_ratio = std::get<8>(dataset);
+        auto betas = std::get<9>(dataset);
+        auto lmdas = std::get<10>(dataset);
+        auto rsqs = std::get<11>(dataset);
 
-        basil(A, r, s, user_lmdas, max_n_lambdas, n_lambdas_iter,
+        basil(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter,
               strong_size, delta_strong_size, max_strong_size, max_cds, thr, 
               min_ratio, n_threads,
               betas, lmdas, rsqs);
@@ -275,14 +280,17 @@ struct BasilBlockFixture
         Eigen::VectorXd r = A_dense * beta + Eigen::VectorXd::NullaryExpr(n_cols,
                 [&](auto) { return 0.2 * norm(gen); });
 
-        value_t s = 0.1;
+        value_t alpha = 0.1;
+        Eigen::VectorXd penalty(n_cols);
+        penalty.setOnes();
 
         return std::make_tuple(
                 std::move(mat_list), // must return also since A references it
                 std::move(A),
                 std::move(A_dense),
                 std::move(r),
-                std::move(s),
+                std::move(alpha),
+                std::move(penalty),
                 strong_size,
                 delta_strong_size,
                 max_strong_size,
@@ -296,22 +304,24 @@ struct BasilBlockFixture
             return std::make_tuple(
                 std::get<1>(dataset), // A (block)
                 std::get<3>(dataset), // r
-                std::get<4>(dataset), // s
-                std::get<5>(dataset),
+                std::get<4>(dataset), // alpha
+                std::get<5>(dataset), // penalty
                 std::get<6>(dataset),
                 std::get<7>(dataset),
-                std::get<8>(dataset)
+                std::get<8>(dataset),
+                std::get<9>(dataset)
                 );
         };
         auto generate_expected_pack = [&]() {
             return std::make_tuple(
                 std::get<2>(dataset), // A_dense
                 std::get<3>(dataset), // r
-                std::get<4>(dataset), // s
-                std::get<5>(dataset),
+                std::get<4>(dataset), // alpha
+                std::get<5>(dataset), // penalty
                 std::get<6>(dataset),
                 std::get<7>(dataset),
-                std::get<8>(dataset)
+                std::get<8>(dataset),
+                std::get<9>(dataset)
                 );
         };
         return std::make_tuple(generate_actual_pack, generate_expected_pack);
@@ -389,7 +399,9 @@ struct BasilGhostFixture
         Eigen::VectorXd r = A_dense * beta + Eigen::VectorXd::NullaryExpr(n_cols,
                 [&](auto) { return 0.2 * norm(gen); });
 
-        value_t s = 0.1;
+        value_t alpha = 0.1;
+        Eigen::VectorXd penalty(n_cols);
+        penalty.setOnes();
 
         return std::make_tuple(
                 std::move(mat), // must return also since A references it
@@ -397,7 +409,8 @@ struct BasilGhostFixture
                 std::move(A),
                 std::move(A_dense),
                 std::move(r),
-                std::move(s),
+                std::move(alpha),
+                std::move(penalty),
                 strong_size,
                 delta_strong_size,
                 max_strong_size,
@@ -411,22 +424,24 @@ struct BasilGhostFixture
             return std::make_tuple(
                 std::get<2>(dataset), // A (ghost)
                 std::get<4>(dataset), // r
-                std::get<5>(dataset), // s
-                std::get<6>(dataset),
+                std::get<5>(dataset), // alpha
+                std::get<6>(dataset), // penalty
                 std::get<7>(dataset),
                 std::get<8>(dataset),
-                std::get<9>(dataset)
+                std::get<9>(dataset),
+                std::get<10>(dataset)
                 );
         };
         auto generate_expected_pack = [&]() {
             return std::make_tuple(
                 std::get<3>(dataset), // A_dense
                 std::get<4>(dataset), // r
-                std::get<5>(dataset), // s
-                std::get<6>(dataset),
+                std::get<5>(dataset), // alpha
+                std::get<6>(dataset), // penalty
                 std::get<7>(dataset),
                 std::get<8>(dataset),
-                std::get<9>(dataset)
+                std::get<9>(dataset),
+                std::get<10>(dataset)
                 );
         };
         return std::make_tuple(generate_actual_pack, generate_expected_pack);
@@ -515,7 +530,9 @@ struct BasilBlockGhostFixture
         Eigen::VectorXd r = A_dense * beta + Eigen::VectorXd::NullaryExpr(n_cols,
                 [&](auto) { return 0.2 * norm(gen); });
 
-        value_t s = 0.1;
+        value_t alpha = 0.1;
+        Eigen::VectorXd penalty(n_cols);
+        penalty.setOnes();
 
         return std::make_tuple(
                 std::move(mat_list), // must return also since A references it
@@ -524,7 +541,8 @@ struct BasilBlockGhostFixture
                 std::move(A),
                 std::move(A_dense),
                 std::move(r),
-                std::move(s),
+                std::move(alpha),
+                std::move(penalty),
                 strong_size,
                 delta_strong_size,
                 max_strong_size,
@@ -538,22 +556,24 @@ struct BasilBlockGhostFixture
             return std::make_tuple(
                 std::get<3>(dataset), // A (block)
                 std::get<5>(dataset), // r
-                std::get<6>(dataset), // s
-                std::get<7>(dataset),
+                std::get<6>(dataset), // alpha
+                std::get<7>(dataset), // penalty
                 std::get<8>(dataset),
                 std::get<9>(dataset),
-                std::get<10>(dataset)
+                std::get<10>(dataset),
+                std::get<11>(dataset)
                 );
         };
         auto generate_expected_pack = [&]() {
             return std::make_tuple(
                 std::get<4>(dataset), // A (dense)
                 std::get<5>(dataset), // r
-                std::get<6>(dataset), // s
-                std::get<7>(dataset),
+                std::get<6>(dataset), // alpha
+                std::get<7>(dataset), // penalty
                 std::get<8>(dataset),
                 std::get<9>(dataset),
-                std::get<10>(dataset)
+                std::get<10>(dataset),
+                std::get<11>(dataset)
                 );
         };
         return std::make_tuple(generate_actual_pack, generate_expected_pack);

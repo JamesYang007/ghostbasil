@@ -42,19 +42,21 @@ void next_lambdas(
  * into strong_set and strong_hashset.
  * strong_set is sorted to fit the invariant.
  */
-template <class SSType, class SHType, class AbsGradType,
-          class ISType>
+template <class SSType, class SHType, class ValueType, class AbsGradType,
+          class ISType, class PenaltyType>
 GHOSTBASIL_STRONG_INLINE
 void init_strong_set(
         SSType& strong_set, 
         SHType& strong_hashset,
         const AbsGradType& abs_grad, 
+        ValueType alpha,
+        const PenaltyType& penalty,
         const ISType& is_strong,
         size_t n_add,
         size_t capacity)
 {
     strong_set.reserve(capacity); 
-    screen(abs_grad, is_strong, n_add, strong_set);
+    screen(abs_grad, alpha, penalty, is_strong, n_add, strong_set);
     strong_hashset.insert(strong_set.begin(), strong_set.end());
     std::sort(strong_set.begin(), strong_set.end());
 }
@@ -83,25 +85,35 @@ void init_strong_order(
  * Otherwise, it will copy size number of elements from the beginning of user_lmdas.
  */
 template <class LmdasType, class UserLmdasType, class SSType,
-          class SGType, class ValueType>
+          class SGType, class ValueType, class PenaltyType>
 void init_lambdas(
         LmdasType& lmdas,
         const UserLmdasType& user_lmdas,
         const SSType& strong_set,
         const SGType& strong_grad,
+        ValueType alpha,
+        const PenaltyType& penalty,
         size_t size,
         ValueType factor)
 {
     using value_t = typename std::decay_t<SGType>::value_type;
+    using vec_value_t = util::vec_type<value_t>;
     lmdas.resize(size);
     if (lmdas.size() == 0) return;
     if (user_lmdas.size() == 0) {
         // if no user-specific lambdas, find max abs grad 
         // and construct a sequence downwards by factor.
-        Eigen::Map<const util::vec_type<value_t>> sg_map(
+        Eigen::Map<const vec_value_t> sg_map(
                 strong_grad.data(),
                 strong_grad.size());
-        value_t max_abs_grad = sg_map.array().abs().maxCoeff();
+        value_t max_abs_grad = vec_value_t::NullaryExpr(
+            sg_map.size(), [&](auto i) {
+                const auto k = strong_set[i];
+                return (penalty[k] <= 0.0) ?
+                    std::numeric_limits<value_t>::max() :
+                    std::abs(sg_map[i]) / penalty[k];
+            }
+        ).maxCoeff() / std::max(alpha, 1e-3);
         next_lambdas(max_abs_grad, factor, lmdas);
     } else {
         // if user-specific lambdas, copy a chunk.
@@ -226,13 +238,14 @@ void init_strong_beta(
  *                      It is undefined-behavior accessing this after the call.
  *                      It just has to be initialized to the same size as grad.
  */
-template <class AType, class RType, class ValueType, 
+template <class AType, class RType, class ValueType, class PenaltyType,
           class LmdasType, class BetasType, class ISType, class GradType>
 GHOSTBASIL_STRONG_INLINE 
 auto check_kkt(
     const AType& A, 
     const RType& r,
-    ValueType s,
+    ValueType alpha,
+    const PenaltyType& penalty,
     const LmdasType& lmdas, 
     const BetasType& betas,
     const ISType& is_strong,
@@ -245,13 +258,13 @@ auto check_kkt(
     assert(betas.size() == lmdas.size());
 
     size_t i = 0;
-    auto sc = 1-s;
+    auto alpha_c = 1 - alpha;
 
     if (lmdas.size() == 0) return i;
 
     for (; i < lmdas.size(); ++i) {
         const auto& beta_i = betas[i];
-        auto lmda = lmdas[i];
+        const auto lmda = lmdas[i];
 
         std::atomic<bool> kkt_fail(false);
 
@@ -264,11 +277,13 @@ auto check_kkt(
             if (kkt_fail_raw) continue;
 
             // we still need to save the gradients including strong variables
-            auto gk = -sc * A.col_dot(k, beta_i) + r[k] - s * beta_i.coeff(k);
+            auto gk = r[k] - A.col_dot(k, beta_i);
             grad_next[k] = gk;
 
+            const auto pk = penalty[k];
             if (is_strong(k) || 
-                (std::abs(gk) < lmda /* TODO: numerical prec window? */)) continue;
+                (std::abs(gk - lmda * alpha_c * pk * beta_i.coeff(k)) <= 
+                    lmda * alpha * pk)) continue;
             
             kkt_fail.store(true, std::memory_order_relaxed);
         }
@@ -287,21 +302,32 @@ auto check_kkt(
  * exactly max_size will be added.
  * Otherwise, all such elements will be added, but no more.
  */
-template <class AbsGradType, class ISType, class SSType>
+template <class AbsGradType, class ValueType, class PenaltyType, class ISType, class SSType>
 GHOSTBASIL_STRONG_INLINE 
 void screen(
         const AbsGradType& abs_grad,
+        ValueType alpha,
+        const PenaltyType& penalty,
         const ISType& is_strong,
         size_t size,
         SSType& strong_set)
 {
+    using value_t = ValueType;
+
     assert(strong_set.size() <= abs_grad.size());
 
     size_t rem_size = abs_grad.size() - strong_set.size();
     size_t size_capped = std::min(size, rem_size);
     size_t old_strong_size = strong_set.size();
     strong_set.insert(strong_set.end(), size_capped, 0);
-    util::k_imax(abs_grad, is_strong, size_capped, 
+    const auto abs_grad_p = util::vec_type<value_t>::NullaryExpr(
+        abs_grad.size(), [&](auto i) {
+            return (penalty[i] <= 0) ? 
+                std::numeric_limits<value_t>::max() :
+                abs_grad[i] / penalty[i];
+        }
+    ) / std::max(alpha, 1e-3);
+    util::k_imax(abs_grad_p, is_strong, size_capped, 
             std::next(strong_set.begin(), old_strong_size));
 }
 
@@ -359,13 +385,14 @@ void screen(
  */
 
 template <class AType, class RType, class ValueType,
-          class ULmdasType,
+          class PenaltyType, class ULmdasType,
           class BetasType, class LmdasType, class RsqsType,
           class CUIType = util::no_op>
 inline void basil(
         const AType& A,
         const RType& r,
-        ValueType s,
+        ValueType alpha,
+        const PenaltyType& penalty,
         const ULmdasType& user_lmdas,
         size_t max_n_lambdas,
         size_t n_lambdas_iter,
@@ -403,7 +430,7 @@ inline void basil(
     max_strong_size = std::min(max_strong_size, n_features);
     strong_size = std::min(strong_size, max_strong_size);
 
-    // (negative) gradient: -(1-s)/2 A[k,:]^T * beta + r - s/2 * beta[k]
+    // (negative) gradient: r - A * beta
     vec_t grad = r; 
     vec_t grad_next(grad.size()); // just a common buffer to optimize alloc
 
@@ -417,7 +444,7 @@ inline void basil(
     std::vector<index_t> strong_set; 
 
     // initialize strong_set, strong_hashset based on current absolute gradient
-    init_strong_set(strong_set, strong_hashset, grad.array().abs(), 
+    init_strong_set(strong_set, strong_hashset, grad.array().abs(), alpha, penalty,
             is_strong, strong_size, initial_size);
 
     // strong set order
@@ -463,7 +490,7 @@ inline void basil(
     // initialize lambda sequence
     vec_t lmdas_curr;
     init_lambdas(lmdas_curr, user_lmdas, 
-            strong_set, strong_grad, n_lambdas_iter, factor);
+            strong_set, strong_grad, alpha, penalty, n_lambdas_iter, factor);
 
     // list of coefficient outputs
     util::vec_type<sp_vec_t> betas_curr(lmdas_curr.size());
@@ -480,7 +507,7 @@ inline void basil(
         LassoParamPack<
             AType, value_t, index_t, bool_t
         > fit_pack(
-            A, s, strong_set, strong_order, strong_A_diag,
+            A, alpha, penalty, strong_set, strong_order, strong_A_diag,
             lmdas_curr, max_n_cds, thr, rsq, strong_beta, strong_grad,
             active_set, active_order, active_set_ordered,
             is_active, betas_curr, rsqs_curr, 0, 0       
@@ -495,7 +522,7 @@ inline void basil(
         // and if idx <= 0, then grad is unchanged.
         // In any case, grad corresponds to the first smallest lambda where KKT check passes.
         size_t idx = check_kkt(
-                    A, r, s, lmdas_curr.head(n_lmdas), betas_curr.head(n_lmdas), 
+                    A, r, alpha, penalty, lmdas_curr.head(n_lmdas), betas_curr.head(n_lmdas), 
                     is_strong, n_threads, grad, grad_next);
 
         // decrement number of remaining lambdas
@@ -528,7 +555,7 @@ inline void basil(
         const auto old_strong_set_size = strong_set.size();
 
         if (idx < lmdas_curr.size()) {
-            screen(grad.array().abs(), is_strong, delta_strong_size, strong_set);
+            screen(grad.array().abs(), alpha, penalty, is_strong, delta_strong_size, strong_set);
             if (strong_set.size() > max_strong_size) throw util::max_basil_strong_set();
             new_strong_added = (old_strong_set_size < strong_set.size());
 
@@ -634,7 +661,13 @@ inline void basil(
                     Eigen::Map<vec_t> strong_grad_view(
                             strong_grad.data() + old_strong_set_size,
                             strong_grad.size() - old_strong_set_size);
-                    max_abs_grad = strong_grad_view.array().abs().maxCoeff();
+                    max_abs_grad = vec_t::NullaryExpr(
+                        strong_grad_view.size(), [&](auto i) {
+                            const auto k = strong_set[i];
+                            return (penalty[k] <= 0.0) ? std::numeric_limits<value_t>::max() :
+                                std::abs(strong_grad_view[i]) / penalty[k];
+                        }
+                    ).maxCoeff() / std::max(alpha, 1e-3);
                 }             
 
                 lmdas_curr.resize(std::min(n_lambdas_iter, n_lambdas_rem));

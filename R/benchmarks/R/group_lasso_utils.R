@@ -109,7 +109,7 @@ group.lasso.process.data <- function(data, n.lmdas)
 
 bench <- function(
     n, ps, n.groups.prop, n.lmdas, seed=0, times=times, 
-    s=0.0, max.cds=100000, thr=1e-20, newton.tol=1e-12, newton.max.iters=1000,
+    alpha=1.0, max.cds=100000, thr=1e-20, newton.tol=1e-12, newton.max.iters=1000,
     debug=F, ...
 )
 {
@@ -119,6 +119,7 @@ bench <- function(
     for (i in 1:n.ps) {
         p <- ps[i]
         n.groups <- as.integer(p * n.groups.prop)
+        penalty <- rep(1, n.groups)
 
         print(paste("Iteration ", i, ": ", p, sep=''))
 
@@ -138,7 +139,7 @@ bench <- function(
             print(head(data$A))
             print(as.integer(data$groups-1))
             print(data$group.sizes)
-            print(s)
+            print(alpha)
             print(as.integer(data$strong.set-1))
             print(data$strong.g1-1)
             print(data$strong.g2-1)
@@ -164,7 +165,8 @@ bench <- function(
                     data$A,
                     as.integer(data$groups-1),
                     data$group.sizes,
-                    s,
+                    alpha,
+                    penalty,
                     as.integer(data$strong.set-1),
                     as.integer(data$strong.g1-1),
                     as.integer(data$strong.g2-1),
