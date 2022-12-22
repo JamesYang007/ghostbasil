@@ -70,8 +70,8 @@
                 "-c",
                 "dbg",
                 "//ghostbasil/test:optimization",
-                "--",
-                "--gtest_filter='Lasso*'",
+                //"--",
+                //"--gtest_filter='BasilFixture.basil_n_le_p'",
             ],
             "group": {
                 "kind": "test",

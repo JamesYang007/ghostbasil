@@ -21,7 +21,7 @@
 
 cc_test(
     name = 'optimization',
-    srcs = ['optimization/basil_unittest.cpp'],
+    srcs = ['optimization/group_lasso_unittest.cpp'],
     includes = ['.'],
     defines = ["EIGEN_INITIALIZE_MATRICES_BY_NAN"],
     deps = [

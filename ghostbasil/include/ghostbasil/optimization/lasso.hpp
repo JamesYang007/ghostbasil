@@ -357,7 +357,7 @@ auto objective(
         ValueType lmda,
         const BetaType& beta)
 {
-    return A.quad_form(beta) - beta.dot(r) 
+    return 0.5 * A.quad_form(beta) - beta.dot(r) 
         + lmda * (
             (1-alpha)/2 * beta.cwiseProduct(penalty).cwiseProduct(beta).sum()
             + alpha * beta.cwiseAbs().cwiseProduct(penalty).sum()

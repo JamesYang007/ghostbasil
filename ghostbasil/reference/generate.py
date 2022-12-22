@@ -103,8 +103,10 @@ def generate_lasso_solution(A, r, alpha, lmda, penalty, strong_set):
         if j not in strong_set
     ]
     prob = cp.Problem(objective, constraints)
-    result = prob.solve(solver=cp.OSQP, max_iter=100000,
-                        eps_abs=1e-8, eps_rel=1e-8)
+    result = prob.solve(
+        solver=cp.OSQP, max_iter=100000,
+        eps_abs=1e-12, eps_rel=1e-12,
+    )
     return result, beta.value
 
 
