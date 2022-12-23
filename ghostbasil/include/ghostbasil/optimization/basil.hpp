@@ -290,27 +290,40 @@ template <class AbsGradType, class ValueType, class PenaltyType, class ISType, c
 GHOSTBASIL_STRONG_INLINE 
 void screen(
         const AbsGradType& abs_grad,
+        ValueType lmda_prev,
+        ValueType lmda_next,
         ValueType alpha,
         const PenaltyType& penalty,
         const ISType& is_strong,
         size_t size,
-        SSType& strong_set)
+        SSType& strong_set,
+        bool do_old_rule = false)
 {
     using value_t = ValueType;
 
     assert(strong_set.size() <= abs_grad.size());
-
-    size_t rem_size = abs_grad.size() - strong_set.size();
-    size_t size_capped = std::min(size, rem_size);
-    size_t old_strong_size = strong_set.size();
-    strong_set.insert(strong_set.end(), size_capped, 0);
-    const auto abs_grad_p = util::vec_type<value_t>::NullaryExpr(
-        abs_grad.size(), [&](auto i) {
-            return (penalty[i] <= 0) ? 0.0 : abs_grad[i] / penalty[i];
+    if (do_old_rule) {
+        size_t rem_size = abs_grad.size() - strong_set.size();
+        size_t size_capped = std::min(size, rem_size);
+        size_t old_strong_size = strong_set.size();
+        strong_set.insert(strong_set.end(), size_capped, 0);
+        const auto abs_grad_p = util::vec_type<value_t>::NullaryExpr(
+            abs_grad.size(), [&](auto i) {
+                return (penalty[i] <= 0) ? 0.0 : abs_grad[i] / penalty[i];
+            }
+        ) / std::max(alpha, 1e-3);
+        util::k_imax(abs_grad_p, is_strong, size_capped, 
+                std::next(strong_set.begin(), old_strong_size));
+        return;
+    }
+    
+    const auto strong_rule_lmda = (2 * lmda_next - lmda_prev) * alpha;
+    for (size_t i = 0; i < abs_grad.size(); ++i) {
+        if (is_strong(i)) continue;
+        if (abs_grad[i] > strong_rule_lmda * penalty[i]) {
+            strong_set.push_back(i);
         }
-    ) / std::max(alpha, 1e-3);
-    util::k_imax(abs_grad_p, is_strong, size_capped, 
-            std::next(strong_set.begin(), old_strong_size));
+    }
 }
 
 /**
@@ -496,8 +509,11 @@ inline void basil(
     n_lambdas_iter = std::min(n_lambdas_iter, max_n_lambdas);
     size_t n_lambdas_rem = max_n_lambdas;
 
+    // current lambda sub-sequence
+    // Take only lmda_max. Current state is the correct solution at lmda_max.
+    // Lasso fitting should be trivial.
     vec_t lmdas_curr;
-    init_lambdas(lmdas_curr, lmda_seq, n_lambdas_iter);
+    init_lambdas(lmdas_curr, lmda_seq, 1);
 
     // list of coefficient outputs
     util::vec_type<sp_vec_t> betas_curr(lmdas_curr.size());
@@ -507,9 +523,6 @@ inline void basil(
 
     while (1) 
     {
-        // finish if all lmdas are finished
-        if (lmdas_curr.size() == 0) break;
-
         /* Fit lasso */
         LassoParamPack<
             AType, value_t, index_t, bool_t
@@ -552,7 +565,24 @@ inline void basil(
             if (check_early_stop_rsq(rsq_l, rsq_m, rsq_u)) break;
         }
 
+        // finish if no more lambdas to process finished
+        if (n_lambdas_rem == 0) break;
+
         /* Screening */
+
+        const bool some_lambdas_failed = idx < lmdas_curr.size();
+
+        // if some lambdas have valid solutions, shift the next lambda sequence
+        if (idx > 0) {
+            lmdas_curr.resize(std::min(n_lambdas_iter, n_lambdas_rem));
+            auto begin = std::next(lmda_seq.data(), lmda_seq.size()-n_lambdas_rem);
+            auto end = std::next(begin, lmdas_curr.size());
+            std::copy(begin, end, lmdas_curr.data());
+
+            // reset current lasso estimates to next lambda sequence length
+            betas_curr.resize(lmdas_curr.size());
+            rsqs_curr.resize(lmdas_curr.size());
+        }
 
         // screen to append to strong set and strong hashset.
         // Must use the previous valid gradient vector.
@@ -561,8 +591,13 @@ inline void basil(
         bool new_strong_added = false;
         const auto old_strong_set_size = strong_set.size();
 
-        if (idx < lmdas_curr.size()) {
-            screen(grad.array().abs(), alpha, penalty, is_strong, delta_strong_size, strong_set);
+        if (some_lambdas_failed) {
+            const auto lmda_prev_valid = (lmdas.size() == 0) ? 
+                std::numeric_limits<value_t>::max() : lmdas.back(); 
+            const auto lmda_last = lmdas_curr[lmdas_curr.size()-1]; // well-defined
+            const auto all_lmdas_failed = idx == 0;
+            screen(grad.array().abs(), lmda_prev_valid, lmda_last, 
+                alpha, penalty, is_strong, delta_strong_size, strong_set, all_lmdas_failed);
             if (strong_set.size() > max_strong_size) throw util::max_basil_strong_set();
             new_strong_added = (old_strong_set_size < strong_set.size());
 
@@ -576,13 +611,16 @@ inline void basil(
             init_strong_A_diag(strong_A_diag, A, strong_set, 
                     old_strong_set_size, strong_set.size());
 
-            // update ONLY on the new strong variable.
-            // the old strong variables will be updated later!
+            // updates on these will be done later!
             strong_beta.resize(strong_set.size(), 0);
             strong_beta_prev_valid.resize(strong_set.size(), 0);
+
+            // update is_active to set the new strong variables to false
             is_active.resize(strong_set.size(), false);
+
+            // update strong grad to last valid gradient
             strong_grad.resize(strong_set.size());
-            for (size_t i = old_strong_set_size; i < strong_grad.size(); ++i) {
+            for (size_t i = 0; i < strong_grad.size(); ++i) {
                 strong_grad[i] = grad[strong_set[i]];
             }
         }
@@ -591,13 +629,7 @@ inline void basil(
         // and unordered for the last few (new variables).
         // But all referencing quantities (strong_beta, strong_grad, is_active, strong_A_diag)
         // match up in size and positions with strong_set.
- 
-        // reset strong gradient to previous valid version.
-        // We only need to update the old strong variables.
-        // If new variables were added, these were updated before.
-        for (size_t j = 0; j < old_strong_set_size; ++j) {
-            strong_grad[j] = grad[strong_set[j]];
-        }
+        // Note: strong_grad has been updated properly to previous valid version in all cases.
 
         // create dense viewers of old strong betas
         Eigen::Map<util::vec_type<value_t>> old_strong_beta_view(
@@ -613,7 +645,7 @@ inline void basil(
             old_strong_beta_view = strong_beta_prev_valid_view;
             rsq = rsq_prev_valid;
         }
-        else {
+        else if (some_lambdas_failed) {
             // save last valid solution (this logic assumes the ordering is in old one)
             assert(betas.size() > 0);
             const auto& last_valid_sol = betas.back();
@@ -651,23 +683,6 @@ inline void basil(
 
             // save last valid R^2
             rsq_prev_valid = rsq = rsqs.back();
-
-            // shift lambda sequence
-            // Find the maximum absolute gradient among the non-strong set
-            // on the last valid solution.
-            // The maximum must occur somewhere in the newly added strong variables.
-            // If no new strong variables were added, it must be because 
-            // we already added every variable. 
-            // Use last valid lambda * factor as a cheap alternative to finding
-            // the maximum absolute gradient at the last valid solution.
-            lmdas_curr.resize(std::min(n_lambdas_iter, n_lambdas_rem));
-            auto begin = std::next(lmda_seq.data(), lmda_seq.size()-n_lambdas_rem);
-            auto end = std::next(begin, lmdas_curr.size());
-            std::copy(begin, end, lmdas_curr.data());
-
-            // reset current lasso estiamtes to next lambda sequence length
-            betas_curr.resize(lmdas_curr.size());
-            rsqs_curr.resize(lmdas_curr.size());
 
             // TODO: early stop
         }

@@ -71,8 +71,8 @@
                 "dbg",
                 "//ghostbasil/test:optimization",
                 //"--cxxopt=-DMAKE_LMDAS",
-                "--",
-                "--gtest_filter='Basil*'",
+                //"--",
+                //"--gtest_filter='Basil*'",
             ],
             "group": {
                 "kind": "test",
