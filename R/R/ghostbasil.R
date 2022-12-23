@@ -41,7 +41,6 @@ ghostbasil <- function(A, r, alpha=1,
                       user.lambdas=c(), 
                       max.lambdas=100,
                       lambdas.iter=10, 
-                      strong.size=100, 
                       delta.strong.size=500, 
                       max.strong.size=10000, 
                       max.cds=100000, 
@@ -54,7 +53,6 @@ ghostbasil <- function(A, r, alpha=1,
     user.lambdas <- as.numeric(user.lambdas)
     max.lambas <- as.integer(max.lambdas)
     lambdas.iter <- as.integer(lambdas.iter)
-    strong.size <- as.integer(strong.size)
     delta.strong.size <- as.integer(delta.strong.size)
     max.strong.size <- as.integer(max.strong.size)
     max.cds <- as.integer(max.cds)
@@ -81,9 +79,6 @@ ghostbasil <- function(A, r, alpha=1,
     }
     if (lambdas.iter <= 0) {
         stop("Number of lambdas per BASIL iteration must be greater than 0.")
-    }
-    if (strong.size <= 0) {
-        stop("Initial size of strong set must be greater than 0.")
     }
     if (delta.strong.size <= 0) {
         stop("Number of lambdas to add per BASIL iteration must be greater than 0.")
@@ -123,7 +118,6 @@ ghostbasil <- function(A, r, alpha=1,
                     user_lmdas=user.lambdas,
                     max_n_lambdas=max.lambdas,
                     n_lambdas_iter=lambdas.iter,
-                    strong_size=strong.size, 
                     delta_strong_size=delta.strong.size, 
                     max_strong_size=max.strong.size,
                     max_n_cds=max.cds, 

@@ -3,8 +3,7 @@ library(devtools)
 source('utils.R')
 
 # Load GhostBASIL
-GhostBASIL.path <- paste(thisPath(), '/../R', sep='')
-load_all(GhostBASIL.path)
+load_all()
 
 L <- 3
 p <- 100

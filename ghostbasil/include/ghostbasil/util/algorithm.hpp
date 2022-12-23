@@ -15,7 +15,7 @@ inline size_t k_imax(
 {
     using idx_t = typename Iter::value_type;
     
-    if (k <= 0) return;
+    if (k <= 0) return 0;
 
     auto comp = [&](auto i, auto j) {
         return v[i] > v[j];

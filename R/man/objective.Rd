@@ -4,14 +4,16 @@
 \alias{objective}
 \title{Computes the PGR objective that is minimized by ghostbasil.}
 \usage{
-objective(A, r, s, lmda, beta)
+objective(A, r, alpha, penalty, lmda, beta)
 }
 \arguments{
-\item{A}{covariance matrix. Currently, only supports dense matrix.}
+\item{A}{covariance matrix. Currently, only supports dense and sparse matrices.}
 
 \item{r}{correlation vector.}
 
-\item{s}{regularization strength of A towards identity.}
+\item{alpha}{elastic net proportion.}
+
+\item{penalty}{penalty vector p.}
 
 \item{lmda}{lambda regularization value.}
 
@@ -20,6 +22,7 @@ objective(A, r, s, lmda, beta)
 \description{
 The objective is given by:
 \deqn{
- \frac{1-s}{2} \beta^\top A \beta - \beta^\top r + \frac{s}{2} ||\beta||_2 + \lambda ||\beta||_1
+ \frac{1}{2} \beta^\top A \beta - \beta^\top r 
+     + \lambda \sum\limits_i p_i \left(\alpha |\beta_i| + \frac{1-\alpha}{2} \beta_i^2 \right)
 }
 }

@@ -17,7 +17,6 @@ List basil__(
         const Eigen::Map<Eigen::VectorXd> user_lmdas,
         size_t max_n_lambdas,
         size_t n_lambdas_iter,
-        size_t strong_size,
         size_t delta_strong_size,
         size_t max_strong_size,
         size_t max_n_cds,
@@ -52,7 +51,7 @@ List basil__(
     try {
         basil(
                 A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter,
-                strong_size, delta_strong_size, max_strong_size, max_n_cds, thr, 
+                delta_strong_size, max_strong_size, max_n_cds, thr, 
                 min_ratio, n_threads,
                 betas, lmdas, rsqs,
                 check_user_interrupt);
@@ -88,7 +87,6 @@ List basil_dense__(
         const Eigen::Map<Eigen::VectorXd> user_lmdas,
         size_t max_n_lambdas,
         size_t n_lambdas_iter,
-        size_t strong_size,
         size_t delta_strong_size,
         size_t max_strong_size,
         size_t max_n_cds,
@@ -97,7 +95,7 @@ List basil_dense__(
         size_t n_threads)
 {
     return basil__(A, r, alpha, penalty, user_lmdas, max_n_lambdas,
-            n_lambdas_iter, strong_size, delta_strong_size,
+            n_lambdas_iter, delta_strong_size,
             max_strong_size, max_n_cds, thr, min_ratio, n_threads);
 }
 
@@ -110,7 +108,6 @@ List basil_block_dense__(
         const Eigen::Map<Eigen::VectorXd> user_lmdas,
         size_t max_n_lambdas,
         size_t n_lambdas_iter,
-        size_t strong_size,
         size_t delta_strong_size,
         size_t max_strong_size,
         size_t max_n_cds,
@@ -125,7 +122,7 @@ List basil_block_dense__(
     
     return basil__(
             bm, r, alpha, penalty, user_lmdas, max_n_lambdas,
-            n_lambdas_iter, strong_size, delta_strong_size,
+            n_lambdas_iter, delta_strong_size,
             max_strong_size, max_n_cds, thr, min_ratio, n_threads);
 }
 
@@ -138,7 +135,6 @@ List basil_ghost__(
         const Eigen::Map<Eigen::VectorXd> user_lmdas,
         size_t max_n_lambdas,
         size_t n_lambdas_iter,
-        size_t strong_size,
         size_t delta_strong_size,
         size_t max_strong_size,
         size_t max_n_cds,
@@ -153,7 +149,7 @@ List basil_ghost__(
     
     return basil__(
             gm, r, alpha, penalty, user_lmdas, max_n_lambdas,
-            n_lambdas_iter, strong_size, delta_strong_size,
+            n_lambdas_iter, delta_strong_size,
             max_strong_size, max_n_cds, thr, min_ratio, n_threads);
 }
 
@@ -166,7 +162,6 @@ List basil_block_ghost__(
         const Eigen::Map<Eigen::VectorXd> user_lmdas,
         size_t max_n_lambdas,
         size_t n_lambdas_iter,
-        size_t strong_size,
         size_t delta_strong_size,
         size_t max_strong_size,
         size_t max_n_cds,
@@ -181,7 +176,7 @@ List basil_block_ghost__(
     
     return basil__(
             bgm, r, alpha, penalty, user_lmdas, max_n_lambdas,
-            n_lambdas_iter, strong_size, delta_strong_size,
+            n_lambdas_iter, delta_strong_size,
             max_strong_size, max_n_cds, thr, min_ratio, n_threads);
 }
 
