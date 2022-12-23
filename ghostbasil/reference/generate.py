@@ -71,7 +71,7 @@ def generate_lasso_data(n, p, seed=0):
     beta = np.random.normal(size=p) * \
         np.random.binomial(1, 0.5, size=p)
     y = X @ beta + np.random.normal(size=n)
-    return X.T @ X / n, X.T @ y / n
+    return X.T @ X / n + np.diag(np.full(p, 1e-1)), X.T @ y / n
 
 
 def generate_group_lasso_data(n, p, groups, seed=0):
@@ -114,8 +114,8 @@ def generate_lasso_solution(A, r, alpha, lmda, penalty, strong_set):
     objective = cp.Minimize(
         0.5 * cp.quad_form(beta, cp.Parameter(shape=A.shape, value=A, PSD=True)) -
         beta @ r +
-        lmda * (1-alpha) * 0.5 * cp.square(beta) @ penalty +
-        lmda * alpha * cp.abs(beta) @ penalty
+        lmda * (1-alpha) * 0.5 * cp.sum(cp.multiply(cp.square(beta), penalty)) +
+        lmda * alpha * cp.sum(cp.multiply(cp.abs(beta), penalty))
     )
     constraints = [
         beta[j] == 0
@@ -124,8 +124,11 @@ def generate_lasso_solution(A, r, alpha, lmda, penalty, strong_set):
     ]
     prob = cp.Problem(objective, constraints)
     result = prob.solve(
-        solver=cp.OSQP, max_iter=100000,
-        eps_abs=1e-10, eps_rel=1e-10,
+        #solver=cp.OSQP, max_iter=100000,
+        #eps_abs=1e-9, eps_rel=1e-9,
+        solver=cp.SCS, 
+        max_iters=10000,
+        eps=1e-24,
     )
     return result, beta.value
 

@@ -1,6 +1,7 @@
 #pragma once
 #include <numeric>
 #include <ghostbasil/util/queue.hpp>
+#include <ghostbasil/util/macros.hpp>
 
 namespace ghostbasil {
 namespace util {
@@ -13,6 +14,8 @@ inline size_t k_imax(
         Iter out_begin)
 {
     using idx_t = typename Iter::value_type;
+    
+    if (k <= 0) return;
 
     auto comp = [&](auto i, auto j) {
         return v[i] > v[j];

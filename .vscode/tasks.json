@@ -70,8 +70,9 @@
                 "-c",
                 "dbg",
                 "//ghostbasil/test:optimization",
-                //"--",
-                //"--gtest_filter='GroupLassoFixture.group_lasso_n_le_p_partial'",
+                //"--cxxopt=-DMAKE_LMDAS",
+                "--",
+                "--gtest_filter='Basil*'",
             ],
             "group": {
                 "kind": "test",
