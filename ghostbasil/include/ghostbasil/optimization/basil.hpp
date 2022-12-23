@@ -320,7 +320,7 @@ void screen(
     const auto strong_rule_lmda = (2 * lmda_next - lmda_prev) * alpha;
     for (size_t i = 0; i < abs_grad.size(); ++i) {
         if (is_strong(i)) continue;
-        if (abs_grad[i] > strong_rule_lmda * penalty[i]) {
+        if (abs_grad[i] > strong_rule_lmda * penalty[i] * 1.0001) {
             strong_set.push_back(i);
         }
     }
@@ -480,8 +480,7 @@ inline void basil(
     }
 
     // current (unnormalized) R^2 at strong_beta.
-    value_t rsq = fit_pack.rsq;
-    value_t rsq_prev_valid = rsq;
+    value_t rsq_prev_valid = fit_pack.rsq;
     
     // previously valid strong beta
     auto strong_beta_prev_valid = strong_beta; 
@@ -528,7 +527,7 @@ inline void basil(
             AType, value_t, index_t, bool_t
         > fit_pack(
             A, alpha, penalty, strong_set, strong_order, strong_A_diag,
-            lmdas_curr, max_n_cds, thr, rsq, strong_beta, strong_grad,
+            lmdas_curr, max_n_cds, thr, rsq_prev_valid, strong_beta, strong_grad,
             active_set, active_order, active_set_ordered,
             is_active, betas_curr, rsqs_curr, 0, 0       
         );
@@ -542,8 +541,8 @@ inline void basil(
         // and if idx <= 0, then grad is unchanged.
         // In any case, grad corresponds to the first smallest lambda where KKT check passes.
         size_t idx = check_kkt(
-                    A, r, alpha, penalty, lmdas_curr.head(n_lmdas), betas_curr.head(n_lmdas), 
-                    is_strong, n_threads, grad, grad_next);
+                A, r, alpha, penalty, lmdas_curr.head(n_lmdas), betas_curr.head(n_lmdas), 
+                is_strong, n_threads, grad, grad_next);
 
         // decrement number of remaining lambdas
         n_lambdas_rem -= idx;
@@ -592,11 +591,10 @@ inline void basil(
         const auto old_strong_set_size = strong_set.size();
 
         if (some_lambdas_failed) {
-            const auto lmda_prev_valid = (lmdas.size() == 0) ? 
-                std::numeric_limits<value_t>::max() : lmdas.back(); 
-            const auto lmda_last = lmdas_curr[lmdas_curr.size()-1]; // well-defined
+            const auto lmda_prev_valid = (lmdas.size() == 0) ? lmdas_curr[0] : lmdas.back(); 
+            const auto lmda_next = lmdas_curr[0]; // well-defined
             const auto all_lmdas_failed = idx == 0;
-            screen(grad.array().abs(), lmda_prev_valid, lmda_last, 
+            screen(grad.array().abs(), lmda_prev_valid, lmda_next, 
                 alpha, penalty, is_strong, delta_strong_size, strong_set, all_lmdas_failed);
             if (strong_set.size() > max_strong_size) throw util::max_basil_strong_set();
             new_strong_added = (old_strong_set_size < strong_set.size());
@@ -638,12 +636,11 @@ inline void basil(
                 strong_beta_prev_valid.data(),
                 old_strong_set_size);
 
-        // if the first lambda was the failure
+        // Save last valid strong beta and put current state to that point.
         if (idx == 0) {
             // warm-start using previously valid solution.
             // Note: this is crucial for correctness in grad update step below.
             old_strong_beta_view = strong_beta_prev_valid_view;
-            rsq = rsq_prev_valid;
         }
         else if (some_lambdas_failed) {
             // save last valid solution (this logic assumes the ordering is in old one)
@@ -680,12 +677,10 @@ inline void basil(
             }
 
             strong_beta_prev_valid_view = old_strong_beta_view;
-
-            // save last valid R^2
-            rsq_prev_valid = rsq = rsqs.back();
-
-            // TODO: early stop
         }
+
+        // save last valid R^2
+        rsq_prev_valid = rsqs.back();
 
         // update strong_order for new order of strong_set
         // only if new variables were added to the strong set.

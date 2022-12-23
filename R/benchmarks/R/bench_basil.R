@@ -16,7 +16,7 @@ bench <- function(
         print(paste("Iteration ", i, ": ", p, sep=''))
 
         start <- proc.time()
-        data <- generate.data(n=n, p=p, seed=seed, ...)
+        data <- generate.data(n=n, p=p, seed=seed)
         gen.data.time <- proc.time() - start
         print("Generate data time:")
         print(gen.data.time)
@@ -25,7 +25,8 @@ bench <- function(
             {
                 models[[i]] <- ghostbasil(
                     A=data$A,
-                    r=data$r
+                    r=data$r,
+                    ...
                 )
             },
             times=ifelse(length(times) == 1, times, times[i]),
@@ -46,5 +47,10 @@ times <- 1
 write.csv.default(n, 'n.csv')
 write.csv.default(ps, 'p.csv')
 
-bench.times <- bench(n, ps, times=times, seed=9183)$times
+bench.out <- bench(n, ps, times=times, seed=9183,
+                     delta.strong.size=100,
+                     lambdas.iter=10,
+                     thr=1e-7,
+                     n.threads=-1)
+bench.times <- bench.out$times
 write.csv.default(bench.times, 'basil_times.csv')
