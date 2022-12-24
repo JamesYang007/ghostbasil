@@ -2,11 +2,10 @@ library(devtools)
 library(lassosum)
 library(fdrtool)
 
-source('utils.R')
+source('example/utils.R')
 
 # Load GhostBASIL
-GhostBASIL.path <- paste(thisPath(), '/../R', sep='')
-load_all(GhostBASIL.path)
+load_all()
 
 elnetR <- function(lambda1, lambda2=0, X, b, thr=1e-4,
                    trace=0, maxiter=10000,

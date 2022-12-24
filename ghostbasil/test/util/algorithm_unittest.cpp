@@ -101,6 +101,23 @@ TEST_F(KImaxFixture, k_imax_ge_k_larger)
     test(actual, s, expected);
 }
 
+TEST_F(KImaxFixture, k_imax_non_max_later)
+{
+    size_t k = 3;
+    auto skip = [&](auto i) { return false; };
+    std::vector<int> v({6, 4, 3, 5});
+    std::vector<uint32_t> actual(k);
+    auto s = k_imax(v, skip, k, actual.begin());
+    EXPECT_EQ(s, k);
+    
+    std::vector<uint32_t> expected(k);
+    expected[0] = 0;
+    expected[1] = 1;
+    expected[2] = 3;
+    
+    test(actual, s, expected);
+}
+
 }
 } // namespace util
 } // namespace ghostbasil

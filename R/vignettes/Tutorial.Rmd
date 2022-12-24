@@ -202,7 +202,7 @@ y <- X %*% beta + rnorm(n)
 # Prepare inputs
 A <- (t(X) %*% X) / n
 r <- (t(X) %*% y) / n
-alpha <- 0.5
+alpha <- 1.0
 
 gb.out <- ghostbasil(A, r, alpha)
 ```
@@ -222,6 +222,7 @@ slice <- 1:13
 gb.out$betas[, slice]
 gb.out$lmdas[slice]
 gb.out$rsqs[slice]
+gb.out$error
 ```
 
 Currently, `rsqs` is the _unnormalized_ (training) $R^2$.

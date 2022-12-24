@@ -7,11 +7,11 @@
 ghostbasil(
   A,
   r,
-  s,
+  alpha = 1,
+  penalty = rep(1, times = length(r)),
   user.lambdas = c(),
   max.lambdas = 100,
   lambdas.iter = 10,
-  strong.size = 100,
   delta.strong.size = 500,
   max.strong.size = 10000,
   max.cds = 1e+05,
@@ -27,7 +27,9 @@ For types of the form xxx__, see the function xxx.}
 
 \item{r}{correlation vector.}
 
-\item{s}{regularization to shrink A towards identity ((1-s) * A + s * I).}
+\item{alpha}{elastic net proportion.}
+
+\item{penalty}{penalty factor for each coefficient.}
 
 \item{user.lambdas}{user-specified sequence of lambdas. Will be sorted in decreasing order if not sorted already.}
 
@@ -42,9 +44,6 @@ The maximum lambda is the largest lambda where solution isn't 0.}
 \item{lambdas.iter}{number of lambdas to compute strong set solutions for at each iteration of the BASIL algorithm.
 Internally, capped at max.lambdas.
 Must be positive.}
-
-\item{strong.size}{initial number of strong set variables to include.
-Internally, capped at max.strong.size.}
 
 \item{delta.strong.size}{number of strong set variables to include at every iteration of the BASIL algorithm.
 Internally, capped at number of non-strong variables at every iteration of BASIL.
@@ -67,6 +66,9 @@ Set it to 0 (default) to disable OpenMP usage.
 Set it to -1 to use all available logical cores.
 Note that if this value is too high, performance may worsen.
 A general rule of thumb is to use the number of physical (not logical) cores.}
+
+\item{strong.size}{initial number of strong set variables to include.
+Internally, capped at max.strong.size.}
 }
 \description{
 Fits PGR objective with BASIL framework.

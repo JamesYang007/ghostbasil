@@ -246,7 +246,7 @@ def bench():
         library(devtools);
         library(pkgbuild);
         pkgbuild::compile_dll(debug=F);
-        load_all();
+        load_all(recompile=T);
         setwd(\'{r_path}\')
 
         # source utility functions
