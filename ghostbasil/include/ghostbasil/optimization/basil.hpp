@@ -15,27 +15,6 @@ namespace ghostbasil {
 namespace lasso {
 
 /*
- * Computes and stores the next sequence of lambdas.
- * Given the max absolute gradient max_abs_grad,
- * it will be the first value in the sequence
- * and the subsequent values decrease down by factor.
- * If lmdas is empty, nothing occurs.
- */
-template <class ValueType, class LmdasType>
-GHOSTBASIL_STRONG_INLINE
-void next_lambdas(
-        ValueType max_abs_grad,
-        ValueType factor,
-        LmdasType& lmdas)
-{
-    if (lmdas.size() == 0) return;
-    lmdas[0] = max_abs_grad;
-    for (size_t i = 1; i < lmdas.size(); ++i) {
-        lmdas[i] = lmdas[i-1] * factor;
-    }
-}
-
-/*
  * Initializes strong set. It adds n_add number of variables 
  * that are not in the strong set already (is_strong(i) == false) 
  * and achieve the highest absolute gradient values
@@ -91,7 +70,6 @@ void init_strong_order(
 /*
  * Initializes the lambda sequence.
  * lmdas will be resized to size number of elements.
- * If user_lmdas is empty, it will generate a sequence by calling next_lambdas.
  * Otherwise, it will copy size number of elements from the beginning of user_lmdas.
  */
 template <class LmdasType, class UserLmdasType>
@@ -343,6 +321,10 @@ void screen(
  * @param   n_lambdas_iter  number of lambdas per BASIL iteration for fitting lasso on strong set.
  *                          Internally, it is capped at max_n_lambdas.
  *                          Assumes it is > 0.
+ * @param   use_strong_rule     if true then use strong rule as the primary way of discarding variables.
+ *                              Original incremental method with delta_strong_size is used when
+ *                              the strong rule fails to get enough variables and KKT fails at
+ *                              the first lambda in the sub-sequence at every BASIL iteration.
  * @param   delta_strong_size   number of variables to add to strong set 
  *                              at every BASIL iteration.
  *                              Internally, it is capped at number of non-strong variables
