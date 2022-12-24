@@ -19,6 +19,9 @@
 #'                          Must be positive.
 #' @param   strong.size     initial number of strong set variables to include.
 #'                          Internally, capped at max.strong.size.
+#' @param   use.strong.rule     uses the strong rule with minimal dependence on fixed incremental rule if TRUE. 
+#'                              Note that delta.strong.size is still used in tandem with strong rule.
+#'                              It is recommended to keep delta.strong.size small if strong rule is used.
 #' @param   delta.strong.size   number of strong set variables to include at every iteration of the BASIL algorithm.
 #'                              Internally, capped at number of non-strong variables at every iteration of BASIL.
 #'                              Must be positive.
@@ -40,7 +43,8 @@ ghostbasil <- function(A, r, alpha=1,
                       penalty=rep(1, times=length(r)),
                       user.lambdas=c(), 
                       max.lambdas=100,
-                      lambdas.iter=10, 
+                      lambdas.iter=5, 
+                      use.strong.rule=T,
                       delta.strong.size=500, 
                       max.strong.size=10000, 
                       max.cds=100000, 
@@ -53,6 +57,7 @@ ghostbasil <- function(A, r, alpha=1,
     user.lambdas <- as.numeric(user.lambdas)
     max.lambas <- as.integer(max.lambdas)
     lambdas.iter <- as.integer(lambdas.iter)
+    use.strong.rule <- as.logical(use.strong.rule)
     delta.strong.size <- as.integer(delta.strong.size)
     max.strong.size <- as.integer(max.strong.size)
     max.cds <- as.integer(max.cds)
@@ -118,6 +123,7 @@ ghostbasil <- function(A, r, alpha=1,
                     user_lmdas=user.lambdas,
                     max_n_lambdas=max.lambdas,
                     n_lambdas_iter=lambdas.iter,
+                    use_strong_rule=use.strong.rule,
                     delta_strong_size=delta.strong.size, 
                     max_strong_size=max.strong.size,
                     max_n_cds=max.cds, 

@@ -43,14 +43,11 @@ bench <- function(
 n <- 100
 ps <- c(100, 200, 400, 800, 1600, 3200)
 times <- 1
+seed <- 9183
 
 write.csv.default(n, 'n.csv')
 write.csv.default(ps, 'p.csv')
 
-bench.out <- bench(n, ps, times=times, seed=9183,
-                     delta.strong.size=100,
-                     lambdas.iter=10,
-                     thr=1e-7,
-                     n.threads=-1)
+bench.out <- bench(n, ps, times=times, seed=seed)
 bench.times <- bench.out$times
 write.csv.default(bench.times, 'basil_times.csv')

@@ -79,7 +79,7 @@ struct BasilFixture
 
         try {
             basil(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter,
-                  delta_strong_size, max_strong_size, max_cds, thr, 
+                  true, delta_strong_size, max_strong_size, max_cds, thr, 
                   min_ratio, n_threads,
                   betas, lmdas, rsqs);
 #ifdef MAKE_LMDAS
@@ -189,7 +189,7 @@ struct BasilCompareFixture
         auto rsqs = std::get<10>(dataset);
 
         basil(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter,
-              delta_strong_size, max_strong_size, max_cds, thr, 
+              true, delta_strong_size, max_strong_size, max_cds, thr, 
               min_ratio, n_threads,
               betas, lmdas, rsqs);
         return std::make_tuple(betas, lmdas, rsqs);

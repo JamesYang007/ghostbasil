@@ -297,12 +297,12 @@ void screen(
         const ISType& is_strong,
         size_t size,
         SSType& strong_set,
-        bool do_old_rule = false)
+        bool do_strong_rule)
 {
     using value_t = ValueType;
 
     assert(strong_set.size() <= abs_grad.size());
-    if (do_old_rule) {
+    if (!do_strong_rule) {
         size_t rem_size = abs_grad.size() - strong_set.size();
         size_t size_capped = std::min(size, rem_size);
         size_t old_strong_size = strong_set.size();
@@ -381,6 +381,7 @@ inline void basil(
         const ULmdasType& user_lmdas,
         size_t max_n_lambdas,
         size_t n_lambdas_iter,
+        bool use_strong_rule,
         size_t delta_strong_size,
         size_t max_strong_size,
         size_t max_n_cds,
@@ -593,9 +594,9 @@ inline void basil(
         if (some_lambdas_failed) {
             const auto lmda_prev_valid = (lmdas.size() == 0) ? lmdas_curr[0] : lmdas.back(); 
             const auto lmda_next = lmdas_curr[0]; // well-defined
-            const auto all_lmdas_failed = idx == 0;
+            const bool do_strong_rule = use_strong_rule && (idx != 0);
             screen(grad.array().abs(), lmda_prev_valid, lmda_next, 
-                alpha, penalty, is_strong, delta_strong_size, strong_set, all_lmdas_failed);
+                alpha, penalty, is_strong, delta_strong_size, strong_set, do_strong_rule);
             if (strong_set.size() > max_strong_size) throw util::max_basil_strong_set();
             new_strong_added = (old_strong_set_size < strong_set.size());
 
