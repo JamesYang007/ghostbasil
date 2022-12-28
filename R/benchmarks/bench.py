@@ -71,7 +71,7 @@ r_path = os.path.join(bench_path, "R")
 analyze_path = os.path.join(bench_path, "analyze")
 fig_path = os.path.join(bench_path, "fig")
 tmp_name = ".tmp"
-tmp_path = os.path.join(bench_path, tmp_name)
+tmp_path = os.path.join('/tmp', tmp_name)
 data_name = 'data'
 data_path = os.path.join(bench_path, data_name)
 
@@ -246,7 +246,7 @@ def bench():
         library(devtools);
         library(pkgbuild);
         pkgbuild::compile_dll(debug=F);
-        load_all(recompile=T);
+        load_all();
         setwd(\'{r_path}\')
 
         # source utility functions
@@ -369,11 +369,13 @@ def bench():
                          "green")
 
     if not do_analyze_only:
+        baseline_r_path = os.path.join(baseline_path, 'R')
+        new_version_r_path = os.path.join(new_version_path, 'R')
         pretty_print("[Running benchmarks for baseline...]", "cyan")
-        run_benchmark(baseline_path, True, r_path, baseline_name)
+        run_benchmark(baseline_r_path, True, r_path, baseline_name)
         pretty_print("[Done]", "green")
         pretty_print("[Running benchmarks for new version...]", "cyan")
-        run_benchmark(new_version_path, True, r_path, new_version_name)
+        run_benchmark(new_version_r_path, True, r_path, new_version_name)
         pretty_print("[Done]", "green")
 
     if do_analyze or do_analyze_only:
