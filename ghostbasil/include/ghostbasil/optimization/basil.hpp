@@ -389,6 +389,8 @@ struct BasilState
             }
 
             strong_beta_prev_valid_view = old_strong_beta_view;
+        } else {
+            strong_beta_prev_valid_view = old_strong_beta_view;
         }
 
         // save last valid R^2
@@ -747,7 +749,6 @@ inline void basil(
     // with 0 coefficient everywhere for each block.
     std::vector<basil_state_t> basil_states;
     basil_states.reserve(n_blocks);
-    size_t strong_set_tot_size = 0;
     for (size_t i = 0; i < n_blocks; ++i) {
         const auto& A_block = block_ptr[i];
         const auto begin = strides[i];
@@ -756,13 +757,20 @@ inline void basil(
         const auto penalty_block = penalty.segment(begin, size);
         basil_states.emplace_back(A_block, r_block, alpha, penalty_block);
 
-        // check strong set size
-        strong_set_tot_size += basil_states.back().strong_set.size();
-        if (strong_set_tot_size > max_strong_size) throw util::max_basil_strong_set();
-
         assert(basil_states.back().betas_curr.size() == 1);
         assert(basil_states.back().rsqs_curr.size() == 1);
     }
+
+    const auto get_strong_set_tot_size = [&]() {
+        return util::vec_type<size_t>::NullaryExpr(
+            basil_states.size(), [&](auto i) {
+                const auto& basil_state = basil_states[i];
+                return basil_state.strong_set.size();
+            }
+        ).sum();
+    };
+
+    if (get_strong_set_tot_size() > max_strong_size) throw util::max_basil_strong_set();
 
     // current lambda sequence
     vec_value_t lmdas_curr(1);
@@ -773,8 +781,8 @@ inline void basil(
     for (size_t i = 0; i < n_blocks; ++i) {
         auto& basil_state = basil_states[i];
 
-        const auto& A = basil_state.A;
-        const auto& penalty = basil_state.penalty;
+        const auto& A_block = basil_state.A;
+        const auto& penalty_block = basil_state.penalty;
         const auto& strong_set = basil_state.strong_set;
         const auto& strong_order = basil_state.strong_order;
         const auto& strong_A_diag = basil_state.strong_A_diag;
@@ -788,16 +796,17 @@ inline void basil(
         auto& rsqs_curr = basil_state.rsqs_curr;
 
         lasso_pack_t fit_pack(
-            A, alpha, penalty, strong_set, strong_order, strong_A_diag,
+            A_block, alpha, penalty_block, strong_set, strong_order, strong_A_diag,
             lmdas_curr, max_n_cds, thr, 0, strong_beta, strong_grad,
             active_set, active_order, active_set_ordered,
             is_active, betas_curr, rsqs_curr, 0, 0       
         );
-        fit(fit_pack, check_user_interrupt);
+        fit(fit_pack);
 
         // update state after fitting on non-penalized variables
         basil_state.update_after_initial_fit(fit_pack.rsq);
     }
+    check_user_interrupt(0);
 
     // lambda sequence in each basil iteration
     vec_value_t lmda_seq;
@@ -853,12 +862,8 @@ inline void basil(
             );
         }
         
-        const auto strong_set_tot_size = util::vec_type<size_t>::NullaryExpr(
-            n_blocks, [&](auto i) {
-                const auto& basil_state = basil_states[i];
-                return basil_state.strong_set.size();
-            }
-        ).sum();
+        const auto strong_set_tot_size = get_strong_set_tot_size();
+
         if (strong_set_tot_size > max_strong_size) throw util::max_basil_strong_set();
 
         util::vec_type<size_t> indices(n_blocks);
@@ -891,7 +896,7 @@ inline void basil(
                 active_set, active_order, active_set_ordered,
                 is_active, betas_curr, rsqs_curr, 0, 0       
             );
-            fit(fit_pack, check_user_interrupt);
+            fit(fit_pack);
             const auto& n_lmdas = fit_pack.n_lmdas;
 
             /* Checking KKT */
@@ -903,6 +908,8 @@ inline void basil(
             );
         }
         idx = indices.minCoeff();
+
+        check_user_interrupt(0);
 
         // decrement number of remaining lambdas
         n_lambdas_rem -= idx;

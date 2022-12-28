@@ -32,7 +32,9 @@ List basil__(
     std::vector<double> rsqs;
 
     // slight optimization: reserve spaces ahead of time
-    constexpr size_t capacity = 100;
+    const size_t capacity = std::max(
+        max_n_lambdas, static_cast<size_t>(user_lmdas.size())
+    );
     betas.reserve(capacity);
     lmdas.reserve(capacity);
     rsqs.reserve(capacity);

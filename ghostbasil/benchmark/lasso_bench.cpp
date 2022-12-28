@@ -38,6 +38,9 @@ struct LassoFixture
     {
         size_t p = A.cols();
 
+        Eigen::VectorXd penalty(p);
+        penalty.setOnes();
+
         std::vector<double> lmdas(100);
         double factor = std::pow(1e-6, 1./(lmdas.size()-1));
         lmdas[0] = r.array().abs().maxCoeff();
@@ -81,7 +84,7 @@ struct LassoFixture
                 strong_A_diag, lmdas, max_cds, thr, rsq, strong_beta, 
                 strong_grad, active_set, active_order, active_set_ordered,
                 is_active, betas, rsqs, 
-                n_cds, n_lmdas);
+                n_cds, n_lmdas, penalty);
     }
 
     template <class SGType, class StrongBetaType,
@@ -117,7 +120,7 @@ BENCHMARK_DEFINE_F(LassoFixture, dense)(benchmark::State& state)
     size_t p = state.range(0);
     size_t n = 100;
     size_t seed = 30;
-    double s = 0.5;
+    double alpha = 0.5;
 
     auto&& data = generate_data(n, p, seed);
     auto&& A = std::get<0>(data);
@@ -142,6 +145,7 @@ BENCHMARK_DEFINE_F(LassoFixture, dense)(benchmark::State& state)
     auto&& rsqs = std::get<14>(input);
     auto&& n_cds = std::get<15>(input);
     auto&& n_lmdas = std::get<16>(input);
+    auto&& penalty = std::get<17>(input);
 
     for (auto _ : state) {
         state.PauseTiming();
@@ -150,7 +154,7 @@ BENCHMARK_DEFINE_F(LassoFixture, dense)(benchmark::State& state)
         LassoParamPack<
             std::decay_t<decltype(A)>, double, int, int
         > pack(
-            A, s, strong_set, strong_order, strong_A_diag,
+            A, alpha, penalty, strong_set, strong_order, strong_A_diag,
             lmdas, max_cds, thr, rsq, strong_beta, strong_grad,
             active_set, active_order, active_set_ordered,
             is_active, betas, rsqs, n_cds, n_lmdas            
@@ -202,7 +206,7 @@ BENCHMARK_DEFINE_F(LassoBlockFixture, block_dense)(benchmark::State& state)
     size_t p = state.range(1);
     size_t n = 100;
     size_t seed = 30;
-    double s = 0.5;
+    double alpha = 0.5;
 
     auto&& data = generate_data(n, p, L, seed);
     auto&& mat_list = std::get<0>(data);
@@ -228,6 +232,7 @@ BENCHMARK_DEFINE_F(LassoBlockFixture, block_dense)(benchmark::State& state)
     auto&& rsqs = std::get<14>(input);
     auto&& n_cds = std::get<15>(input);
     auto&& n_lmdas = std::get<16>(input);
+    auto&& penalty = std::get<17>(input);
         
     for (auto _ : state) {
         state.PauseTiming();
@@ -236,7 +241,7 @@ BENCHMARK_DEFINE_F(LassoBlockFixture, block_dense)(benchmark::State& state)
         LassoParamPack<
             std::decay_t<decltype(A)>, double, int, int
         > pack(
-            A, s, strong_set, strong_order, strong_A_diag,
+            A, alpha, penalty, strong_set, strong_order, strong_A_diag,
             lmdas, max_cds, thr, rsq, strong_beta, strong_grad,
             active_set, active_order, active_set_ordered,
             is_active, betas, rsqs, n_cds, n_lmdas            
