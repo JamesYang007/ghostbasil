@@ -1062,6 +1062,7 @@ inline void fit(
     const auto& lmdas = pack.lmdas;
     const auto thr = pack.thr;
     const auto max_cds = pack.max_cds;
+    const auto do_early_stop = pack.do_early_stop;
     const auto& rsq = pack.rsq;
     auto& active_set = *pack.active_set;
     auto& active_order = *pack.active_order;
@@ -1172,7 +1173,7 @@ inline void fit(
         if (l < 2) continue;
 
         // early stop if R^2 criterion is fulfilled.
-        if (check_early_stop_rsq(rsqs[l-2], rsqs[l-1], rsqs[l])) break;
+        if (do_early_stop && check_early_stop_rsq(rsqs[l-2], rsqs[l-1], rsqs[l])) break;
     }
 }
 
