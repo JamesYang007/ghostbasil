@@ -102,6 +102,7 @@ struct LassoParamPack
     map_vec_value_t rsqs;
     size_t n_cds;
     size_t n_lmdas;
+    bool do_early_stop = true;
     
     explicit LassoParamPack()
         : penalty(nullptr, 0),
@@ -140,7 +141,8 @@ struct LassoParamPack
         BetasType& betas_, 
         RsqsType& rsqs_,
         size_t n_cds_,
-        size_t n_lmdas_
+        size_t n_lmdas_,
+        bool do_early_stop_ = true
     )
         : A(&A_),
           alpha(alpha_),
@@ -161,7 +163,8 @@ struct LassoParamPack
           betas(betas_.data(), betas_.size()),
           rsqs(rsqs_.data(), rsqs_.size()),
           n_cds(n_cds_),
-          n_lmdas(n_lmdas_)
+          n_lmdas(n_lmdas_),
+          do_early_stop(do_early_stop_)
     {}
 };
 
