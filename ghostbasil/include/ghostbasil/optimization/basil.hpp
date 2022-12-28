@@ -171,6 +171,7 @@ struct BasilState
     const value_t alpha;
     const map_cvec_value_t penalty;
     const AType& A;
+    const map_cvec_value_t r;
 
     std::unordered_set<index_t> strong_hashset;
     dyn_vec_index_t strong_set; 
@@ -202,6 +203,7 @@ struct BasilState
           alpha(alpha_),
           penalty(penalty_.data(), penalty_.size()),
           A(A_),
+          r(r_.data(), r_.size()),
           grad(r_),
           grad_next(r_.size()),
           betas_curr(1),
@@ -440,14 +442,29 @@ private:
     }
 };    
 
-template <class ValueType, class GradType, class PenaltyType, class OutType>
+template <class ValueType, class GradType, class PenaltyType>
+GHOSTBASIL_STRONG_INLINE
+auto lambda_max(
+    const GradType& grad,
+    ValueType alpha,
+    const PenaltyType& penalty
+)
+{
+    using value_t = ValueType;
+    using vec_value_t = util::vec_type<value_t>;
+    return vec_value_t::NullaryExpr(
+        grad.size(), [&](auto i) {
+            return (penalty[i] <= 0.0) ? 0.0 : std::abs(grad[i]) / penalty[i];
+        }
+    ).maxCoeff() / std::max(alpha, 1e-3);
+}
+
+template <class ValueType, class OutType>
 GHOSTBASIL_STRONG_INLINE
 void generate_lambdas(
     size_t max_n_lambdas,
     ValueType min_ratio,
-    const GradType& grad,
-    ValueType alpha,
-    const PenaltyType& penalty,
+    ValueType lmda_max,
     OutType& out
 )
 {
@@ -458,11 +475,6 @@ void generate_lambdas(
     // l_max is the smallest lambda such that the penalized features (penalty > 0)
     // have 0 coefficients (assuming alpha > 0). The logic is still coherent when alpha = 0.
     auto log_factor = std::log(min_ratio) * static_cast<value_t>(1.0)/(max_n_lambdas-1);
-    auto lmda_max = vec_value_t::NullaryExpr(
-        grad.size(), [&](auto i) {
-            return (penalty[i] <= 0.0) ? 0.0 : std::abs(grad[i]) / penalty[i];
-        }
-    ).maxCoeff() / std::max(alpha, 1e-3);
     out.array() = lmda_max * (
         log_factor * vec_value_t::LinSpaced(max_n_lambdas, 0, max_n_lambdas-1)
     ).array().exp();
@@ -543,6 +555,8 @@ inline void basil(
     using index_t = int;
     using bool_t = index_t;
     using basil_state_t = BasilState<A_t, value_t, index_t, bool_t>;
+    using vec_value_t = typename basil_state_t::vec_value_t;
+    using lasso_pack_t = LassoParamPack<A_t, value_t, index_t, bool_t>;
     
     const size_t n_features = r.size();
     max_strong_size = std::min(max_strong_size, n_features);
@@ -576,13 +590,11 @@ inline void basil(
     // current lambda sequence
     assert(betas_curr.size() == 1);
     assert(rsqs_curr.size() == 1);
-    util::vec_type<value_t> lmdas_curr(1);
+    vec_value_t lmdas_curr(1);
     lmdas_curr[0] = std::numeric_limits<value_t>::max();
 
     // fit only on the non-penalized variables
-    LassoParamPack<
-        AType, value_t, index_t, bool_t
-    > fit_pack(
+    lasso_pack_t fit_pack(
         A, alpha, penalty, strong_set, strong_order, strong_A_diag,
         lmdas_curr, max_n_cds, thr, 0, strong_beta, strong_grad,
         active_set, active_order, active_set_ordered,
@@ -594,10 +606,11 @@ inline void basil(
     basil_state.update_after_initial_fit(fit_pack.rsq);
 
     // lambda sequence in each basil iteration
-    util::vec_type<value_t> lmda_seq;
+    vec_value_t lmda_seq;
     const bool use_user_lmdas = user_lmdas.size() != 0;
     if (!use_user_lmdas) {
-        generate_lambdas(max_n_lambdas, min_ratio, grad, alpha, penalty, lmda_seq);
+        const auto lmda_max = lambda_max(grad, alpha, penalty);
+        generate_lambdas(max_n_lambdas, min_ratio, lmda_max, lmda_seq);
     } else {
         lmda_seq = user_lmdas;
         max_n_lambdas = user_lmdas.size();
@@ -685,6 +698,274 @@ inline void basil(
 
     betas_out = std::move(betas);
     rsqs_out = std::move(rsqs);
+}
+
+/**
+ * Specialized routine for block matrix A.
+ */
+template <class AType, class RType, class ValueType,
+          class PenaltyType, class ULmdasType,
+          class BetasType, class LmdasType, class RsqsType,
+          class CUIType = util::no_op>
+inline void basil(
+        const BlockMatrix<AType>& A,
+        const RType& r,
+        ValueType alpha,
+        const PenaltyType& penalty,
+        const ULmdasType& user_lmdas,
+        size_t max_n_lambdas,
+        size_t n_lambdas_iter,
+        bool use_strong_rule,
+        size_t delta_strong_size,
+        size_t max_strong_size,
+        size_t max_n_cds,
+        ValueType thr,
+        ValueType min_ratio,
+        size_t n_threads,
+        BetasType& betas_out,
+        LmdasType& lmdas,
+        RsqsType& rsqs_out,
+        CUIType check_user_interrupt = CUIType())
+{
+    using A_t = std::decay_t<AType>;
+    using value_t = ValueType;
+    using index_t = int;
+    using bool_t = index_t;
+    using basil_state_t = BasilState<A_t, value_t, index_t, bool_t>;
+    using vec_value_t = typename basil_state_t::vec_value_t;
+    using sp_vec_value_t = typename basil_state_t::sp_vec_value_t;
+    using lasso_pack_t = LassoParamPack<A_t, value_t, index_t, bool_t>;
+    
+    const size_t n_features = r.size();
+    max_strong_size = std::min(max_strong_size, n_features);
+    
+    const size_t n_blocks = A.n_blocks();
+    const auto block_ptr = A.blocks();
+    const auto& strides = A.strides();
+
+    // initialize current state to consider non-penalized variables
+    // with 0 coefficient everywhere for each block.
+    std::vector<basil_state_t> basil_states;
+    basil_states.reserve(n_blocks);
+    size_t strong_set_tot_size = 0;
+    for (size_t i = 0; i < n_blocks; ++i) {
+        const auto& A_block = block_ptr[i];
+        const auto begin = strides[i];
+        const auto size = strides[i+1] - begin;
+        const auto r_block = r.segment(begin, size);
+        const auto penalty_block = penalty.segment(begin, size);
+        basil_states.emplace_back(A_block, r_block, alpha, penalty_block);
+
+        // check strong set size
+        strong_set_tot_size += basil_states.back().strong_set.size();
+        if (strong_set_tot_size > max_strong_size) throw util::max_basil_strong_set();
+
+        assert(basil_states.back().betas_curr.size() == 1);
+        assert(basil_states.back().rsqs_curr.size() == 1);
+    }
+
+    // current lambda sequence
+    vec_value_t lmdas_curr(1);
+    lmdas_curr[0] = std::numeric_limits<value_t>::max();
+
+    // fit only on the non-penalized variables
+#pragma omp parallel for schedule(static) num_threads(n_threads)
+    for (size_t i = 0; i < n_blocks; ++i) {
+        auto& basil_state = basil_states[i];
+
+        const auto& A = basil_state.A;
+        const auto& penalty = basil_state.penalty;
+        const auto& strong_set = basil_state.strong_set;
+        const auto& strong_order = basil_state.strong_order;
+        const auto& strong_A_diag = basil_state.strong_A_diag;
+        auto& strong_beta = basil_state.strong_beta;
+        auto& strong_grad = basil_state.strong_grad;
+        auto& active_set = basil_state.active_set;
+        auto& active_order = basil_state.active_order;
+        auto& active_set_ordered = basil_state.active_set_ordered;
+        auto& is_active = basil_state.is_active;
+        auto& betas_curr = basil_state.betas_curr;
+        auto& rsqs_curr = basil_state.rsqs_curr;
+
+        lasso_pack_t fit_pack(
+            A, alpha, penalty, strong_set, strong_order, strong_A_diag,
+            lmdas_curr, max_n_cds, thr, 0, strong_beta, strong_grad,
+            active_set, active_order, active_set_ordered,
+            is_active, betas_curr, rsqs_curr, 0, 0       
+        );
+        fit(fit_pack, check_user_interrupt);
+
+        // update state after fitting on non-penalized variables
+        basil_state.update_after_initial_fit(fit_pack.rsq);
+    }
+
+    // lambda sequence in each basil iteration
+    vec_value_t lmda_seq;
+    const bool use_user_lmdas = user_lmdas.size() != 0;
+    if (!use_user_lmdas) {
+        const auto lmda_max = vec_value_t::NullaryExpr(
+            n_blocks, [&](auto i) {
+                const auto& basil_state = basil_states[i];
+                const auto& grad = basil_state.grad;
+                const auto& penalty = basil_state.penalty;
+                return lambda_max(grad, alpha, penalty);
+            }
+        ).maxCoeff();
+        generate_lambdas(max_n_lambdas, min_ratio, lmda_max, lmda_seq);
+    } else {
+        lmda_seq = user_lmdas;
+        max_n_lambdas = user_lmdas.size();
+    }
+    n_lambdas_iter = std::min(n_lambdas_iter, max_n_lambdas);
+
+    // number of remaining lambdas to process
+    size_t n_lambdas_rem = max_n_lambdas;
+
+    size_t idx = 1;         // first index of KKT failure
+    size_t basil_iter = 0;  // number of iterations 
+    while (1) 
+    {
+        // finish if no more lambdas to process finished
+        if (n_lambdas_rem == 0) break;
+
+        /* Update lambda sequence */
+        const bool some_lambdas_failed = idx < lmdas_curr.size();
+
+        // if some lambdas have valid solutions, shift the next lambda sequence
+        if (idx > 0) {
+            lmdas_curr.resize(std::min(n_lambdas_iter, n_lambdas_rem));
+            auto begin = std::next(lmda_seq.data(), lmda_seq.size()-n_lambdas_rem);
+            auto end = std::next(begin, lmdas_curr.size());
+            std::copy(begin, end, lmdas_curr.data());
+        }
+
+        /* Screening */
+        const auto lmda_prev_valid = (lmdas.size() == 0) ? lmdas_curr[0] : lmdas.back(); 
+        const auto lmda_next = lmdas_curr[0]; // well-defined
+        const bool do_strong_rule = use_strong_rule && (idx != 0);
+#pragma omp parallel for schedule(static) num_threads(n_threads)
+        for (size_t i = 0; i < n_blocks; ++i) {
+            auto& basil_state = basil_states[i];
+            basil_state.screen(
+                lmdas_curr.size(), delta_strong_size,
+                do_strong_rule, idx == 0, some_lambdas_failed,
+                lmda_prev_valid, lmda_next 
+            );
+        }
+        
+        const auto strong_set_tot_size = util::vec_type<size_t>::NullaryExpr(
+            n_blocks, [&](auto i) {
+                const auto& basil_state = basil_states[i];
+                return basil_state.strong_set.size();
+            }
+        ).sum();
+        if (strong_set_tot_size > max_strong_size) throw util::max_basil_strong_set();
+
+        util::vec_type<size_t> indices(n_blocks);
+#pragma omp parallel for schedule(static) num_threads(n_threads)
+        for (size_t i = 0; i < n_blocks; ++i) {
+            auto& basil_state = basil_states[i];
+
+            const auto& A_block = basil_state.A;
+            const auto& r_block = basil_state.r;
+            const auto& penalty_block = basil_state.penalty;
+            const auto& strong_set = basil_state.strong_set;
+            const auto& strong_order = basil_state.strong_order;
+            const auto& strong_A_diag = basil_state.strong_A_diag;
+            const auto& rsq_prev_valid = basil_state.rsq_prev_valid;
+            auto& strong_beta = basil_state.strong_beta;
+            auto& strong_grad = basil_state.strong_grad;
+            auto& active_set = basil_state.active_set;
+            auto& active_order = basil_state.active_order;
+            auto& active_set_ordered = basil_state.active_set_ordered;
+            auto& is_active = basil_state.is_active;
+            auto& betas_curr = basil_state.betas_curr;
+            auto& rsqs_curr = basil_state.rsqs_curr;
+            auto& grad = basil_state.grad;
+            auto& grad_next = basil_state.grad_next;
+
+            /* Fit lasso */
+            lasso_pack_t fit_pack(
+                A_block, alpha, penalty_block, strong_set, strong_order, strong_A_diag,
+                lmdas_curr, max_n_cds, thr, rsq_prev_valid, strong_beta, strong_grad,
+                active_set, active_order, active_set_ordered,
+                is_active, betas_curr, rsqs_curr, 0, 0       
+            );
+            fit(fit_pack, check_user_interrupt);
+            const auto& n_lmdas = fit_pack.n_lmdas;
+
+            /* Checking KKT */
+
+            indices[i] = check_kkt(
+                A_block, r_block, alpha, penalty_block, 
+                lmdas_curr.head(n_lmdas), betas_curr.head(n_lmdas), 
+                [&](auto j) { return basil_state.is_strong(j); }, 1, grad, grad_next
+            );
+        }
+        idx = indices.minCoeff();
+
+        // decrement number of remaining lambdas
+        n_lambdas_rem -= idx;
+
+        /* Save output and check for any early stopping */
+
+        // if first failure is not at the first lambda, save all previous solutions.
+        std::vector<index_t> active_indices;
+        std::vector<value_t> active_values;
+        active_indices.reserve(strong_set_tot_size);
+        active_values.reserve(strong_set_tot_size);
+        for (size_t i = 0; i < idx; ++i) {
+            lmdas.emplace_back(std::move(lmdas_curr[i]));
+            
+            active_indices.clear();
+            active_values.clear();
+            value_t rsq_tot = 0;
+            for (size_t j = 0; j < n_blocks; ++j) {
+                auto& basil_state = basil_states[j];
+                const auto& betas_curr = basil_state.betas_curr;
+                const auto& rsqs_curr = basil_state.rsqs_curr;
+                auto& betas = basil_state.betas;
+                auto& rsqs = basil_state.rsqs;
+
+                // Append jth block of active coefficients in the concatenated coeff vector
+                // Assumes that blocks are ordered in terms of coefficient indices
+                // (block 1: [0, n_1), block 2: [n_1, n_2) ... )
+                const size_t nzn = betas_curr[i].nonZeros();
+                const auto inner = betas_curr[i].innerIndexPtr();
+                const auto vals = betas_curr[i].valuePtr();
+                const auto shift = strides[j];
+                for (size_t k = 0; k < nzn; ++k) {
+                    active_indices.push_back(shift + inner[k]);
+                    active_values.push_back(vals[k]);
+                }
+
+                rsq_tot += rsqs_curr[i];
+
+                betas.emplace_back(std::move(betas_curr[i]));
+                rsqs.emplace_back(std::move(rsqs_curr[i]));
+            }
+
+            Eigen::Map<sp_vec_value_t> beta_concat(
+                n_features,
+                active_indices.size(),
+                active_indices.data(),
+                active_values.data()
+            );
+            betas_out.emplace_back(beta_concat);
+
+            rsqs_out.emplace_back(rsq_tot);
+        }
+
+        // check early termination 
+        if (rsqs_out.size() >= 3) {
+            const auto rsq_u = rsqs_out[rsqs_out.size()-1];
+            const auto rsq_m = rsqs_out[rsqs_out.size()-2];
+            const auto rsq_l = rsqs_out[rsqs_out.size()-3];
+            if (check_early_stop_rsq(rsq_l, rsq_m, rsq_u)) break;
+        }
+
+        ++basil_iter;
+    }
 }
 
 } // namespace lasso

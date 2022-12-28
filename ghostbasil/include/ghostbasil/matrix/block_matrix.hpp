@@ -90,6 +90,8 @@ public:
     GHOSTBASIL_STRONG_INLINE Index rows() const { return n_features(); }
     GHOSTBASIL_STRONG_INLINE Index cols() const { return n_features(); }
     GHOSTBASIL_STRONG_INLINE Index size() const { return rows() * cols(); }
+    GHOSTBASIL_STRONG_INLINE Index n_blocks() const { return n_mats_; }
+    GHOSTBASIL_STRONG_INLINE const mat_t* blocks() const { return mat_list_; }
 
     template <class VecType>
     GHOSTBASIL_STRONG_INLINE

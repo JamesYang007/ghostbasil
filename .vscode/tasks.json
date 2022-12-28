@@ -72,7 +72,7 @@
                 "//ghostbasil/test:optimization",
                 //"--cxxopt=-DMAKE_LMDAS",
                 //"--",
-                //"--gtest_filter='Basil*'",
+                //"--gtest_filter='BasilBlockSuite/BasilBlockFixture.basil_block/1'",
             ],
             "group": {
                 "kind": "test",
