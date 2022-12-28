@@ -439,17 +439,24 @@ inline void basil(
     std::vector<value_t> strong_beta;
     init_strong_beta(strong_beta, strong_set, initial_size); 
 
-    // Fit lasso on lambda == inf to get non-penalized coefficients.
-    util::vec_type<value_t, 1> lmda_inf(std::numeric_limits<value_t>::max());
-    util::vec_type<sp_vec_t, 1> beta_inf;
-    util::vec_type<value_t, 1> rsq_inf;
+    // current lambda sub-sequence
+    vec_t lmdas_curr(1);
+    lmdas_curr[0] = std::numeric_limits<value_t>::max();
+
+    // list of coefficient outputs
+    util::vec_type<sp_vec_t> betas_curr(lmdas_curr.size());
+
+    // list of R^2 outputs
+    vec_t rsqs_curr(lmdas_curr.size());
+
+    // fit only on the non-penalized variables
     LassoParamPack<
         AType, value_t, index_t, bool_t
     > fit_pack(
         A, alpha, penalty, strong_set, strong_order, strong_A_diag,
-        lmda_inf, max_n_cds, thr, 0, strong_beta, strong_grad,
+        lmdas_curr, max_n_cds, thr, 0, strong_beta, strong_grad,
         active_set, active_order, active_set_ordered,
-        is_active, beta_inf, rsq_inf, 0, 0       
+        is_active, betas_curr, rsqs_curr, 0, 0       
     );
     fit(fit_pack, check_user_interrupt);
     
@@ -459,7 +466,7 @@ inline void basil(
     }
     for (size_t i = 0; i < grad.size(); ++i) {
         if (is_strong(i)) continue;
-        grad[i] -= A.col_dot(i, beta_inf[0]);
+        grad[i] -= A.col_dot(i, betas_curr[0]);
     }
 
     // current (unnormalized) R^2 at strong_beta.
@@ -468,13 +475,13 @@ inline void basil(
     // previously valid strong beta
     auto strong_beta_prev_valid = strong_beta; 
                                           
-    // initialize lambda sequence
+    // initialize full lambda sequence for the whole program
     vec_t lmda_seq;
     const bool use_user_lmdas = user_lmdas.size() != 0;
     if (!use_user_lmdas) {
         // lmda_seq = [l_max, l_max * f, l_max * f^2, ..., l_max * f^(max_n_lambdas-1)]
         // l_max is the smallest lambda such that the penalized features (penalty > 0)
-        // have 0 coefficients.
+        // have 0 coefficients (assuming alpha > 0). The logic is still coherent when alpha = 0.
         value_t log_factor = std::log(min_ratio) * static_cast<value_t>(1.0)/(max_n_lambdas-1);
         value_t lmda_max = vec_t::NullaryExpr(
             grad.size(), [&](auto i) {
@@ -491,65 +498,10 @@ inline void basil(
     n_lambdas_iter = std::min(n_lambdas_iter, max_n_lambdas);
     size_t n_lambdas_rem = max_n_lambdas;
 
-    // current lambda sub-sequence
-    // Take only lmda_max. Current state is the correct solution at lmda_max.
-    // Lasso fitting should be trivial.
-    vec_t lmdas_curr;
-    init_lambdas(lmdas_curr, lmda_seq, 1);
-
-    // list of coefficient outputs
-    util::vec_type<sp_vec_t> betas_curr(lmdas_curr.size());
-
-    // list of R^2 outputs
-    vec_t rsqs_curr(lmdas_curr.size());
-
+    size_t idx = 1;         // first index of KKT failure
+    size_t basil_iter = 0;  // number of iterations 
     while (1) 
     {
-        /* Fit lasso */
-        LassoParamPack<
-            AType, value_t, index_t, bool_t
-        > fit_pack(
-            A, alpha, penalty, strong_set, strong_order, strong_A_diag,
-            lmdas_curr, max_n_cds, thr, rsq_prev_valid, strong_beta, strong_grad,
-            active_set, active_order, active_set_ordered,
-            is_active, betas_curr, rsqs_curr, 0, 0       
-        );
-        auto& n_lmdas = fit_pack.n_lmdas;
-        fit(fit_pack, check_user_interrupt);
-
-        /* Checking KKT */
-
-        // Get index of lambda of first failure.
-        // grad will be the corresponding gradient vector at the returned lmdas_curr[index-1] if index >= 1,
-        // and if idx <= 0, then grad is unchanged.
-        // In any case, grad corresponds to the first smallest lambda where KKT check passes.
-        size_t idx = check_kkt(
-                A, r, alpha, penalty, lmdas_curr.head(n_lmdas), betas_curr.head(n_lmdas), 
-                is_strong, n_threads, grad, grad_next);
-
-        // decrement number of remaining lambdas
-        n_lambdas_rem -= idx;
-
-        /* Save output and check for any early stopping */
-
-        // if first failure is not at the first lambda, save all previous solutions.
-        for (size_t i = 0; i < idx; ++i) {
-            betas.emplace_back(std::move(betas_curr[i]));
-            lmdas.emplace_back(std::move(lmdas_curr[i]));
-            rsqs.emplace_back(std::move(rsqs_curr[i]));
-        }
-
-        // check early termination 
-        if (rsqs.size() >= 3) {
-            const auto rsq_u = rsqs[rsqs.size()-1];
-            const auto rsq_m = rsqs[rsqs.size()-2];
-            const auto rsq_l = rsqs[rsqs.size()-3];
-            if (check_early_stop_rsq(rsq_l, rsq_m, rsq_u)) break;
-        }
-
-        // finish if no more lambdas to process finished
-        if (n_lambdas_rem == 0) break;
-
         /* Screening */
 
         const bool some_lambdas_failed = idx < lmdas_curr.size();
@@ -663,13 +615,58 @@ inline void basil(
         }
 
         // save last valid R^2
-        rsq_prev_valid = rsqs.back();
+        rsq_prev_valid = (rsqs.size() == 0) ? rsq_prev_valid : rsqs.back();
 
         // update strong_order for new order of strong_set
         // only if new variables were added to the strong set.
         if (new_strong_added) {
             init_strong_order(strong_order, strong_set, old_strong_set_size);
         }
+
+        /* Fit lasso */
+        LassoParamPack<
+            AType, value_t, index_t, bool_t
+        > fit_pack(
+            A, alpha, penalty, strong_set, strong_order, strong_A_diag,
+            lmdas_curr, max_n_cds, thr, rsq_prev_valid, strong_beta, strong_grad,
+            active_set, active_order, active_set_ordered,
+            is_active, betas_curr, rsqs_curr, 0, 0       
+        );
+        auto& n_lmdas = fit_pack.n_lmdas;
+        fit(fit_pack, check_user_interrupt);
+
+        /* Checking KKT */
+
+        // Get index of lambda of first failure.
+        // grad will be the corresponding gradient vector at the returned lmdas_curr[index-1] if index >= 1,
+        // and if idx <= 0, then grad is unchanged.
+        // In any case, grad corresponds to the first smallest lambda where KKT check passes.
+        idx = check_kkt(
+                A, r, alpha, penalty, lmdas_curr.head(n_lmdas), betas_curr.head(n_lmdas), 
+                is_strong, n_threads, grad, grad_next);
+
+        // decrement number of remaining lambdas
+        n_lambdas_rem -= idx;
+
+        /* Save output and check for any early stopping */
+
+        // if first failure is not at the first lambda, save all previous solutions.
+        for (size_t i = 0; i < idx; ++i) {
+            betas.emplace_back(std::move(betas_curr[i]));
+            lmdas.emplace_back(std::move(lmdas_curr[i]));
+            rsqs.emplace_back(std::move(rsqs_curr[i]));
+        }
+
+        // check early termination 
+        if (rsqs.size() >= 3) {
+            const auto rsq_u = rsqs[rsqs.size()-1];
+            const auto rsq_m = rsqs[rsqs.size()-2];
+            const auto rsq_l = rsqs[rsqs.size()-3];
+            if (check_early_stop_rsq(rsq_l, rsq_m, rsq_u)) break;
+        }
+
+        // finish if no more lambdas to process finished
+        if (n_lambdas_rem == 0) break;
     }
 }
 
