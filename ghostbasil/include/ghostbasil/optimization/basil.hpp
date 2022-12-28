@@ -440,6 +440,34 @@ private:
     }
 };    
 
+template <class ValueType, class GradType, class PenaltyType, class OutType>
+GHOSTBASIL_STRONG_INLINE
+void generate_lambdas(
+    size_t max_n_lambdas,
+    ValueType min_ratio,
+    const GradType& grad,
+    ValueType alpha,
+    const PenaltyType& penalty,
+    OutType& out
+)
+{
+    using value_t = ValueType;
+    using vec_value_t = util::vec_type<value_t>;
+
+    // lmda_seq = [l_max, l_max * f, l_max * f^2, ..., l_max * f^(max_n_lambdas-1)]
+    // l_max is the smallest lambda such that the penalized features (penalty > 0)
+    // have 0 coefficients (assuming alpha > 0). The logic is still coherent when alpha = 0.
+    auto log_factor = std::log(min_ratio) * static_cast<value_t>(1.0)/(max_n_lambdas-1);
+    auto lmda_max = vec_value_t::NullaryExpr(
+        grad.size(), [&](auto i) {
+            return (penalty[i] <= 0.0) ? 0.0 : std::abs(grad[i]) / penalty[i];
+        }
+    ).maxCoeff() / std::max(alpha, 1e-3);
+    out.array() = lmda_max * (
+        log_factor * vec_value_t::LinSpaced(max_n_lambdas, 0, max_n_lambdas-1)
+    ).array().exp();
+}
+
 /**
  * Solves the lasso objective for a sequence of \f$\lambda\f$ values.
  *
@@ -486,7 +514,6 @@ private:
  * and vector of coefficient (sparse) matrices 
  * corresponding to each vector of lambdas.
  */
-
 template <class AType, class RType, class ValueType,
           class PenaltyType, class ULmdasType,
           class BetasType, class LmdasType, class RsqsType,
@@ -516,7 +543,6 @@ inline void basil(
     using index_t = int;
     using bool_t = index_t;
     using basil_state_t = BasilState<A_t, value_t, index_t, bool_t>;
-    using vec_value_t = typename basil_state_t::vec_value_t;
     
     const size_t n_features = r.size();
     max_strong_size = std::min(max_strong_size, n_features);
@@ -571,18 +597,7 @@ inline void basil(
     util::vec_type<value_t> lmda_seq;
     const bool use_user_lmdas = user_lmdas.size() != 0;
     if (!use_user_lmdas) {
-        // lmda_seq = [l_max, l_max * f, l_max * f^2, ..., l_max * f^(max_n_lambdas-1)]
-        // l_max is the smallest lambda such that the penalized features (penalty > 0)
-        // have 0 coefficients (assuming alpha > 0). The logic is still coherent when alpha = 0.
-        value_t log_factor = std::log(min_ratio) * static_cast<value_t>(1.0)/(max_n_lambdas-1);
-        value_t lmda_max = vec_value_t::NullaryExpr(
-            grad.size(), [&](auto i) {
-                return (penalty[i] <= 0.0) ? 0.0 : std::abs(grad[i]) / penalty[i];
-            }
-        ).maxCoeff() / std::max(alpha, 1e-3);
-        lmda_seq.array() = lmda_max * (
-            log_factor * vec_value_t::LinSpaced(max_n_lambdas, 0, max_n_lambdas-1)
-        ).array().exp();
+        generate_lambdas(max_n_lambdas, min_ratio, grad, alpha, penalty, lmda_seq);
     } else {
         lmda_seq = user_lmdas;
         max_n_lambdas = user_lmdas.size();
