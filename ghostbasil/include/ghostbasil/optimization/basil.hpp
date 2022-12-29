@@ -852,6 +852,7 @@ inline void basil(
 template <class AType, class RType, class ValueType,
           class PenaltyType, class ULmdasType,
           class BetasType, class LmdasType, class RsqsType,
+          class VecCheckpointType = std::vector<BasilCheckpoint<ValueType, int, int>>,
           class CUIType = util::no_op>
 inline void basil(
         const BlockMatrix<AType>& A,
@@ -871,6 +872,7 @@ inline void basil(
         BetasType& betas_out,
         LmdasType& lmdas,
         RsqsType& rsqs_out,
+        VecCheckpointType&& checkpoints = VecCheckpointType(),
         CUIType check_user_interrupt = CUIType())
 {
     using A_t = std::decay_t<AType>;
@@ -881,6 +883,10 @@ inline void basil(
     using vec_value_t = typename basil_state_t::vec_value_t;
     using sp_vec_value_t = typename basil_state_t::sp_vec_value_t;
     using lasso_pack_t = LassoParamPack<A_t, value_t, index_t, bool_t>;
+
+    betas_out.clear();
+    lmdas.clear();
+    rsqs_out.clear();
     
     const size_t n_features = r.size();
     max_strong_size = std::min(max_strong_size, n_features);
@@ -888,6 +894,11 @@ inline void basil(
     const size_t n_blocks = A.n_blocks();
     const auto block_ptr = A.blocks();
     const auto& strides = A.strides();
+
+    // either checkpoints is empty (no checkpoints are initialized)
+    // or all checkpoints are given for each block.
+    assert((checkpoints.size() == 0) ||
+            (checkpoints.size() == n_blocks));
 
     // initialize current state to consider non-penalized variables
     // with 0 coefficient everywhere for each block.
@@ -899,10 +910,13 @@ inline void basil(
         const auto size = strides[i+1] - begin;
         const auto r_block = r.segment(begin, size);
         const auto penalty_block = penalty.segment(begin, size);
-        basil_states.emplace_back(A_block, r_block, alpha, penalty_block);
-
-        assert(basil_states.back().betas_curr.size() == 1);
-        assert(basil_states.back().rsqs_curr.size() == 1);
+        if (checkpoints.size() && checkpoints[i].is_initialized) {
+            basil_states.emplace_back(A_block, r_block, alpha, penalty_block, checkpoints[i]);
+        } else {
+            basil_states.emplace_back(A_block, r_block, alpha, penalty_block);
+            assert(basil_states.back().betas_curr.size() == 1);
+            assert(basil_states.back().rsqs_curr.size() == 1);
+        }
     }
 
     const auto get_strong_set_tot_size = [&]() {
@@ -923,6 +937,9 @@ inline void basil(
     // fit only on the non-penalized variables
 #pragma omp parallel for schedule(static) num_threads(n_threads)
     for (size_t i = 0; i < n_blocks; ++i) {
+        if (checkpoints.size() && checkpoints[i].is_initialized) {
+            continue;
+        }
         auto& basil_state = basil_states[i];
 
         const auto& A_block = basil_state.A;
@@ -1116,6 +1133,11 @@ inline void basil(
         }
 
         ++basil_iter;
+    }
+
+    checkpoints.resize(basil_states.size());
+    for (size_t i = 0; i < checkpoints.size(); ++i) {
+        checkpoints[i] = std::move(basil_states[i]);
     }
 }
 
