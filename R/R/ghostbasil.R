@@ -48,18 +48,18 @@ ghostbasil <- function(A, r, alpha=1,
                       max.lambdas=100,
                       lambdas.iter=5, 
                       use.strong.rule=T,
-                      delta.strong.size=500, 
+                      delta.strong.size=10, 
                       max.strong.size=10000, 
                       max.cds=100000, 
                       thr=1e-7,
-                      min.ratio=1e-6,
-                      n.threads=0,
+                      min.ratio=1e-2,
+                      n.threads=-1,
                       checkpoint=list())
 {
     # proper casting of inputs
     penalty <- as.numeric(penalty)
     user.lambdas <- as.numeric(user.lambdas)
-    max.lambas <- as.integer(max.lambdas)
+    max.lambdas <- as.integer(max.lambdas)
     lambdas.iter <- as.integer(lambdas.iter)
     use.strong.rule <- as.logical(use.strong.rule)
     delta.strong.size <- as.integer(delta.strong.size)
@@ -101,6 +101,9 @@ ghostbasil <- function(A, r, alpha=1,
     if (n.threads < -1) {
         stop("Number of threads must be at least -1.")
     }
+
+    # rescale penalty to sum to nvars
+    penalty <- penalty * (length(penalty) / sum(penalty))
 
     # choose the C++ routine
     basil_cpp <- NA

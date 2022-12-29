@@ -432,38 +432,31 @@ struct BasilState
         bool new_strong_added = false;
         const auto old_strong_set_size = strong_set.size();
 
-        if (some_lambdas_failed) {
-            lasso::screen(grad.array().abs(), lmda_prev_valid, lmda_next, 
-                alpha, penalty, [&](auto i) { return is_strong(i); }, 
-                delta_strong_size, strong_set, do_strong_rule);
+        lasso::screen(grad.array().abs(), lmda_prev_valid, lmda_next, 
+            alpha, penalty, [&](auto i) { return is_strong(i); }, 
+            delta_strong_size, strong_set, do_strong_rule);
 
-            new_strong_added = (old_strong_set_size < strong_set.size());
+        new_strong_added = (old_strong_set_size < strong_set.size());
 
-            const auto strong_set_new_begin = std::next(strong_set.begin(), old_strong_set_size);
-            strong_hashset.insert(strong_set_new_begin, strong_set.end());
+        const auto strong_set_new_begin = std::next(strong_set.begin(), old_strong_set_size);
+        strong_hashset.insert(strong_set_new_begin, strong_set.end());
 
-            // Note: DO NOT UPDATE strong_order YET!
-            // Updating previously valid beta requires the old order.
-            
-            // only need to update on the new strong variables
-            update_strong_A_diag(old_strong_set_size, strong_set.size());
+        // Note: DO NOT UPDATE strong_order YET!
+        // Updating previously valid beta requires the old order.
+        
+        // only need to update on the new strong variables
+        update_strong_A_diag(old_strong_set_size, strong_set.size());
 
-            // updates on these will be done later!
-            strong_beta.resize(strong_set.size(), 0);
-            strong_beta_prev_valid.resize(strong_set.size(), 0);
+        // updates on these will be done later!
+        strong_beta.resize(strong_set.size(), 0);
+        strong_beta_prev_valid.resize(strong_set.size(), 0);
 
-            // update is_active to set the new strong variables to false
-            is_active.resize(strong_set.size(), false);
+        // update is_active to set the new strong variables to false
+        is_active.resize(strong_set.size(), false);
 
-            // update strong grad to last valid gradient
-            strong_grad.resize(strong_set.size());
-            for (size_t i = old_strong_set_size; i < strong_grad.size(); ++i) {
-                strong_grad[i] = grad[strong_set[i]];
-            }
-        }
-
-        // Note: old part of the gradient must be updated no matter what!
-        for (size_t i = 0; i < old_strong_set_size; ++i) {
+        // update strong grad to last valid gradient
+        strong_grad.resize(strong_set.size());
+        for (size_t i = 0; i < strong_grad.size(); ++i) {
             strong_grad[i] = grad[strong_set[i]];
         }
 
@@ -576,6 +569,20 @@ private:
     }
 };    
 
+struct BasilDiagnostic
+{
+    using index_t = int;
+    using bool_t = int;
+    using dyn_vec_index_t = std::vector<index_t>;
+    using dyn_vec_bool_t = std::vector<bool_t>;
+
+    dyn_vec_index_t strong_sizes;
+    dyn_vec_index_t active_sizes;
+    dyn_vec_bool_t used_strong_rule;
+    dyn_vec_index_t n_cds;
+    dyn_vec_index_t n_lambdas_proc;
+};
+
 template <class ValueType, class GradType, class PenaltyType>
 GHOSTBASIL_STRONG_INLINE
 auto lambda_max(
@@ -664,6 +671,7 @@ template <class AType, class RType, class ValueType,
           class PenaltyType, class ULmdasType,
           class BetasType, class LmdasType, class RsqsType,
           class CheckpointType = BasilCheckpoint<ValueType, int, int>,
+          class DiagnosticType = BasilDiagnostic,
           class CUIType = util::no_op>
 inline void basil(
         const AType& A,
@@ -684,6 +692,7 @@ inline void basil(
         LmdasType& lmdas,
         RsqsType& rsqs_out,
         CheckpointType&& checkpoint = CheckpointType(),
+        DiagnosticType&& diagnostic = DiagnosticType(),
         CUIType check_user_interrupt = CUIType())
 {
     using A_t = std::decay_t<AType>;
@@ -736,6 +745,13 @@ inline void basil(
     // If checkpoint is not provided, can keep it uninitialized.
     vec_value_t lmdas_curr(1);
 
+    lasso_pack_t fit_pack(
+        A, alpha, penalty, strong_set, strong_order, strong_A_diag,
+        lmdas_curr, max_n_cds, thr, 0, strong_beta, strong_grad,
+        active_set, active_order, active_set_ordered,
+        is_active, betas_curr, rsqs_curr, 0, 0       
+    );
+
     // fit only on the non-penalized variables
     if (!checkpoint.is_initialized) {
         assert(betas_curr.size() == 1);
@@ -743,17 +759,11 @@ inline void basil(
 
         lmdas_curr[0] = std::numeric_limits<value_t>::max();
 
-        lasso_pack_t fit_pack(
-            A, alpha, penalty, strong_set, strong_order, strong_A_diag,
-            lmdas_curr, max_n_cds, thr, 0, strong_beta, strong_grad,
-            active_set, active_order, active_set_ordered,
-            is_active, betas_curr, rsqs_curr, 0, 0       
-        );
         fit(fit_pack, check_user_interrupt);
 
         // update state after fitting on non-penalized variables
         basil_state.update_after_initial_fit(fit_pack.rsq);
-    }
+    }     
 
     // full lambda sequence 
     vec_value_t lmda_seq;
@@ -770,8 +780,16 @@ inline void basil(
     // number of remaining lambdas to process
     size_t n_lambdas_rem = max_n_lambdas;
 
-    size_t idx = 1;         // first index of KKT failure
-    size_t basil_iter = 0;  // number of iterations 
+    // first index of KKT failure
+    size_t idx = 1;         
+
+    // update diagnostic for initialization
+    diagnostic.strong_sizes.push_back(strong_set.size());
+    diagnostic.active_sizes.push_back(active_set.size());
+    diagnostic.used_strong_rule.push_back(false);
+    diagnostic.n_cds.push_back(fit_pack.n_cds);
+    diagnostic.n_lambdas_proc.push_back(1);
+
     while (1) 
     {
         // check early termination 
@@ -843,7 +861,12 @@ inline void basil(
             lmdas.emplace_back(std::move(lmdas_curr[i]));
         }
 
-        ++basil_iter;
+        // update diagnostic 
+        diagnostic.strong_sizes.push_back(strong_set.size());
+        diagnostic.active_sizes.push_back(active_set.size());
+        diagnostic.used_strong_rule.push_back(do_strong_rule);
+        diagnostic.n_cds.push_back(fit_pack.n_cds);
+        diagnostic.n_lambdas_proc.push_back(idx);
     }
 
     // Last screening to ensure that the basil state is at the previously valid state.
@@ -865,6 +888,7 @@ template <class AType, class RType, class ValueType,
           class PenaltyType, class ULmdasType,
           class BetasType, class LmdasType, class RsqsType,
           class VecCheckpointType = std::vector<BasilCheckpoint<ValueType, int, int>>,
+          class DiagnosticType = BasilDiagnostic,
           class CUIType = util::no_op>
 inline void basil(
         const BlockMatrix<AType>& A,
@@ -885,6 +909,7 @@ inline void basil(
         LmdasType& lmdas,
         RsqsType& rsqs_out,
         VecCheckpointType&& checkpoints = VecCheckpointType(),
+        DiagnosticType&& diagnostic = DiagnosticType(),
         CUIType check_user_interrupt = CUIType())
 {
     using A_t = std::decay_t<AType>;
@@ -893,6 +918,7 @@ inline void basil(
     using bool_t = index_t;
     using basil_state_t = BasilState<A_t, value_t, index_t, bool_t>;
     using vec_value_t = typename basil_state_t::vec_value_t;
+    using vec_index_t = typename basil_state_t::vec_index_t;
     using sp_vec_value_t = typename basil_state_t::sp_vec_value_t;
     using lasso_pack_t = LassoParamPack<A_t, value_t, index_t, bool_t>;
 
@@ -907,15 +933,21 @@ inline void basil(
     const auto block_ptr = A.blocks();
     const auto& strides = A.strides();
 
+    // either checkpoints is empty (no checkpoints are initialized)
+    // or all checkpoints are given for each block.
+    assert((checkpoints.size() == 0) ||
+            (checkpoints.size() == n_blocks));
+
     // Extra information is needed to properly update grad state.
     // This serves as an extra buffer.
     // See the basil loop below.
     vec_value_t grad_last_valid(n_features);
 
-    // either checkpoints is empty (no checkpoints are initialized)
-    // or all checkpoints are given for each block.
-    assert((checkpoints.size() == 0) ||
-            (checkpoints.size() == n_blocks));
+    // Buffer to store n_cds per block
+    vec_index_t n_cds_block(n_blocks);
+
+    // Buffer to store first KKT failure index for each block
+    vec_index_t indices_block(n_blocks);
 
     // initialize current state to consider non-penalized variables
     // with 0 coefficient everywhere for each block.
@@ -945,7 +977,18 @@ inline void basil(
         ).sum();
     };
 
-    if (get_strong_set_tot_size() > max_strong_size) throw util::max_basil_strong_set();
+    const auto get_active_set_tot_size = [&]() {
+        return util::vec_type<size_t>::NullaryExpr(
+            basil_states.size(), [&](auto i) {
+                const auto& basil_state = basil_states[i];
+                return basil_state.active_set.size();
+            }
+        ).sum();
+    };
+
+    const auto strong_set_tot_size = get_strong_set_tot_size();
+
+    if (strong_set_tot_size > max_strong_size) throw util::max_basil_strong_set();
 
     // current lambda sequence
     vec_value_t lmdas_curr(1);
@@ -981,10 +1024,15 @@ inline void basil(
         );
         fit(fit_pack);
 
+        n_cds_block[i] = fit_pack.n_cds;
+
         // update state after fitting on non-penalized variables
         basil_state.update_after_initial_fit(fit_pack.rsq);
     }
     check_user_interrupt(0);
+
+    // compute max cds
+    const auto max_n_cds_block = n_cds_block.maxCoeff();
 
     // lambda sequence in each basil iteration
     vec_value_t lmda_seq;
@@ -1008,8 +1056,15 @@ inline void basil(
     // number of remaining lambdas to process
     size_t n_lambdas_rem = max_n_lambdas;
 
-    size_t idx = 1;         // first index of KKT failure
-    size_t basil_iter = 0;  // number of iterations 
+    // first index of KKT failure
+    size_t idx = 1;         
+
+    diagnostic.strong_sizes.push_back(strong_set_tot_size);
+    diagnostic.active_sizes.push_back(get_active_set_tot_size());
+    diagnostic.used_strong_rule.push_back(false);
+    diagnostic.n_cds.push_back(max_n_cds_block);
+    diagnostic.n_lambdas_proc.push_back(1);
+
     while (1) 
     {
         // check early termination 
@@ -1052,7 +1107,6 @@ inline void basil(
 
         if (strong_set_tot_size > max_strong_size) throw util::max_basil_strong_set();
 
-        util::vec_type<size_t> indices(n_blocks);
 #pragma omp parallel for schedule(static) num_threads(n_threads)
         for (size_t i = 0; i < n_blocks; ++i) {
             auto& basil_state = basil_states[i];
@@ -1085,6 +1139,8 @@ inline void basil(
             fit(fit_pack);
             const auto& n_lmdas = fit_pack.n_lmdas;
 
+            n_cds_block[i] = fit_pack.n_cds;
+
             // save last valid gradient
             Eigen::Map<vec_value_t> grad_last_valid_block(
                 grad_last_valid.data() + strides[i], strides[i+1] - strides[i]
@@ -1092,13 +1148,14 @@ inline void basil(
             grad_last_valid_block = grad;
             
             /* Checking KKT */
-            indices[i] = check_kkt(
+            indices_block[i] = check_kkt(
                 A_block, r_block, alpha, penalty_block, 
                 lmdas_curr.head(n_lmdas), betas_curr.head(n_lmdas), 
                 [&](auto j) { return basil_state.is_strong(j); }, 1, grad, grad_next
             );
         }
-        idx = indices.minCoeff();
+        idx = indices_block.minCoeff();
+        const auto max_n_cds_block = n_cds_block.maxCoeff();
 
         // MUST reset grad for each block to the one at idx-1 (if idx > 0)
         // and grad_last_valid if idx == 0.
@@ -1175,7 +1232,12 @@ inline void basil(
             rsqs_out.emplace_back(rsq_tot);
         }
 
-        ++basil_iter;
+        // update diagnostic
+        diagnostic.strong_sizes.push_back(strong_set_tot_size);
+        diagnostic.active_sizes.push_back(get_active_set_tot_size());
+        diagnostic.used_strong_rule.push_back(do_strong_rule);
+        diagnostic.n_cds.push_back(max_n_cds_block);
+        diagnostic.n_lambdas_proc.push_back(idx);
     }
 
     checkpoints.resize(basil_states.size());
