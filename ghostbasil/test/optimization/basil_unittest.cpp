@@ -58,6 +58,7 @@ struct BasilFixture
     template <class GenerateFType>
     void test(
             GenerateFType generate_dataset,
+            bool use_checkpoint = false,
             size_t max_strong_size = 100,
             size_t delta_strong_size = 1,
             double min_ratio = 7e-1,
@@ -78,10 +79,33 @@ struct BasilFixture
         auto& expected_objs = std::get<11>(input);
 
         try {
-            basil(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter,
-                  true, delta_strong_size, max_strong_size, max_cds, thr, 
-                  min_ratio, n_threads,
-                  betas, lmdas, rsqs);
+            if (use_checkpoint) {
+                // initialize empty checkpoint
+                BasilCheckpoint<double, int, int> checkpoint;
+                // call basil with the first lambda
+                basil(A, r, alpha, penalty, expected_lmdas, 1, n_lambdas_iter,
+                      true, delta_strong_size, max_strong_size, max_cds, thr, 
+                      min_ratio, n_threads,
+                      betas, lmdas, rsqs, checkpoint);
+                auto tmp_betas = betas;
+                auto tmp_lmdas = lmdas;
+                auto tmp_rsqs = rsqs;
+                const auto next_lmdas = expected_lmdas.tail(expected_lmdas.size()-1);
+                // call basil with the subsequent lambdas with the checkpoint
+                basil(A, r, alpha, penalty, next_lmdas, max_n_lambdas-1, n_lambdas_iter,
+                      true, delta_strong_size, max_strong_size, max_cds, thr, 
+                      min_ratio, n_threads,
+                      betas, lmdas, rsqs, checkpoint);
+                // concatenate the results
+                betas.insert(betas.begin(), tmp_betas[0]);
+                lmdas.insert(lmdas.begin(), tmp_lmdas[0]);
+                rsqs.insert(rsqs.begin(), tmp_rsqs[0]);
+            } else {
+                basil(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter,
+                      true, delta_strong_size, max_strong_size, max_cds, thr, 
+                      min_ratio, n_threads,
+                      betas, lmdas, rsqs);
+            }
 #ifdef MAKE_LMDAS
             for (size_t i = 0; i < lmdas.size(); ++i) {
                 PRINT(lmdas[i]);
@@ -139,6 +163,27 @@ TEST_F(BasilFixture, basil_p_large)
     size_t max_strong_size = 1000;
     size_t delta_strong_size = 50;
     test(TEST_BASIL_FN(3),
+            false,
+            max_strong_size,
+            delta_strong_size);
+}
+
+TEST_F(BasilFixture, basil_n_ge_p_ckpt)
+{
+    test(TEST_BASIL_FN(1), true);
+}
+
+TEST_F(BasilFixture, basil_n_le_p_ckpt)
+{
+    test(TEST_BASIL_FN(2), true);
+}
+
+TEST_F(BasilFixture, basil_p_large_ckpt)
+{
+    size_t max_strong_size = 1000;
+    size_t delta_strong_size = 50;
+    test(TEST_BASIL_FN(3),
+            true,
             max_strong_size,
             delta_strong_size);
 }
