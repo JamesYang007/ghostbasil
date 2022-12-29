@@ -27,10 +27,9 @@ test_ckpt <- function(A, r, max.lambdas=100, n.threads=-1, ...)
         out.actual$lmdas,
         out.expected$lmdas[sub.idx:length(lmdas)]
     )
-    expect_lte(
-        max(abs(out.actual$rsqs - out.expected$rsqs[sub.idx:length(lmdas)]) / 
-                out.expected$rsqs[sub.idx:length(lmdas)]),
-        1e-2
+    expect_equal(
+        out.actual$rsqs,
+        out.expected$rsqs[sub.idx:length(lmdas)]
     )
     expect_equal(
         as.matrix(out.actual$betas), 
@@ -142,4 +141,4 @@ test_block_ghost_ckpt <- function(n=100, p=50, L=10, M=2, seed=0, ...)
 
 test_block_ghost_ckpt(n=100, p=2, L=2, M=2, seed=0)
 test_block_ghost_ckpt(n=100, p=5, L=2, M=5, seed=0)
-test_block_ghost_ckpt(n=100, p=10, L=10, M=2, seed=32)
+test_block_ghost_ckpt(n=100, p=10, L=10, M=2, alpha=0.5, seed=0)

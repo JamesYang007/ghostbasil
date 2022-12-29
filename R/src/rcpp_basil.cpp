@@ -51,7 +51,6 @@ auto checkpoint_to_list(const ckpt_t& checkpoint)
 
 auto list_to_checkpoint(ListOf<List> checkpoints)
 {
-    using ckpt_t = ghostbasil::lasso::BasilCheckpoint<double, int, int>;
     std::vector<ckpt_t> checkpoints_cvt;
     checkpoints_cvt.reserve(checkpoints.size());
     for (size_t i = 0; i < checkpoints.size(); ++i) {

@@ -907,6 +907,11 @@ inline void basil(
     const auto block_ptr = A.blocks();
     const auto& strides = A.strides();
 
+    // Extra information is needed to properly update grad state.
+    // This serves as an extra buffer.
+    // See the basil loop below.
+    vec_value_t grad_last_valid(n_features);
+
     // either checkpoints is empty (no checkpoints are initialized)
     // or all checkpoints are given for each block.
     assert((checkpoints.size() == 0) ||
@@ -1080,8 +1085,13 @@ inline void basil(
             fit(fit_pack);
             const auto& n_lmdas = fit_pack.n_lmdas;
 
+            // save last valid gradient
+            Eigen::Map<vec_value_t> grad_last_valid_block(
+                grad_last_valid.data() + strides[i], strides[i+1] - strides[i]
+            );
+            grad_last_valid_block = grad;
+            
             /* Checking KKT */
-
             indices[i] = check_kkt(
                 A_block, r_block, alpha, penalty_block, 
                 lmdas_curr.head(n_lmdas), betas_curr.head(n_lmdas), 
@@ -1089,6 +1099,27 @@ inline void basil(
             );
         }
         idx = indices.minCoeff();
+
+        // MUST reset grad for each block to the one at idx-1 (if idx > 0)
+        // and grad_last_valid if idx == 0.
+#pragma omp parallel for schedule(static) num_threads(n_threads)
+        for (size_t i = 0; i < n_blocks; ++i) {
+            auto& basil_state = basil_states[i];
+            auto& grad = basil_state.grad;
+            if (idx == 0) {
+                Eigen::Map<vec_value_t> grad_last_valid_block(
+                    grad_last_valid.data() + strides[i], strides[i+1] - strides[i]
+                );
+                grad = grad_last_valid_block;
+            } else {
+                const auto& A_block = basil_state.A;
+                const auto& r_block = basil_state.r;
+                const auto& beta_valid = basil_state.betas_curr[idx-1];
+                for (size_t j = 0; j < grad.size(); ++j) {
+                    grad[j] = r_block[j] - A_block.col_dot(j, beta_valid);
+                }
+            }
+        }
 
         check_user_interrupt(0);
 
