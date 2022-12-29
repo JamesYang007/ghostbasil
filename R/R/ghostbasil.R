@@ -79,6 +79,9 @@ ghostbasil <- function(A, r, alpha=1,
     if (sum(penalty < 0) > 0) {
         stop("Penalty must all be non-negative.") 
     }
+    if (sum(penalty == 0) == length(penalty)) {
+        stop("Penalty cannot be all 0.")
+    }
     if (length(user.lambdas) != 0) {
         user.lambdas <- sort(user.lambdas, decreasing=T)
     }
