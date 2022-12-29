@@ -50,7 +50,8 @@ ghostbasil <- function(A, r, alpha=1,
                       max.cds=100000, 
                       thr=1e-7,
                       min.ratio=1e-6,
-                      n.threads=0)
+                      n.threads=0,
+                      checkpoint=list())
 {
     # proper casting of inputs
     penalty <- as.numeric(penalty)
@@ -129,7 +130,8 @@ ghostbasil <- function(A, r, alpha=1,
                     max_n_cds=max.cds, 
                     thr=thr,
                     min_ratio=min.ratio,
-                    n_threads=n.threads
+                    n_threads=n.threads,
+                    checkpoint=checkpoint
                     )
 
     # raise any warnings

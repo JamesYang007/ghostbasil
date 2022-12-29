@@ -183,7 +183,7 @@ struct BasilCheckpoint
     explicit BasilCheckpoint() =default;
 
     template <class VecIndexType, class VecValueType, 
-              class VecBoolType>
+              class VecBoolType, class GradType>
     explicit BasilCheckpoint(
         const VecIndexType& strong_set_,
         const VecIndexType& strong_order_,
@@ -194,7 +194,7 @@ struct BasilCheckpoint
         const VecIndexType& active_order_,
         const VecIndexType& active_set_ordered_,
         const VecBoolType& is_active_,
-        const VecValueType& grad_,
+        const GradType& grad_,
         value_t rsq_
     )
         : is_initialized(true),
@@ -457,9 +457,14 @@ struct BasilState
 
             // update strong grad to last valid gradient
             strong_grad.resize(strong_set.size());
-            for (size_t i = 0; i < strong_grad.size(); ++i) {
+            for (size_t i = old_strong_set_size; i < strong_grad.size(); ++i) {
                 strong_grad[i] = grad[strong_set[i]];
             }
+        }
+
+        // Note: old part of the gradient must be updated no matter what!
+        for (size_t i = 0; i < old_strong_set_size; ++i) {
+            strong_grad[i] = grad[strong_set[i]];
         }
 
         // At this point, strong_set is ordered for all old variables
@@ -841,6 +846,13 @@ inline void basil(
         ++basil_iter;
     }
 
+    // Last screening to ensure that the basil state is at the previously valid state.
+    // We force non-strong rule and add 0 new variables to preserve the state.
+    basil_state.screen(
+        0, 0, false, idx == 0, idx < lmdas_curr.size(),
+        lmdas.back(), lmdas.back() 
+    );
+
     betas_out = std::move(betas);
     rsqs_out = std::move(rsqs);
     checkpoint = std::move(basil_state);
@@ -1091,7 +1103,7 @@ inline void basil(
         active_indices.reserve(strong_set_tot_size);
         active_values.reserve(strong_set_tot_size);
         for (size_t i = 0; i < idx; ++i) {
-            lmdas.emplace_back(std::move(lmdas_curr[i]));
+            lmdas.emplace_back(lmdas_curr[i]);
             
             active_indices.clear();
             active_values.clear();
@@ -1136,7 +1148,13 @@ inline void basil(
     }
 
     checkpoints.resize(basil_states.size());
-    for (size_t i = 0; i < checkpoints.size(); ++i) {
+#pragma omp parallel for schedule(static) num_threads(n_threads)
+    for (size_t i = 0; i < basil_states.size(); ++i) {
+        auto& basil_state = basil_states[i];
+        basil_state.screen(
+            0, 0, false, idx == 0, idx < lmdas_curr.size(),
+            lmdas.back(), lmdas.back() 
+        );
         checkpoints[i] = std::move(basil_states[i]);
     }
 }
