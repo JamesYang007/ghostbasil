@@ -11,13 +11,15 @@ ghostbasil(
   penalty = rep(1, times = length(r)),
   user.lambdas = c(),
   max.lambdas = 100,
-  lambdas.iter = 10,
+  lambdas.iter = 5,
+  use.strong.rule = T,
   delta.strong.size = 500,
   max.strong.size = 10000,
   max.cds = 1e+05,
   thr = 1e-07,
   min.ratio = 1e-06,
-  n.threads = 0
+  n.threads = 0,
+  checkpoint = list()
 )
 }
 \arguments{
@@ -45,6 +47,10 @@ The maximum lambda is the largest lambda where solution isn't 0.}
 Internally, capped at max.lambdas.
 Must be positive.}
 
+\item{use.strong.rule}{uses the strong rule with minimal dependence on fixed incremental rule if TRUE.
+Note that delta.strong.size is still used in tandem with strong rule.
+It is recommended to keep delta.strong.size small if strong rule is used.}
+
 \item{delta.strong.size}{number of strong set variables to include at every iteration of the BASIL algorithm.
 Internally, capped at number of non-strong variables at every iteration of BASIL.
 Must be positive.}
@@ -66,6 +72,10 @@ Set it to 0 (default) to disable OpenMP usage.
 Set it to -1 to use all available logical cores.
 Note that if this value is too high, performance may worsen.
 A general rule of thumb is to use the number of physical (not logical) cores.}
+
+\item{checkpoint}{A checkpoint object returned by a previous call to ghostbasil.
+It is useful to pass the checkpoint when one would like to continue
+fitting down a path of lambdas from the last lambda.}
 
 \item{strong.size}{initial number of strong set variables to include.
 Internally, capped at max.strong.size.}

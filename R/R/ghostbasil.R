@@ -38,6 +38,9 @@
 #'                          Set it to -1 to use all available logical cores.
 #'                          Note that if this value is too high, performance may worsen.
 #'                          A general rule of thumb is to use the number of physical (not logical) cores.
+#' @param   checkpoint      A checkpoint object returned by a previous call to ghostbasil.
+#'                          It is useful to pass the checkpoint when one would like to continue
+#'                          fitting down a path of lambdas from the last lambda.
 #' @export
 ghostbasil <- function(A, r, alpha=1,
                       penalty=rep(1, times=length(r)),
@@ -50,7 +53,8 @@ ghostbasil <- function(A, r, alpha=1,
                       max.cds=100000, 
                       thr=1e-7,
                       min.ratio=1e-6,
-                      n.threads=0)
+                      n.threads=0,
+                      checkpoint=list())
 {
     # proper casting of inputs
     penalty <- as.numeric(penalty)
@@ -129,7 +133,8 @@ ghostbasil <- function(A, r, alpha=1,
                     max_n_cds=max.cds, 
                     thr=thr,
                     min_ratio=min.ratio,
-                    n_threads=n.threads
+                    n_threads=n.threads,
+                    checkpoint=checkpoint
                     )
 
     # raise any warnings

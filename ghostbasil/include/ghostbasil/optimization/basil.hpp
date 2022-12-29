@@ -141,7 +141,105 @@ auto check_kkt(
     return i;
 }
 
+/**
+ * @brief 
+ * Checkpoint class for basil routine.
+ * This class contains the minimal state variables that must be provided
+ * to generate a full basil state object.
+ * 
+ * @tparam ValueType    float type.
+ * @tparam IndexType    index type.
+ * @tparam BoolType     boolean type.
+ */
+template <class ValueType,
+          class IndexType,
+          class BoolType>
+struct BasilCheckpoint
+{
+    using value_t = ValueType;
+    using index_t = IndexType;
+    using bool_t = BoolType;
+    using vec_value_t = util::vec_type<value_t>;
 
+    template <class T>
+    using dyn_vec_t = std::vector<T>;
+    using dyn_vec_value_t = dyn_vec_t<value_t>;
+    using dyn_vec_index_t = dyn_vec_t<index_t>;
+    using dyn_vec_bool_t = dyn_vec_t<bool_t>;
+
+    bool is_initialized = false;
+    dyn_vec_index_t strong_set; 
+    dyn_vec_index_t strong_order;
+    dyn_vec_value_t strong_beta;
+    dyn_vec_value_t strong_grad;
+    dyn_vec_value_t strong_A_diag;
+    dyn_vec_index_t active_set;
+    dyn_vec_index_t active_order;
+    dyn_vec_index_t active_set_ordered;
+    dyn_vec_bool_t is_active;
+    vec_value_t grad;
+    value_t rsq;
+
+    explicit BasilCheckpoint() =default;
+
+    template <class VecIndexType, class VecValueType, 
+              class VecBoolType, class GradType>
+    explicit BasilCheckpoint(
+        const VecIndexType& strong_set_,
+        const VecIndexType& strong_order_,
+        const VecValueType& strong_beta_,
+        const VecValueType& strong_grad_,
+        const VecValueType& strong_A_diag_,
+        const VecIndexType& active_set_,
+        const VecIndexType& active_order_,
+        const VecIndexType& active_set_ordered_,
+        const VecBoolType& is_active_,
+        const GradType& grad_,
+        value_t rsq_
+    )
+        : is_initialized(true),
+          strong_set(strong_set_),
+          strong_order(strong_order_),
+          strong_beta(strong_beta_),
+          strong_grad(strong_grad_),
+          strong_A_diag(strong_A_diag_),
+          active_set(active_set_),
+          active_order(active_order_),
+          active_set_ordered(active_set_ordered_),
+          is_active(is_active_),
+          grad(grad_),
+          rsq(rsq_)
+    {}
+
+    template <class BasilStateType>
+    BasilCheckpoint& operator=(BasilStateType&& bs)
+    {
+        is_initialized = true;
+        strong_set = std::move(bs.strong_set);
+        strong_order = std::move(bs.strong_order);
+        strong_beta = std::move(bs.strong_beta);
+        strong_grad = std::move(bs.strong_grad);
+        strong_A_diag = std::move(bs.strong_A_diag);
+        active_set = std::move(bs.active_set);
+        active_order = std::move(bs.active_order);
+        active_set_ordered = std::move(bs.active_set_ordered);
+        is_active = std::move(bs.is_active);
+        grad = std::move(bs.grad);
+        rsq = std::move(bs.rsq_prev_valid);
+        return *this;
+    }
+};
+
+/**
+ * @brief 
+ * State class for the basil routine.
+ * This class contains the full state variables that describes the state of the basil algorithm.
+ * 
+ * @tparam AType        matrix A type.
+ * @tparam ValueType    float type.
+ * @tparam IndexType    index type.
+ * @tparam BoolType     boolean type.
+ */
 template <class AType,
           class ValueType,
           class IndexType,
@@ -191,6 +289,35 @@ struct BasilState
     value_t rsq_prev_valid = 0;
     dyn_vec_sp_vec_value_t betas;
     dyn_vec_value_t rsqs;
+
+    template <class RType, class PenaltyType>
+    explicit BasilState(
+        const AType& A_,
+        const RType& r_,
+        value_t alpha_,
+        const PenaltyType& penalty_,
+        const BasilCheckpoint<value_t, index_t, bool_t>& bc
+    )
+        : initial_size(std::min(static_cast<size_t>(r_.size()), 1uL << 20)),
+          alpha(alpha_),
+          penalty(penalty_.data(), penalty_.size()),
+          A(A_),
+          r(r_.data(), r_.size()),
+          strong_hashset(bc.strong_set.begin(), bc.strong_set.end()),
+          strong_set(bc.strong_set),
+          strong_order(bc.strong_order),
+          strong_beta(bc.strong_beta),
+          strong_beta_prev_valid(strong_beta),
+          strong_grad(bc.strong_grad),
+          strong_A_diag(bc.strong_A_diag),
+          active_set(bc.active_set),
+          active_order(bc.active_order),
+          active_set_ordered(bc.active_set_ordered),
+          is_active(bc.is_active),
+          grad(bc.grad),
+          grad_next(bc.grad.size()),
+          rsq_prev_valid(bc.rsq)
+    {}
 
     template <class RType, class PenaltyType>
     explicit BasilState(
@@ -330,9 +457,14 @@ struct BasilState
 
             // update strong grad to last valid gradient
             strong_grad.resize(strong_set.size());
-            for (size_t i = 0; i < strong_grad.size(); ++i) {
+            for (size_t i = old_strong_set_size; i < strong_grad.size(); ++i) {
                 strong_grad[i] = grad[strong_set[i]];
             }
+        }
+
+        // Note: old part of the gradient must be updated no matter what!
+        for (size_t i = 0; i < old_strong_set_size; ++i) {
+            strong_grad[i] = grad[strong_set[i]];
         }
 
         // At this point, strong_set is ordered for all old variables
@@ -531,6 +663,7 @@ void generate_lambdas(
 template <class AType, class RType, class ValueType,
           class PenaltyType, class ULmdasType,
           class BetasType, class LmdasType, class RsqsType,
+          class CheckpointType = BasilCheckpoint<ValueType, int, int>,
           class CUIType = util::no_op>
 inline void basil(
         const AType& A,
@@ -550,6 +683,7 @@ inline void basil(
         BetasType& betas_out,
         LmdasType& lmdas,
         RsqsType& rsqs_out,
+        CheckpointType&& checkpoint = CheckpointType(),
         CUIType check_user_interrupt = CUIType())
 {
     using A_t = std::decay_t<AType>;
@@ -559,15 +693,24 @@ inline void basil(
     using basil_state_t = BasilState<A_t, value_t, index_t, bool_t>;
     using vec_value_t = typename basil_state_t::vec_value_t;
     using lasso_pack_t = LassoParamPack<A_t, value_t, index_t, bool_t>;
+
+    // clear the output vectors to guarantee that it only contains produced results
+    betas_out.clear();
+    lmdas.clear();
+    rsqs_out.clear();
     
     const size_t n_features = r.size();
     max_strong_size = std::min(max_strong_size, n_features);
 
-    // initialize current state to consider non-penalized variables
-    // with 0 coefficient everywhere.
-    basil_state_t basil_state(
-        A, r, alpha, penalty
+    // Initialize current state to consider non-penalized variables
+    // with 0 coefficient everywhere if checkpoint is not initialized.
+    // Otherwise, use checkpoint to initialize the state.
+    std::unique_ptr<basil_state_t> basil_state_ptr(
+        checkpoint.is_initialized ? 
+        new basil_state_t(A, r, alpha, penalty, checkpoint) :
+        new basil_state_t(A, r, alpha, penalty)
     );
+    auto& basil_state = *basil_state_ptr;
 
     const auto& strong_set = basil_state.strong_set;
     const auto& strong_order = basil_state.strong_order;
@@ -589,25 +732,30 @@ inline void basil(
     // check strong set size
     if (strong_set.size() > max_strong_size) throw util::max_basil_strong_set();
 
-    // current lambda sequence
-    assert(betas_curr.size() == 1);
-    assert(rsqs_curr.size() == 1);
+    // current sequence of lambdas for basil iteration.
+    // If checkpoint is not provided, can keep it uninitialized.
     vec_value_t lmdas_curr(1);
-    lmdas_curr[0] = std::numeric_limits<value_t>::max();
 
     // fit only on the non-penalized variables
-    lasso_pack_t fit_pack(
-        A, alpha, penalty, strong_set, strong_order, strong_A_diag,
-        lmdas_curr, max_n_cds, thr, 0, strong_beta, strong_grad,
-        active_set, active_order, active_set_ordered,
-        is_active, betas_curr, rsqs_curr, 0, 0       
-    );
-    fit(fit_pack, check_user_interrupt);
+    if (!checkpoint.is_initialized) {
+        assert(betas_curr.size() == 1);
+        assert(rsqs_curr.size() == 1);
 
-    // update state after fitting on non-penalized variables
-    basil_state.update_after_initial_fit(fit_pack.rsq);
+        lmdas_curr[0] = std::numeric_limits<value_t>::max();
 
-    // lambda sequence in each basil iteration
+        lasso_pack_t fit_pack(
+            A, alpha, penalty, strong_set, strong_order, strong_A_diag,
+            lmdas_curr, max_n_cds, thr, 0, strong_beta, strong_grad,
+            active_set, active_order, active_set_ordered,
+            is_active, betas_curr, rsqs_curr, 0, 0       
+        );
+        fit(fit_pack, check_user_interrupt);
+
+        // update state after fitting on non-penalized variables
+        basil_state.update_after_initial_fit(fit_pack.rsq);
+    }
+
+    // full lambda sequence 
     vec_value_t lmda_seq;
     const bool use_user_lmdas = user_lmdas.size() != 0;
     if (!use_user_lmdas) {
@@ -626,6 +774,14 @@ inline void basil(
     size_t basil_iter = 0;  // number of iterations 
     while (1) 
     {
+        // check early termination 
+        if (rsqs.size() >= 3) {
+            const auto rsq_u = rsqs[rsqs.size()-1];
+            const auto rsq_m = rsqs[rsqs.size()-2];
+            const auto rsq_l = rsqs[rsqs.size()-3];
+            if (check_early_stop_rsq(rsq_l, rsq_m, rsq_u)) break;
+        }
+
         // finish if no more lambdas to process finished
         if (n_lambdas_rem == 0) break;
 
@@ -687,19 +843,19 @@ inline void basil(
             lmdas.emplace_back(std::move(lmdas_curr[i]));
         }
 
-        // check early termination 
-        if (rsqs.size() >= 3) {
-            const auto rsq_u = rsqs[rsqs.size()-1];
-            const auto rsq_m = rsqs[rsqs.size()-2];
-            const auto rsq_l = rsqs[rsqs.size()-3];
-            if (check_early_stop_rsq(rsq_l, rsq_m, rsq_u)) break;
-        }
-
         ++basil_iter;
     }
 
+    // Last screening to ensure that the basil state is at the previously valid state.
+    // We force non-strong rule and add 0 new variables to preserve the state.
+    basil_state.screen(
+        0, 0, false, idx == 0, idx < lmdas_curr.size(),
+        lmdas.back(), lmdas.back() 
+    );
+
     betas_out = std::move(betas);
     rsqs_out = std::move(rsqs);
+    checkpoint = std::move(basil_state);
 }
 
 /**
@@ -708,6 +864,7 @@ inline void basil(
 template <class AType, class RType, class ValueType,
           class PenaltyType, class ULmdasType,
           class BetasType, class LmdasType, class RsqsType,
+          class VecCheckpointType = std::vector<BasilCheckpoint<ValueType, int, int>>,
           class CUIType = util::no_op>
 inline void basil(
         const BlockMatrix<AType>& A,
@@ -727,6 +884,7 @@ inline void basil(
         BetasType& betas_out,
         LmdasType& lmdas,
         RsqsType& rsqs_out,
+        VecCheckpointType&& checkpoints = VecCheckpointType(),
         CUIType check_user_interrupt = CUIType())
 {
     using A_t = std::decay_t<AType>;
@@ -737,6 +895,10 @@ inline void basil(
     using vec_value_t = typename basil_state_t::vec_value_t;
     using sp_vec_value_t = typename basil_state_t::sp_vec_value_t;
     using lasso_pack_t = LassoParamPack<A_t, value_t, index_t, bool_t>;
+
+    betas_out.clear();
+    lmdas.clear();
+    rsqs_out.clear();
     
     const size_t n_features = r.size();
     max_strong_size = std::min(max_strong_size, n_features);
@@ -744,6 +906,16 @@ inline void basil(
     const size_t n_blocks = A.n_blocks();
     const auto block_ptr = A.blocks();
     const auto& strides = A.strides();
+
+    // Extra information is needed to properly update grad state.
+    // This serves as an extra buffer.
+    // See the basil loop below.
+    vec_value_t grad_last_valid(n_features);
+
+    // either checkpoints is empty (no checkpoints are initialized)
+    // or all checkpoints are given for each block.
+    assert((checkpoints.size() == 0) ||
+            (checkpoints.size() == n_blocks));
 
     // initialize current state to consider non-penalized variables
     // with 0 coefficient everywhere for each block.
@@ -755,10 +927,13 @@ inline void basil(
         const auto size = strides[i+1] - begin;
         const auto r_block = r.segment(begin, size);
         const auto penalty_block = penalty.segment(begin, size);
-        basil_states.emplace_back(A_block, r_block, alpha, penalty_block);
-
-        assert(basil_states.back().betas_curr.size() == 1);
-        assert(basil_states.back().rsqs_curr.size() == 1);
+        if (checkpoints.size() && checkpoints[i].is_initialized) {
+            basil_states.emplace_back(A_block, r_block, alpha, penalty_block, checkpoints[i]);
+        } else {
+            basil_states.emplace_back(A_block, r_block, alpha, penalty_block);
+            assert(basil_states.back().betas_curr.size() == 1);
+            assert(basil_states.back().rsqs_curr.size() == 1);
+        }
     }
 
     const auto get_strong_set_tot_size = [&]() {
@@ -779,6 +954,9 @@ inline void basil(
     // fit only on the non-penalized variables
 #pragma omp parallel for schedule(static) num_threads(n_threads)
     for (size_t i = 0; i < n_blocks; ++i) {
+        if (checkpoints.size() && checkpoints[i].is_initialized) {
+            continue;
+        }
         auto& basil_state = basil_states[i];
 
         const auto& A_block = basil_state.A;
@@ -834,6 +1012,14 @@ inline void basil(
     size_t basil_iter = 0;  // number of iterations 
     while (1) 
     {
+        // check early termination 
+        if (rsqs_out.size() >= 3) {
+            const auto rsq_u = rsqs_out[rsqs_out.size()-1];
+            const auto rsq_m = rsqs_out[rsqs_out.size()-2];
+            const auto rsq_l = rsqs_out[rsqs_out.size()-3];
+            if (check_early_stop_rsq(rsq_l, rsq_m, rsq_u)) break;
+        }
+
         // finish if no more lambdas to process finished
         if (n_lambdas_rem == 0) break;
 
@@ -899,8 +1085,13 @@ inline void basil(
             fit(fit_pack);
             const auto& n_lmdas = fit_pack.n_lmdas;
 
+            // save last valid gradient
+            Eigen::Map<vec_value_t> grad_last_valid_block(
+                grad_last_valid.data() + strides[i], strides[i+1] - strides[i]
+            );
+            grad_last_valid_block = grad;
+            
             /* Checking KKT */
-
             indices[i] = check_kkt(
                 A_block, r_block, alpha, penalty_block, 
                 lmdas_curr.head(n_lmdas), betas_curr.head(n_lmdas), 
@@ -908,6 +1099,27 @@ inline void basil(
             );
         }
         idx = indices.minCoeff();
+
+        // MUST reset grad for each block to the one at idx-1 (if idx > 0)
+        // and grad_last_valid if idx == 0.
+#pragma omp parallel for schedule(static) num_threads(n_threads)
+        for (size_t i = 0; i < n_blocks; ++i) {
+            auto& basil_state = basil_states[i];
+            auto& grad = basil_state.grad;
+            if (idx == 0) {
+                Eigen::Map<vec_value_t> grad_last_valid_block(
+                    grad_last_valid.data() + strides[i], strides[i+1] - strides[i]
+                );
+                grad = grad_last_valid_block;
+            } else {
+                const auto& A_block = basil_state.A;
+                const auto& r_block = basil_state.r;
+                const auto& beta_valid = basil_state.betas_curr[idx-1];
+                for (size_t j = 0; j < grad.size(); ++j) {
+                    grad[j] = r_block[j] - A_block.col_dot(j, beta_valid);
+                }
+            }
+        }
 
         check_user_interrupt(0);
 
@@ -922,7 +1134,7 @@ inline void basil(
         active_indices.reserve(strong_set_tot_size);
         active_values.reserve(strong_set_tot_size);
         for (size_t i = 0; i < idx; ++i) {
-            lmdas.emplace_back(std::move(lmdas_curr[i]));
+            lmdas.emplace_back(lmdas_curr[i]);
             
             active_indices.clear();
             active_values.clear();
@@ -963,15 +1175,18 @@ inline void basil(
             rsqs_out.emplace_back(rsq_tot);
         }
 
-        // check early termination 
-        if (rsqs_out.size() >= 3) {
-            const auto rsq_u = rsqs_out[rsqs_out.size()-1];
-            const auto rsq_m = rsqs_out[rsqs_out.size()-2];
-            const auto rsq_l = rsqs_out[rsqs_out.size()-3];
-            if (check_early_stop_rsq(rsq_l, rsq_m, rsq_u)) break;
-        }
-
         ++basil_iter;
+    }
+
+    checkpoints.resize(basil_states.size());
+#pragma omp parallel for schedule(static) num_threads(n_threads)
+    for (size_t i = 0; i < basil_states.size(); ++i) {
+        auto& basil_state = basil_states[i];
+        basil_state.screen(
+            0, 0, false, idx == 0, idx < lmdas_curr.size(),
+            lmdas.back(), lmdas.back() 
+        );
+        checkpoints[i] = std::move(basil_states[i]);
     }
 }
 
