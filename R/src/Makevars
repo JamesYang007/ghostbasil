@@ -11,7 +11,6 @@ endif
 
 # TODO: the ghostbasil include directory should probably change since it's a symlink.
 PKG_CPPFLAGS = \
-    -I../inst/ghostbasil/include \
     -I../inst/include \
     -DEIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS \
     -DEIGEN_MATRIXBASE_PLUGIN=\"ghostbasil/util/eigen/matrixbase_plugin.hpp\" 
