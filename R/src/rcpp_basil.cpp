@@ -5,7 +5,6 @@
 #include "rcpp_block_matrix.hpp"
 
 using namespace Rcpp;
-using dgn_t = ghostbasil::lasso::BasilDiagnostic;
 using ckpt_t = ghostbasil::lasso::BasilCheckpoint<double, int, int>;
 using value_t = typename ckpt_t::value_t;
 using vec_value_t = typename ckpt_t::vec_value_t;
@@ -14,17 +13,6 @@ using dyn_vec_index_t = typename ckpt_t::dyn_vec_index_t;
 using dyn_vec_bool_t = typename ckpt_t::dyn_vec_bool_t;
 
 // [[Rcpp::plugins(openmp)]]
-
-auto diagnostic_to_list(const dgn_t& diagnostic)
-{
-    return List::create(
-        Named("strong_sizes")=diagnostic.strong_sizes,
-        Named("active_sizes")=diagnostic.active_sizes,
-        Named("used_strong_rule")=diagnostic.used_strong_rule,
-        Named("n_cds")=diagnostic.n_cds,
-        Named("n_lambdas_proc")=diagnostic.n_lambdas_proc
-    );
-}
 
 auto list_to_checkpoint(List checkpoint)
 {
@@ -102,8 +90,6 @@ List basil__(
 {
     using namespace ghostbasil::lasso;
 
-    dgn_t diagnostic;
-
     std::vector<Eigen::SparseVector<double>> betas;
     std::vector<double> lmdas;
     std::vector<double> rsqs;
@@ -133,7 +119,7 @@ List basil__(
                 A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter,
                 use_strong_rule, delta_strong_size, max_strong_size, max_n_cds, thr, 
                 min_ratio, n_threads,
-                betas, lmdas, rsqs, checkpoint, diagnostic,
+                betas, lmdas, rsqs, checkpoint,
                 check_user_interrupt);
     }
     catch (const std::exception& e) {
@@ -155,8 +141,7 @@ List basil__(
         Named("lmdas")=std::move(lmdas),
         Named("rsqs")=std::move(rsqs),
         Named("error")=std::move(error),
-        Named("checkpoint")=checkpoint_to_list(checkpoint),
-        Named("diagnostic")=diagnostic_to_list(diagnostic)
+        Named("checkpoint")=checkpoint_to_list(checkpoint)
     );
 }
 
