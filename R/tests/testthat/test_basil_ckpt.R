@@ -59,10 +59,10 @@ test_dense_ckpt <- function(n=100, p=50, seed=0, ...)
 # The results will just be off by a small margin due to different convergence.
 # The following are invariants, i.e. further changes should still keep these working.
 
-test_dense_ckpt(n=100, p=50, seed=0)
-test_dense_ckpt(n=100, p=100, seed=0)
-test_dense_ckpt(n=100, p=100, alpha=0.8, seed=843)
-test_dense_ckpt(n=2, p=100, alpha=0.5, seed=941)
+test_dense_ckpt(n=100, p=50, seed=0, min.ratio=1e-6)
+test_dense_ckpt(n=100, p=100, seed=0, min.ratio=1e-6)
+test_dense_ckpt(n=100, p=100, alpha=0.8, seed=843, min.ratio=1e-6)
+test_dense_ckpt(n=2, p=100, alpha=0.5, seed=941, min.ratio=1e-6)
 
 # ==============================================================
 # TEST Ghost Checkpoint
@@ -83,9 +83,9 @@ test_ghost_ckpt <- function(n=100, p=50, M=2, seed=0, ...)
     test_ckpt(A, r, ...)
 }
 
-test_ghost_ckpt(n=100, p=2, M=2, seed=0)
-test_ghost_ckpt(n=100, p=50, M=5, seed=0)
-test_ghost_ckpt(n=100, p=100, M=2, alpha=0.2, seed=0)
+test_ghost_ckpt(n=100, p=2, M=2, seed=0, min.ratio=1e-6)
+test_ghost_ckpt(n=100, p=50, M=5, seed=0, min.ratio=1e-6)
+test_ghost_ckpt(n=100, p=100, M=2, alpha=0.2, seed=0, min.ratio=1e-6)
 
 # ==============================================================
 # TEST Block<Dense> Checkpoint
@@ -109,9 +109,9 @@ test_block_dense_ckpt <- function(n=100, p=50, L=10, seed=0, ...)
     test_ckpt(A, r, ...)
 }
 
-test_block_dense_ckpt(n=100, p=50, L=10, alpha=0.5, seed=123)
-test_block_dense_ckpt(n=100, p=50, L=1, alpha=0.1, seed=123)
-test_block_dense_ckpt(n=10, p=100, L=2, alpha=0.0, seed=8421)
+test_block_dense_ckpt(n=100, p=50, L=10, alpha=0.5, seed=123, min.ratio=1e-6)
+test_block_dense_ckpt(n=100, p=50, L=1, alpha=0.1, seed=123, min.ratio=1e-6)
+test_block_dense_ckpt(n=10, p=100, L=2, alpha=0.0, seed=8421, min.ratio=1e-6)
 
 # ==============================================================
 # TEST Block<Ghost> Checkpoint
@@ -139,6 +139,6 @@ test_block_ghost_ckpt <- function(n=100, p=50, L=10, M=2, seed=0, ...)
     test_ckpt(A, r, ...)
 }
 
-test_block_ghost_ckpt(n=100, p=2, L=2, M=2, seed=0)
-test_block_ghost_ckpt(n=100, p=5, L=2, M=5, seed=0)
-test_block_ghost_ckpt(n=100, p=10, L=10, M=2, alpha=0.5, seed=0)
+test_block_ghost_ckpt(n=100, p=2, L=2, M=2, seed=0, min.ratio=1e-6)
+test_block_ghost_ckpt(n=100, p=5, L=2, M=5, seed=0, min.ratio=1e-6)
+test_block_ghost_ckpt(n=100, p=10, L=10, M=2, alpha=0.5, seed=0, min.ratio=1e-6)
