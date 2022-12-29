@@ -168,7 +168,8 @@ List basil_dense__(
     auto&& checkpoint_cvt = list_to_checkpoint(checkpoint);
     return basil__(A, r, alpha, penalty, user_lmdas, max_n_lambdas,
             n_lambdas_iter, use_strong_rule, delta_strong_size,
-            max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoint_cvt);
+            max_strong_size, max_n_cds, thr, min_ratio, n_threads, 
+            checkpoint_cvt);
 }
 
 // [[Rcpp::export]]
@@ -202,61 +203,67 @@ List basil_block_dense__(
             checkpoints_cvt);
 }
 
-//// [[Rcpp::export]]
-//List basil_ghost__(
-//        SEXP A,
-//        const Eigen::Map<Eigen::VectorXd> r,
-//        double alpha,
-//        const Eigen::Map<Eigen::VectorXd> penalty,
-//        const Eigen::Map<Eigen::VectorXd> user_lmdas,
-//        size_t max_n_lambdas,
-//        size_t n_lambdas_iter,
-//        bool use_strong_rule,
-//        size_t delta_strong_size,
-//        size_t max_strong_size,
-//        size_t max_n_cds,
-//        double thr,
-//        double min_ratio,
-//        size_t n_threads)
-//{
-//    auto gmw = Rcpp::as<GhostMatrixWrap>(A);
-//
-//    // gets the internal GhostMatrix class
-//    const auto& gm = gmw.internal();
-//    
-//    return basil__(
-//            gm, r, alpha, penalty, user_lmdas, max_n_lambdas,
-//            n_lambdas_iter, use_strong_rule, delta_strong_size,
-//            max_strong_size, max_n_cds, thr, min_ratio, n_threads);
-//}
-//
-//// [[Rcpp::export]]
-//List basil_block_ghost__(
-//        SEXP A,
-//        const Eigen::Map<Eigen::VectorXd> r,
-//        double alpha,
-//        const Eigen::Map<Eigen::VectorXd> penalty,
-//        const Eigen::Map<Eigen::VectorXd> user_lmdas,
-//        size_t max_n_lambdas,
-//        size_t n_lambdas_iter,
-//        bool use_strong_rule,
-//        size_t delta_strong_size,
-//        size_t max_strong_size,
-//        size_t max_n_cds,
-//        double thr,
-//        double min_ratio,
-//        size_t n_threads)
-//{
-//    auto bgmw = Rcpp::as<BlockGhostMatrixWrap>(A);
-//
-//    // gets the internal GhostMatrix class
-//    const auto& bgm = bgmw.internal();
-//    
-//    return basil__(
-//            bgm, r, alpha, penalty, user_lmdas, max_n_lambdas,
-//            n_lambdas_iter, use_strong_rule, delta_strong_size,
-//            max_strong_size, max_n_cds, thr, min_ratio, n_threads);
-//}
+// [[Rcpp::export]]
+List basil_ghost__(
+        SEXP A,
+        const Eigen::Map<Eigen::VectorXd> r,
+        double alpha,
+        const Eigen::Map<Eigen::VectorXd> penalty,
+        const Eigen::Map<Eigen::VectorXd> user_lmdas,
+        size_t max_n_lambdas,
+        size_t n_lambdas_iter,
+        bool use_strong_rule,
+        size_t delta_strong_size,
+        size_t max_strong_size,
+        size_t max_n_cds,
+        double thr,
+        double min_ratio,
+        size_t n_threads,
+        List checkpoint)
+{
+    auto gmw = Rcpp::as<GhostMatrixWrap>(A);
+
+    // gets the internal GhostMatrix class
+    const auto& gm = gmw.internal();
+    auto&& checkpoint_cvt = list_to_checkpoint(checkpoint);
+    
+    return basil__(
+            gm, r, alpha, penalty, user_lmdas, max_n_lambdas,
+            n_lambdas_iter, use_strong_rule, delta_strong_size,
+            max_strong_size, max_n_cds, thr, min_ratio, n_threads,
+            checkpoint_cvt);
+}
+
+// [[Rcpp::export]]
+List basil_block_ghost__(
+        SEXP A,
+        const Eigen::Map<Eigen::VectorXd> r,
+        double alpha,
+        const Eigen::Map<Eigen::VectorXd> penalty,
+        const Eigen::Map<Eigen::VectorXd> user_lmdas,
+        size_t max_n_lambdas,
+        size_t n_lambdas_iter,
+        bool use_strong_rule,
+        size_t delta_strong_size,
+        size_t max_strong_size,
+        size_t max_n_cds,
+        double thr,
+        double min_ratio,
+        size_t n_threads,
+        ListOf<List> checkpoints)
+{
+    auto bgmw = Rcpp::as<BlockGhostMatrixWrap>(A);
+
+    // gets the internal GhostMatrix class
+    const auto& bgm = bgmw.internal();
+    auto&& checkpoints_cvt = list_to_checkpoint(checkpoints);
+    
+    return basil__(
+            bgm, r, alpha, penalty, user_lmdas, max_n_lambdas,
+            n_lambdas_iter, use_strong_rule, delta_strong_size,
+            max_strong_size, max_n_cds, thr, min_ratio, n_threads,
+            checkpoints_cvt);
+}
 
 // [[Rcpp::export]]
 List objective_sparse__(

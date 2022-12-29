@@ -27,9 +27,10 @@ test_ckpt <- function(A, r, max.lambdas=100, n.threads=-1, ...)
         out.actual$lmdas,
         out.expected$lmdas[sub.idx:length(lmdas)]
     )
-    expect_equal(
-        out.actual$rsqs,
-        out.expected$rsqs[sub.idx:length(lmdas)]
+    expect_lte(
+        max(abs(out.actual$rsqs - out.expected$rsqs[sub.idx:length(lmdas)]) / 
+                out.expected$rsqs[sub.idx:length(lmdas)]),
+        1e-2
     )
     expect_equal(
         as.matrix(out.actual$betas), 
@@ -58,10 +59,34 @@ test_dense_ckpt <- function(n=100, p=50, seed=0, ...)
 # It is not an issue from a correctness point of view.
 # The results will just be off by a small margin due to different convergence.
 # The following are invariants, i.e. further changes should still keep these working.
+
 test_dense_ckpt(n=100, p=50, seed=0)
 test_dense_ckpt(n=100, p=100, seed=0)
 test_dense_ckpt(n=100, p=100, alpha=0.8, seed=843)
 test_dense_ckpt(n=2, p=100, alpha=0.5, seed=941)
+
+# ==============================================================
+# TEST Ghost Checkpoint
+# ==============================================================
+test_ghost_ckpt <- function(n=100, p=50, M=2, seed=0, ...)
+{
+    set.seed(seed)
+
+    X <- matrix(rnorm(n * p), n, p)
+    y <- X %*% rnorm(p) + rnorm(n)
+    S <- t(X) %*% X / n
+    D <- rep(min(eigen(S, symmetric=T, only.values=T)$values), p)
+    S <- S - diag(D)
+    A <- GhostMatrix(S, D, M)
+    r <- t(X) %*% y / n
+    r <- rep(r, times=M)
+    
+    test_ckpt(A, r, ...)
+}
+
+test_ghost_ckpt(n=100, p=2, M=2, seed=0)
+test_ghost_ckpt(n=100, p=50, M=5, seed=0)
+test_ghost_ckpt(n=100, p=100, M=2, alpha=0.2, seed=0)
 
 # ==============================================================
 # TEST Block<Dense> Checkpoint
@@ -88,3 +113,33 @@ test_block_dense_ckpt <- function(n=100, p=50, L=10, seed=0, ...)
 test_block_dense_ckpt(n=100, p=50, L=10, alpha=0.5, seed=123)
 test_block_dense_ckpt(n=100, p=50, L=1, alpha=0.1, seed=123)
 test_block_dense_ckpt(n=10, p=100, L=2, alpha=0.0, seed=8421)
+
+# ==============================================================
+# TEST Block<Ghost> Checkpoint
+# ==============================================================
+
+test_block_ghost_ckpt <- function(n=100, p=50, L=10, M=2, seed=0, ...)
+{
+    set.seed(seed)
+    mat.list <- list()
+    vec.list <- c()
+    for (i in 1:L) {
+        X <- matrix(rnorm(n * p), n, p)
+        y <- X %*% rnorm(p) + rnorm(n)
+        S <- t(X) %*% X / (n * L)
+        D <- rep(min(eigen(S, symmetric=T, only.values=T)$values), p)
+        S <- S - diag(D)
+        A <- GhostMatrix(S, D, M)
+        r <- t(X) %*% y / (n * L)
+        r <- rep(r, times=M)
+        mat.list[[i]] <- A
+        vec.list <- c(vec.list, r)
+    }
+    A <- BlockGhostMatrix(blocks=mat.list)
+    r <- vec.list
+    test_ckpt(A, r, ...)
+}
+
+test_block_ghost_ckpt(n=100, p=2, L=2, M=2, seed=0)
+test_block_ghost_ckpt(n=100, p=5, L=2, M=5, seed=0)
+test_block_ghost_ckpt(n=100, p=10, L=10, M=2, seed=32)
