@@ -104,8 +104,9 @@ An example construction is as follows:
 ```{r}
 p <- 10
 X <- matrix(rnorm(p*p), p)
-S <- (t(X) %*% X) / p
+Sigma <- (t(X) %*% X) / p
 D <- rep(0.1, p)
+S <- Sigma - D
 n.groups <- 2
 gmat <- GhostMatrix(S, D, n.groups)
 gmat
@@ -152,7 +153,6 @@ except that each block $A_i$ are `GhostMatrix` objects.
 If the `A` matrix contains any level of sparsity where groups of features are independent from others
 and the user wishes to add knockoff features as well,
 it is best to use this matrix class in terms of performance.
-__Currently, there is a small additional cost in speed. We are currently in the process of reducing this cost. In any case, this class brings a large reduction in memory consumption, so it is advised to use this class whenever possible.__
 
 A `BlockGhostMatrix` can be constructed by calling `BlockGhostMatrix(blocks, matrices, vectors, n.groups)`.
 An example construction is as follows:
@@ -160,8 +160,9 @@ An example construction is as follows:
 ```{r}
 p <- 10
 X <- matrix(rnorm(p*p), p)
-S <- (t(X) %*% X) / p
+Sigma <- (t(X) %*% X) / p
 D <- rep(0.1, p)
+S <- Sigma - D
 n.groups <- 2
 
 # Method 1
@@ -185,11 +186,19 @@ __Note: this matrix only _views_ the inputs! It is the user's responsibility tha
 # Calling `ghostbasil` 
 
 Once the user has constructed one of the possible matrix objects discussed previously,
-they can now call `ghostbasil` to solve the lasso problem.
+they can now call `ghostbasil` to solve the elastic net problem.
 Depending on the matrix type of `A`, `ghostbasil` will dispatch to the correct
 C++ routine to perform a highly optimized fitting procedure for that type.
 See `?ghostbasil` for the full description of the input arguments.
-The following is an example usage of `ghostbasil` using a dense matrix (for simplicity):
+
+It is worth noting that `ghostbasil` can finish early.
+Currently, there is only one early-stopping rule based on the training $R^2$.
+It measures whether the $R^2$ is increasing at a sufficiently slow rate
+and finishes early if it detects this behavior.
+
+## matrix
+
+The following is an example usage of `ghostbasil` using a dense matrix:
 
 ```{r}
 # Generate data
@@ -202,9 +211,8 @@ y <- X %*% beta + rnorm(n)
 # Prepare inputs
 A <- (t(X) %*% X) / n
 r <- (t(X) %*% y) / n
-alpha <- 1.0
 
-gb.out <- ghostbasil(A, r, alpha)
+gb.out <- ghostbasil(A, r)
 ```
 
 The output is a list with the following names:
@@ -213,32 +221,69 @@ attr(gb.out, 'names')
 ```
 - __`betas`__: a sparse matrix of coefficient vectors $\beta$ where each column is a solution corresponding to a $\lambda$ value.
 - __`lmdas`__: a vector of $\lambda$ values that correspond to each column of `betas`.
-- __`rsqs`__: a vector of _unnormalized_ (training) $R^2$ values that correspond to each $\lambda$ and $\beta$.
+- __`rsqs`__: a vector of _relative_ (training) $R^2$ values. 
+  The ith value is the $R^2$ at $\lambda_i$ divided by the $R^2$ of the last fitted lambda.
 - __`error`__: any error message propagated from the C++ routine.
+- __`checkpoint`__: the last valid basil state. This is useful to pass as an input to a subsequent call
+  to `ghostbasil` as a warm-start if the user wishes to continue fitting down a lambda path.
+- __`diagnostic`__: diagnostic information for developers.
 
 Let's inspect some of the values:
 ```{r}
-slice <- 1:13
+slice <- 1:7
 gb.out$betas[, slice]
 gb.out$lmdas[slice]
 gb.out$rsqs[slice]
 gb.out$error
 ```
 
-Currently, `rsqs` is the _unnormalized_ (training) $R^2$.
-Our objective can be recasted as a bona fide lasso problem in the linear regression setting
-with pseudo-data $(\tilde{X}, \tilde{y})$,
-hence, we define $R^2$ in the usual sense as
+## `BlockMatrix`
 
-\begin{align*}
-    R^2 := \frac{\norm{\tilde{y}}_2^2 - \norm{\tilde{y}-\tilde{X}\beta}_2^2}{\norm{\tilde{y}}_2^2}
-\end{align*}
+There has been significant improvement in fitting block matrices.
+Because the objective separates perfectly across blocks,
+we can parallelize at each basil iteration the fitting on a batch of lambdas.
+From benchmarking, this leads to almost linear scaling improvement in the number of CPUs,
+e.g. if a machine has 4 physical cores, then with 4 threads, the speed-up is about 4x.
 
-However, for computation reasons, we do not have access to the denominator, $\norm{\tilde{y}}_2^2$.
-We are currently exploring ways to find estimates of this quantity so that `rsqs` is normalized
-for interpretability reasons. 
+The fitting using `BlockMatrix` is the same for `matrix` except the construction of the inputs.
+The following is an example of using a `BlockMatrix`:
+```{r}
+# Generate data
+p <- 10
+X <- matrix(rnorm(p*p), p)
+B <- (t(X) %*% X) / p
+mat.list <- list(B, 2*B, 3*B)
+A <- BlockMatrix(mat.list)
+r <- rnorm(p * length(mat.list))
 
-It is worth noting that `ghostbasil` can finish early.
-Currently, there is only one early-stopping rule based on the training $R^2$.
-It measures whether the $R^2$ is increasing at a sufficiently slow rate
-and finishes early if it detects this behavior.
+gb.out <- ghostbasil(A, r) 
+
+gb.out$betas[, slice]
+gb.out$lmdas[slice]
+gb.out$rsqs[slice] 
+gb.out$error
+```
+
+To see the speed improvement from using a sequential method with no parallelism,
+we can compare the timings with using `n.threads=1`.
+To make the matters more convincing, we increase the size of our inputs.
+The following was run on a machine with 5 physical cores (with hyperthreading).
+```{r}
+L <- 100
+mat.list <- lapply(1:L, function(i) B)
+A <- BlockMatrix(mat.list)
+r <- rnorm(p * L)
+
+# use as many threads as cores (default)
+start1 <- proc.time()
+out1 <- ghostbasil(A, r, n.threads=-1) 
+end1 <- proc.time()
+
+# sequential method
+start2 <- proc.time()
+out2 <- ghostbasil(A, r, n.threads=1) 
+end2 <- proc.time()
+
+print(paste("Parallel:", (end1-start1)['elapsed']))
+print(paste("Sequential:", (end2-start2)['elapsed']))
+```
