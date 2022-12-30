@@ -230,7 +230,7 @@ attr(gb.out, 'names')
 
 Let's inspect some of the values:
 ```{r}
-slice <- 1:13
+slice <- 1:7
 gb.out$betas[, slice]
 gb.out$lmdas[slice]
 gb.out$rsqs[slice]
@@ -243,7 +243,7 @@ There has been significant improvement in fitting block matrices.
 Because the objective separates perfectly across blocks,
 we can parallelize at each basil iteration the fitting on a batch of lambdas.
 From benchmarking, this leads to almost linear scaling improvement in the number of CPUs,
-e.g. if a machine has 4 cores, then with 4 threads, the speed-up is about 4x.
+e.g. if a machine has 4 physical cores, then with 4 threads, the speed-up is about 4x.
 
 The fitting using `BlockMatrix` is the same for `matrix` except the construction of the inputs.
 The following is an example of using a `BlockMatrix`:
@@ -257,21 +257,33 @@ A <- BlockMatrix(mat.list)
 r <- rnorm(p * length(mat.list))
 
 gb.out <- ghostbasil(A, r) 
+
+gb.out$betas[, slice]
+gb.out$lmdas[slice]
+gb.out$rsqs[slice] 
+gb.out$error
 ```
 
 To see the speed improvement from using a sequential method with no parallelism,
 we can compare the timings with using `n.threads=1`.
+To make the matters more convincing, we increase the size of our inputs.
+The following was run on a machine with 5 physical cores (with hyperthreading).
 ```{r}
-# use as many threads as CPUs (may include hyperthreading) (default)
+L <- 100
+mat.list <- lapply(1:L, function(i) B)
+A <- BlockMatrix(mat.list)
+r <- rnorm(p * L)
+
+# use as many threads as cores (default)
 start1 <- proc.time()
-ghostbasil(A, r, n.threads=-1) 
+out1 <- ghostbasil(A, r, n.threads=-1) 
 end1 <- proc.time()
 
 # sequential method
 start2 <- proc.time()
-ghostbasil(A, r, n.threads=1) 
+out2 <- ghostbasil(A, r, n.threads=1) 
 end2 <- proc.time()
 
-print(paste("Parallel:", end1-start1))
-print(paste("Sequential:", end2-start2))
+print(paste("Parallel:", (end1-start1)['elapsed']))
+print(paste("Sequential:", (end2-start2)['elapsed']))
 ```
