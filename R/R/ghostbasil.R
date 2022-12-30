@@ -1,4 +1,4 @@
-#' Fits PGR objective with BASIL framework.
+#' Fits Gaussian elastic net with BASIL framework using summary statistics.
 #'
 #' @param   A   data covariance matrix.
 #'              It must be one of four types: matrix, GhostMatrix__, BlockMatrix__, BlockGhostMatrix__.
@@ -146,5 +146,8 @@ ghostbasil <- function(A, r, alpha=1,
     # raise any warnings
     if (out$error != "") warning(out$error)
     
+    # create relative R^2
+    out$rsqs <- out$rsqs / out$rsqs[length(out$rsqs)]
+
     out
 }

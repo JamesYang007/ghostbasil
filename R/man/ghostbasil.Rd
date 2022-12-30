@@ -2,7 +2,7 @@
 % Please edit documentation in R/ghostbasil.R
 \name{ghostbasil}
 \alias{ghostbasil}
-\title{Fits PGR objective with BASIL framework.}
+\title{Fits Gaussian elastic net with BASIL framework using summary statistics.}
 \usage{
 ghostbasil(
   A,
@@ -13,12 +13,12 @@ ghostbasil(
   max.lambdas = 100,
   lambdas.iter = 5,
   use.strong.rule = T,
-  delta.strong.size = 500,
+  delta.strong.size = 10,
   max.strong.size = 10000,
   max.cds = 1e+05,
   thr = 1e-07,
-  min.ratio = 1e-06,
-  n.threads = 0,
+  min.ratio = 0.01,
+  n.threads = -1,
   checkpoint = list()
 )
 }
@@ -81,5 +81,5 @@ fitting down a path of lambdas from the last lambda.}
 Internally, capped at max.strong.size.}
 }
 \description{
-Fits PGR objective with BASIL framework.
+Fits Gaussian elastic net with BASIL framework using summary statistics.
 }
