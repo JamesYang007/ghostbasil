@@ -115,7 +115,7 @@ ghostbasil <- function(A, r, alpha=1,
     }
     else if (any(class(A) == 'Rcpp_BlockMatrix__')) {
         basil_cpp <- basil_block_dense__
-    }
+    } 
     else if (any(class(A) == 'Rcpp_GhostMatrix__')) {
         basil_cpp <- basil_ghost__
     }
