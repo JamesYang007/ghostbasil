@@ -122,6 +122,12 @@ ghostbasil <- function(A, r, alpha=1,
     else if (any(class(A) == 'Rcpp_BlockGhostMatrix__')) {
         basil_cpp <- basil_block_ghost__
     }
+    else if (any(class(A) == 'Rcpp_GroupGhostMatrix__')) {
+        basil_cpp <- basil_group_ghost__
+    }
+    else if (any(class(A) == 'Rcpp_BlockGroupGhostMatrix__')) {
+        basil_cpp <- basil_block_group_ghost__
+    }
     else {
         stop("Unrecognized type of A.")
     }
