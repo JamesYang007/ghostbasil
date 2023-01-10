@@ -280,6 +280,68 @@ List basil_block_ghost__(
 }
 
 // [[Rcpp::export]]
+List basil_group_ghost__(
+        SEXP A,
+        const Eigen::Map<Eigen::VectorXd> r,
+        double alpha,
+        const Eigen::Map<Eigen::VectorXd> penalty,
+        const Eigen::Map<Eigen::VectorXd> user_lmdas,
+        size_t max_n_lambdas,
+        size_t n_lambdas_iter,
+        bool use_strong_rule,
+        size_t delta_strong_size,
+        size_t max_strong_size,
+        size_t max_n_cds,
+        double thr,
+        double min_ratio,
+        size_t n_threads,
+        List checkpoint)
+{
+    auto gmw = Rcpp::as<GroupGhostMatrixWrap>(A);
+
+    // gets the internal GroupGhostMatrix class
+    const auto& gm = gmw.internal();
+    auto&& checkpoint_cvt = list_to_checkpoint(checkpoint);
+    
+    return basil__(
+            gm, r, alpha, penalty, user_lmdas, max_n_lambdas,
+            n_lambdas_iter, use_strong_rule, delta_strong_size,
+            max_strong_size, max_n_cds, thr, min_ratio, n_threads,
+            checkpoint_cvt);
+}
+
+// [[Rcpp::export]]
+List basil_block_group_ghost__(
+        SEXP A,
+        const Eigen::Map<Eigen::VectorXd> r,
+        double alpha,
+        const Eigen::Map<Eigen::VectorXd> penalty,
+        const Eigen::Map<Eigen::VectorXd> user_lmdas,
+        size_t max_n_lambdas,
+        size_t n_lambdas_iter,
+        bool use_strong_rule,
+        size_t delta_strong_size,
+        size_t max_strong_size,
+        size_t max_n_cds,
+        double thr,
+        double min_ratio,
+        size_t n_threads,
+        ListOf<List> checkpoints)
+{
+    auto bgmw = Rcpp::as<BlockGroupGhostMatrixWrap>(A);
+
+    // gets the internal GhostMatrix class
+    const auto& bgm = bgmw.internal();
+    auto&& checkpoints_cvt = list_to_checkpoint(checkpoints);
+    
+    return basil__(
+            bgm, r, alpha, penalty, user_lmdas, max_n_lambdas,
+            n_lambdas_iter, use_strong_rule, delta_strong_size,
+            max_strong_size, max_n_cds, thr, min_ratio, n_threads,
+            checkpoints_cvt);
+}
+
+// [[Rcpp::export]]
 List objective_sparse__(
         const Eigen::Map<Eigen::MatrixXd> A,
         const Eigen::Map<Eigen::VectorXd> r,

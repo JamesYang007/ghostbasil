@@ -630,7 +630,7 @@ void coordinate_descent(
             const auto j_shift = A.shift(j);
             const auto j_block = j / S.cols();
             const auto S_jk = S.coeff(j_shift, k_shift);
-            strong_grad[ss_idx_j] -= del * (S_jk + (j_block == k_block) ? D_k[j_shift] : 0);
+            strong_grad[ss_idx_j] -= del * (S_jk + ((j_block == k_block) ? D_k[j_shift] : 0));
         }
 
         // additional step
