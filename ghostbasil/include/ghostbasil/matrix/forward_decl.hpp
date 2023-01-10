@@ -8,4 +8,7 @@ class BlockMatrix;
 template <class MatrixType, class VectorType>
 class GhostMatrix;
 
+template <class MatrixType>
+class GroupGhostMatrix;
+
 } // namespace ghostbasil

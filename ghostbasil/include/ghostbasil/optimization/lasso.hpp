@@ -572,6 +572,72 @@ void coordinate_descent(
     }
 }
 
+template <class MatType,
+          class PackType, class Iter, class ValueType,
+          class AdditionalStepType=util::no_op>
+GHOSTBASIL_STRONG_INLINE
+void coordinate_descent(
+        const GroupGhostMatrix<MatType>& A,
+        PackType& pack,
+        Iter begin,
+        Iter end,
+        size_t lmda_idx,
+        ValueType& convg_measure,
+        AdditionalStepType additional_step=AdditionalStepType())
+{
+    const auto alpha = pack.alpha;
+    const auto lmda = pack.lmdas[lmda_idx];
+    const auto l1 = lmda * alpha;
+    const auto l2 = lmda * (1-alpha);
+    const auto& penalty = pack.penalty;
+    const auto& strong_set = pack.strong_set;
+    const auto& strong_A_diag = pack.strong_A_diag;
+    auto& strong_beta = pack.strong_beta;
+    auto& strong_grad = pack.strong_grad;
+    auto& rsq = pack.rsq;
+
+    convg_measure = 0;
+    for (auto it = begin; it != end; ++it) {
+        const auto ss_idx = *it;              // index to strong set
+        const auto k = strong_set[ss_idx];    // actual feature index
+        const auto ak = strong_beta[ss_idx];  // corresponding beta
+        const auto gk = strong_grad[ss_idx];  // corresponding gradient
+        const auto A_kk = strong_A_diag[ss_idx];  // corresponding A diagonal element
+        const auto pk = penalty[k]; 
+                                    
+        auto& ak_ref = strong_beta[ss_idx];
+        update_coefficient(ak_ref, A_kk, l1, l2, pk, gk);
+
+        if (ak_ref == ak) continue;
+
+        const auto del = ak_ref - ak;
+
+        // update measure of convergence
+        update_convergence_measure(convg_measure, del, A_kk);
+
+        // update rsq
+        update_rsq(rsq, ak, ak_ref, A_kk, gk);
+
+        // update gradient
+        const auto& S = A.get_S();
+        const auto& D = A.get_D();
+        const auto k_shift = A.shift(k);
+        const auto k_block = k / S.cols();
+        const auto D_k = D.col(k_shift);
+        for (auto jt = begin; jt != end; ++jt) {
+            const auto ss_idx_j = *jt;
+            const auto j = strong_set[ss_idx_j];
+            const auto j_shift = A.shift(j);
+            const auto j_block = j / S.cols();
+            const auto S_jk = S.coeff(j_shift, k_shift);
+            strong_grad[ss_idx_j] -= del * (S_jk + (j_block == k_block) ? D_k[j_shift] : 0);
+        }
+
+        // additional step
+        additional_step(ss_idx);
+    }
+}
+
 template <class MatType, class PackType, class Iter, class ValueType,
           class AdditionalStepType=util::no_op>
 GHOSTBASIL_STRONG_INLINE
@@ -935,6 +1001,77 @@ void lasso_active(
                     v_inner+v_begin, v_inner+v_nnz, k)-v_inner;
             const auto D_kk_v_k = ((v_begin != v_nnz) && (v_inner[v_begin] == k)) ?
                 D_kk*v_value[v_begin] : 0;
+            strong_grad[ss_idx] -= (S_sum_vs[k_shifted] + D_kk_v_k);
+        }
+    };
+
+    lasso_active_impl(
+            pack, lmda_idx, active_beta_diff_ordered, sg_update,
+            check_user_interrupt);
+}
+
+template <class MatType, class PackType,
+          class ABDiffOType, class CUIType = util::no_op>
+GHOSTBASIL_STRONG_INLINE 
+void lasso_active(
+    const GroupGhostMatrix<MatType>& A,
+    PackType& pack,
+    size_t lmda_idx,
+    ABDiffOType& active_beta_diff_ordered,
+    CUIType check_user_interrupt = CUIType())
+{
+    using pack_t = std::decay_t<PackType>;
+    using value_t = typename pack_t::value_t;
+    
+    const auto& strong_set = pack.strong_set;
+    const auto& strong_order = pack.strong_order;
+    const auto& is_active = pack.is_active;
+    const auto& active_set = *pack.active_set;
+    auto& strong_grad = pack.strong_grad;
+
+    const auto sg_update = [&](const auto& sp_beta_diff) {
+        if ((sp_beta_diff.nonZeros() == 0) || 
+            (active_set.size() == strong_set.size())) return;
+
+        const auto& S = A.get_S();
+        const auto& D = A.get_D();
+        const auto v_inner = sp_beta_diff.innerIndexPtr();
+        const auto v_value = sp_beta_diff.valuePtr();
+        const auto v_nnz = sp_beta_diff.nonZeros();
+        auto v_begin = 0;
+
+        util::vec_type<value_t> sum_vs(S.cols());
+        util::vec_type<value_t> S_sum_vs(S.cols());
+        sum_vs.setZero();
+
+        static constexpr value_t inf = 
+            std::numeric_limits<value_t>::infinity();
+        S_sum_vs.fill(inf);
+
+        // compute sum of v blocks
+        for (size_t j = 0; j < v_nnz; ++j) {
+            const auto j_inner = v_inner[j];
+            const auto j_shift = A.shift(j_inner);
+            sum_vs[j_shift] += v_value[j];
+        }
+
+        // update gradient in non-active positions
+        for (size_t ii = 0; ii < strong_order.size(); ++ii) {
+            const auto ss_idx = strong_order[ii];
+            if (is_active[ss_idx]) continue;
+            const auto k = strong_set[ss_idx];
+            const auto k_shifted = A.shift(k);
+            if (S_sum_vs[k_shifted] == inf) {
+                S_sum_vs[k_shifted] = sum_vs.dot(S.col(k_shifted));
+            }
+            const auto D_k = D.col(k_shifted);
+            const auto k_block_begin = (k / S.cols()) * S.cols();
+            v_begin = std::lower_bound(v_inner+v_begin, v_inner+v_nnz, k_block_begin)-v_inner;
+            const auto v_end = std::lower_bound(v_inner+v_begin, v_inner+v_nnz, k_block_begin+S.cols())-v_inner;
+            value_t D_kk_v_k = 0;
+            for (size_t l = v_begin; l < v_end; ++l) {
+                D_kk_v_k += v_value[l] * D_k[v_inner[l]-k_block_begin];
+            }
             strong_grad[ss_idx] -= (S_sum_vs[k_shifted] + D_kk_v_k);
         }
     };
