@@ -350,7 +350,7 @@ gb.out$error
 ```
 
 To see the speed improvement from using a sequential method with no parallelism,
-we can compare the timings with using `n.threads=1`.
+we can compare the timings by using `n.threads=1`.
 To make the matters more convincing, we increase the size of our inputs.
 The following was run on a machine with 5 physical cores (with hyperthreading).
 ```{r}
@@ -361,7 +361,7 @@ r <- rnorm(p * L)
 
 # use as many threads as cores (default)
 start1 <- proc.time()
-out1 <- ghostbasil(A, r, n.threads=-1) 
+out1 <- ghostbasil(A, r) 
 end1 <- proc.time()
 
 # sequential method
