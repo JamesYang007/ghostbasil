@@ -2,7 +2,7 @@ Package: ghostbasil
 Title: GhostKnockoff + BASIL Framework
 Version: 0.0.0.9000
 Authors@R: 
-    person("James", "Yang", , "jy2816@stanford.com", role = c("aut", "cre"))
+    person("James", "Yang", email = "jy2816@stanford.com", role = c("aut", "cre"))
 Description: TODO.
 License: MIT + file LICENSE
 Encoding: UTF-8
