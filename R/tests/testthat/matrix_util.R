@@ -77,16 +77,10 @@ generate.data.block <- function(n, p, L, seed=0)
     data <- lapply(1:L, function(l) generate.data(n, p, seed + l - 1))
     mat.list <- lapply(1:L, function(l) data[[l]]$Sigma)
     r <- as.numeric(sapply(1:L, function(l) data[[l]]$r))
-
-    A.dense <- matrix(0, p * L, p * L)
-    for (i in 1:L) {
-        ii.b <- p * (i-1) + 1
-        ii.e <- ii.b + p - 1
-        A.dense[ii.b:ii.e, ii.b:ii.e] <- mat.list[[i]]
-    }
-
+    A <- BlockMatrix(mat.list)
+    A.dense <- A$to_dense()
     list(
-        A=BlockMatrix(mat.list),
+        A=A,
         A.dense=A.dense,
         r=r
     )

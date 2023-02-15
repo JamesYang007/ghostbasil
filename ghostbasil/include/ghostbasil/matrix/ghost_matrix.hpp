@@ -349,6 +349,25 @@ public:
         const auto& D = vector();
         return S(i_shift, j_shift) + ((i == j) ? D[i_shift] : 0);
     }
+    
+    inline auto to_dense() const
+    {
+        const auto p = rows_;
+        const auto gsize = compute_group_size();
+        util::mat_type<value_t> dm(p, p); 
+        for (size_t i = 0; i < n_groups_; ++i) {
+            const auto si = gsize * i;
+            for (size_t j = 0; j < n_groups_; ++j) {
+                const auto sj = gsize * j;
+                auto curr_block = dm.block(si, sj, gsize, gsize);
+                curr_block = matrix().to_dense();
+                if (i == j) {
+                    curr_block.diagonal() += vector();
+                }
+            }
+        }
+        return dm;
+    }
 };
 
 } // namespace ghostbasil

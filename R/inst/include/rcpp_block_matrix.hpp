@@ -59,6 +59,8 @@ public:
     }
 
     Rcpp::List get_mat_list_exp() const { return orig_list_; }
+    
+    Eigen::MatrixXd to_dense_exp() const { return block_mat_.to_dense(); }
 };
 
 class BlockGhostMatrixWrap
@@ -118,6 +120,8 @@ public:
     }
 
     Rcpp::List get_mat_list_exp() const { return orig_list_; }
+
+    Eigen::MatrixXd to_dense_exp() const { return block_mat_.to_dense(); }
 };
 
 class BlockGroupGhostMatrixWrap

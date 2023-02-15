@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <ghostbasil/util/macros.hpp>
+#include <ghostbasil/util/types.hpp>
 #include <ghostbasil/matrix/forward_decl.hpp>
 
 namespace ghostbasil {
@@ -204,6 +205,24 @@ public:
         auto end = n_cum_sum_[stride_idx+1];
         if (j < begin || j >= end) return 0;
         return mat_list_[stride_idx].coeff(i-begin, j-begin);
+    }
+    
+    GHOSTBASIL_STRONG_INLINE
+    auto to_dense() const
+    {
+        const auto p = n_features();
+        const auto& strides_ = strides();
+
+        util::mat_type<value_t> dm(p, p);
+        dm.setZero();
+
+        for (size_t i = 0; i < n_mats_; ++i) {
+            const auto si = strides_[i];
+            const auto li = strides_[i+1] - strides_[i];
+            dm.block(si, si, li, li) = mat_list_[i].to_dense();
+        }
+        
+        return dm;
     }
 };
 
