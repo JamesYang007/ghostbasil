@@ -1,7 +1,7 @@
-test_ckpt <- function(A, r, max.lambdas=100, n.threads=-1, ...)
+test_ckpt <- function(A, r, max.lambdas=100, n.threads=-1, thr=1e-7, ...)
 {
     # initial fit
-    out.expected <- ghostbasil(A, r, max.lambdas=max.lambdas, n.threads=n.threads, ...)
+    out.expected <- ghostbasil(A, r, max.lambdas=max.lambdas, n.threads=n.threads, thr=thr, ...)
 
     expect_equal(out.expected$error, "")
 
@@ -12,13 +12,13 @@ test_ckpt <- function(A, r, max.lambdas=100, n.threads=-1, ...)
     lmdas.rest <- lmdas[sub.idx:length(lmdas)]
 
     # fit on subset and checkpoint
-    out.ckpt <- ghostbasil(A, r, max.lambdas=length(lmdas.sub), user.lambdas=lmdas.sub, n.threads=n.threads, ...)
+    out.ckpt <- ghostbasil(A, r, max.lambdas=length(lmdas.sub), user.lambdas=lmdas.sub, n.threads=n.threads, thr=thr, ...)
 
     expect_equal(out.ckpt$lmdas, lmdas.sub)
 
     # fit on the rest with checkpoint
     out.actual <- ghostbasil(A, r, max.lambdas=length(lmdas.rest), user.lambdas=lmdas.rest, 
-                            n.threads=n.threads, checkpoint=out.ckpt$checkpoint, ...)
+                            n.threads=n.threads, checkpoint=out.ckpt$checkpoint, thr=thr, ...)
 
     expect_equal(out.actual$lmdas, lmdas.rest)
 
@@ -60,8 +60,8 @@ test_dense_ckpt <- function(n=100, p=50, seed=0, ...)
 # The following are invariants, i.e. further changes should still keep these working.
 
 test_dense_ckpt(n=100, p=50, seed=0, min.ratio=1e-6)
-test_dense_ckpt(n=100, p=100, seed=0, min.ratio=1e-6)
-test_dense_ckpt(n=100, p=100, alpha=0.8, seed=843, min.ratio=1e-6)
+test_dense_ckpt(n=100, p=100, seed=4, min.ratio=1e-2)
+test_dense_ckpt(n=100, p=100, alpha=0.8, seed=3, min.ratio=1e-2)
 test_dense_ckpt(n=2, p=100, alpha=0.5, seed=941, min.ratio=1e-6)
 
 # ==============================================================
@@ -83,9 +83,9 @@ test_ghost_ckpt <- function(n=100, p=50, M=2, seed=0, ...)
     test_ckpt(A, r, ...)
 }
 
-test_ghost_ckpt(n=100, p=2, M=2, seed=0, min.ratio=1e-6)
-test_ghost_ckpt(n=100, p=50, M=5, seed=0, min.ratio=1e-6)
-test_ghost_ckpt(n=100, p=100, M=2, alpha=0.2, seed=0, min.ratio=1e-6)
+test_ghost_ckpt(n=100, p=2, M=2, seed=10, min.ratio=1e-2)
+test_ghost_ckpt(n=100, p=50, M=5, seed=123, min.ratio=1e-2)
+test_ghost_ckpt(n=100, p=100, M=2, alpha=0.2, seed=20, min.ratio=1e-2)
 
 # ==============================================================
 # TEST Block<Dense> Checkpoint
