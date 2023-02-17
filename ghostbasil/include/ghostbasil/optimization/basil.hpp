@@ -749,7 +749,7 @@ inline void basil(
         A, alpha, penalty, strong_set, strong_order, strong_A_diag,
         lmdas_curr, max_n_cds, thr, 0, strong_beta, strong_grad,
         active_set, active_order, active_set_ordered,
-        is_active, betas_curr, rsqs_curr, 0, 0       
+        is_active, betas_curr, rsqs_curr, 0, 0, false       
     );
 
     // fit only on the non-penalized variables
@@ -846,7 +846,7 @@ inline void basil(
             A, alpha, penalty, strong_set, strong_order, strong_A_diag,
             lmdas_curr, max_n_cds, thr, rsq_prev_valid, strong_beta, strong_grad,
             active_set, active_order, active_set_ordered,
-            is_active, betas_curr, rsqs_curr, 0, 0       
+            is_active, betas_curr, rsqs_curr, 0, 0, false      
         );
         try {
             fit(fit_pack, check_user_interrupt);
