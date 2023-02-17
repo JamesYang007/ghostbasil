@@ -9,6 +9,7 @@ RCPP_MODULE(core_module) {
         .method("col_dot", &BlockMatrixWrap::col_dot_exp)
         .method("quad_form", &BlockMatrixWrap::quad_form_exp)
         .method("inv_quad_form", &BlockMatrixWrap::inv_quad_form_exp)
+        .method("to_dense", &BlockMatrixWrap::to_dense_exp)
         .property("matrices", &BlockMatrixWrap::get_mat_list_exp)
         .property("dim", &BlockMatrixWrap::dim_exp)
         ;
@@ -39,6 +40,7 @@ RCPP_MODULE(core_module) {
         .method("col_dot", &BlockGhostMatrixWrap::col_dot_exp)
         .method("quad_form", &BlockGhostMatrixWrap::quad_form_exp)
         .method("inv_quad_form", &BlockGhostMatrixWrap::inv_quad_form_exp)
+        .method("to_dense", &BlockGhostMatrixWrap::to_dense_exp)
         .property("matrices", &BlockGhostMatrixWrap::get_mat_list_exp)
         .property("dim", &BlockGhostMatrixWrap::dim_exp)
         ;

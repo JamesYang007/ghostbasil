@@ -55,7 +55,7 @@ void screen(
     const auto strong_rule_lmda = (2 * lmda_next - lmda_prev) * alpha;
     for (size_t i = 0; i < abs_grad.size(); ++i) {
         if (is_strong(i)) continue;
-        if (abs_grad[i] > strong_rule_lmda * penalty[i] * 1.0001) {
+        if (abs_grad[i] > strong_rule_lmda * penalty[i]) {
             strong_set.push_back(i);
         }
     }
@@ -737,7 +737,7 @@ inline void basil(
     auto& rsqs_curr = basil_state.rsqs_curr;
     auto& betas = basil_state.betas;
     auto& rsqs = basil_state.rsqs;
-
+    
     // check strong set size
     if (strong_set.size() > max_strong_size) throw util::max_basil_strong_set();
 
@@ -749,7 +749,7 @@ inline void basil(
         A, alpha, penalty, strong_set, strong_order, strong_A_diag,
         lmdas_curr, max_n_cds, thr, 0, strong_beta, strong_grad,
         active_set, active_order, active_set_ordered,
-        is_active, betas_curr, rsqs_curr, 0, 0       
+        is_active, betas_curr, rsqs_curr, 0, 0, false       
     );
 
     // fit only on the non-penalized variables
@@ -782,6 +782,19 @@ inline void basil(
 
     // first index of KKT failure
     size_t idx = 1;         
+
+    const auto tidy_up = [&]() {
+        // Last screening to ensure that the basil state is at the previously valid state.
+        // We force non-strong rule and add 0 new variables to preserve the state.
+        basil_state.screen(
+            0, 0, false, idx == 0, idx < lmdas_curr.size(),
+            lmdas.back(), lmdas.back() 
+        );
+
+        betas_out = std::move(betas);
+        rsqs_out = std::move(rsqs);
+        checkpoint = std::move(basil_state);
+    };
 
     // update diagnostic for initialization
     diagnostic.strong_sizes.push_back(strong_set.size());
@@ -833,9 +846,15 @@ inline void basil(
             A, alpha, penalty, strong_set, strong_order, strong_A_diag,
             lmdas_curr, max_n_cds, thr, rsq_prev_valid, strong_beta, strong_grad,
             active_set, active_order, active_set_ordered,
-            is_active, betas_curr, rsqs_curr, 0, 0       
+            is_active, betas_curr, rsqs_curr, 0, 0, false      
         );
-        fit(fit_pack, check_user_interrupt);
+        try {
+            fit(fit_pack, check_user_interrupt);
+        } catch (const std::exception& e) {
+            tidy_up();
+            throw util::propagator_error(e.what());
+        }
+
         const auto& n_lmdas = fit_pack.n_lmdas;
 
         /* Checking KKT */
@@ -869,16 +888,7 @@ inline void basil(
         diagnostic.n_lambdas_proc.push_back(idx);
     }
 
-    // Last screening to ensure that the basil state is at the previously valid state.
-    // We force non-strong rule and add 0 new variables to preserve the state.
-    basil_state.screen(
-        0, 0, false, idx == 0, idx < lmdas_curr.size(),
-        lmdas.back(), lmdas.back() 
-    );
-
-    betas_out = std::move(betas);
-    rsqs_out = std::move(rsqs);
-    checkpoint = std::move(basil_state);
+    tidy_up();
 }
 
 /**
@@ -949,6 +959,12 @@ inline void basil(
     // Buffer to store first KKT failure index for each block
     vec_index_t indices_block(n_blocks);
 
+    // Buffer to store exceptions
+    std::vector<std::pair<util::propagator_error, bool>> exceptions(
+        n_blocks, {{}, false} 
+    );
+    std::atomic<bool> has_exception(false);
+
     // initialize current state to consider non-penalized variables
     // with 0 coefficient everywhere for each block.
     std::vector<basil_state_t> basil_states;
@@ -984,6 +1000,14 @@ inline void basil(
                 return basil_state.active_set.size();
             }
         ).sum();
+    };
+    
+    const auto check_exceptions = [&]() {
+        for (size_t i = 0; i < exceptions.size(); ++i) {
+            if (std::get<1>(exceptions[i])) {
+                throw std::get<0>(exceptions[i]);
+            }
+        }
     };
 
     const auto strong_set_tot_size = get_strong_set_tot_size();
@@ -1022,13 +1046,24 @@ inline void basil(
             active_set, active_order, active_set_ordered,
             is_active, betas_curr, rsqs_curr, 0, 0, false
         );
-        fit(fit_pack);
+        
+        try {
+            fit(fit_pack);
+        } catch (const std::exception& e) {
+            auto& ei = exceptions[i];
+            std::get<0>(ei) = util::propagator_error(e.what());
+            std::get<1>(ei) = true;
+            has_exception.store(true, std::memory_order_relaxed);
+        }
 
         n_cds_block[i] = fit_pack.n_cds;
 
         // update state after fitting on non-penalized variables
         basil_state.update_after_initial_fit(fit_pack.rsq);
     }
+    
+    if (has_exception) check_exceptions(); 
+
     check_user_interrupt(0);
 
     // compute max cds
@@ -1058,6 +1093,19 @@ inline void basil(
 
     // first index of KKT failure
     size_t idx = 1;         
+
+    const auto tidy_up = [&]() {
+        checkpoints.resize(basil_states.size());
+#pragma omp parallel for schedule(static) num_threads(n_threads)
+        for (size_t i = 0; i < basil_states.size(); ++i) {
+            auto& basil_state = basil_states[i];
+            basil_state.screen(
+                0, 0, false, idx == 0, idx < lmdas_curr.size(),
+                lmdas.back(), lmdas.back() 
+            );
+            checkpoints[i] = std::move(basil_states[i]);
+        }
+    };
 
     diagnostic.strong_sizes.push_back(strong_set_tot_size);
     diagnostic.active_sizes.push_back(get_active_set_tot_size());
@@ -1136,7 +1184,16 @@ inline void basil(
                 active_set, active_order, active_set_ordered,
                 is_active, betas_curr, rsqs_curr, 0, 0, false
             );
-            fit(fit_pack);
+
+            try {
+                fit(fit_pack);
+            } catch (const std::exception& e) {
+                auto& ei = exceptions[i];
+                std::get<0>(ei) = util::propagator_error(e.what());
+                std::get<1>(ei) = true;
+                has_exception.store(true, std::memory_order_relaxed);
+            }
+
             const auto& n_lmdas = fit_pack.n_lmdas;
 
             n_cds_block[i] = fit_pack.n_cds;
@@ -1154,6 +1211,12 @@ inline void basil(
                 [&](auto j) { return basil_state.is_strong(j); }, 1, grad, grad_next
             );
         }
+        
+        if (has_exception) {
+            tidy_up();
+            check_exceptions();
+        }
+        
         idx = indices_block.minCoeff();
         const auto max_n_cds_block = n_cds_block.maxCoeff();
 
@@ -1168,7 +1231,7 @@ inline void basil(
                     grad_last_valid.data() + strides[i], strides[i+1] - strides[i]
                 );
                 grad = grad_last_valid_block;
-            } else {
+            } else if (idx < lmdas_curr.size()){
                 const auto& A_block = basil_state.A;
                 const auto& r_block = basil_state.r;
                 const auto& beta_valid = basil_state.betas_curr[idx-1];
@@ -1240,16 +1303,7 @@ inline void basil(
         diagnostic.n_lambdas_proc.push_back(idx);
     }
 
-    checkpoints.resize(basil_states.size());
-#pragma omp parallel for schedule(static) num_threads(n_threads)
-    for (size_t i = 0; i < basil_states.size(); ++i) {
-        auto& basil_state = basil_states[i];
-        basil_state.screen(
-            0, 0, false, idx == 0, idx < lmdas_curr.size(),
-            lmdas.back(), lmdas.back() 
-        );
-        checkpoints[i] = std::move(basil_states[i]);
-    }
+    tidy_up();
 }
 
 } // namespace lasso

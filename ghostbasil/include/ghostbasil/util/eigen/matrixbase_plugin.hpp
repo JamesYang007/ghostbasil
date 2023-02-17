@@ -29,3 +29,5 @@ inline Scalar inv_quad_form(Scalar s, const Eigen::SparseMatrixBase<VecType>& v)
     colvec_t vd = v;
     return inv_quad_form(s, vd);
 }
+
+inline const auto& to_dense() const { return *this; }
