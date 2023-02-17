@@ -1231,7 +1231,7 @@ inline void basil(
                     grad_last_valid.data() + strides[i], strides[i+1] - strides[i]
                 );
                 grad = grad_last_valid_block;
-            } else {
+            } else if (idx < lmdas_curr.size()){
                 const auto& A_block = basil_state.A;
                 const auto& r_block = basil_state.r;
                 const auto& beta_valid = basil_state.betas_curr[idx-1];
