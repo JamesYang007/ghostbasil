@@ -48,7 +48,7 @@ struct BlockGroupGhostMatrixUtil
     static auto make_dense(const GMatType& gmat)
     {
         const auto& D = gmat.get_D();
-        std::vector<const Eigen::Map<mat_t>> dl;
+        std::vector<Eigen::Map<mat_t>> dl;
         dl.reserve(D.n_blocks());
         for (size_t i = 0; i < D.n_blocks(); ++i) {
             dl.emplace_back(
