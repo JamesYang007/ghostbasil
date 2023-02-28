@@ -6,65 +6,48 @@ dim.Rcpp_BlockGroupGhostMatrix__ <- function(x) x$dim
 
 #' Creates an instance of a BlockGroupGhostMatrix.
 #'
-#' This matrix represents a block diagonal matrix where each
-#' block matrix is a GroupGhostMatrix.
+#' This matrix has the block-form of Sigma on the off-diagonal
+#' and Sigma + D on the diagonal with D begin block-diagonal.
+#' For example, if n.groups is 2, then GhostMatrix represents a matrix of the form
+#' \deqn{
+#'  \begin{bmatrix}
+#'      \Sigma+D & \Sigma \\
+#'      \Sigma & \Sigma+D
+#'  \end{bmatrix}
+#' }
 #'
-#' @param   blocks  list of matrices of the same type.
-#'                  If specified, the other arguments will be ignored.
-#'                  Otherwise, the other arguments will be used. 
-#' @param   off.diagonals    list of dense off-diagonal blocks to construct each GroupGhostMatrix.
-#' @param   diagonals     list of dense non-off-diagonal blocks to construct each GroupGhostMatrix.
-#' @param   n.groups    vector of the number of groups for each GroupGhostMatrix.
-#'                      If only one value is specified, it is assumed to be
-#'                      the same value for each GroupGhostMatrix.
+#' @param   Sigma   covariance matrix of original features (dense matrix) minus D.
+#' @param   D       matrix to add to Sigma on the diagonal blocks (BlockMatrix).
+#' @param   n.groups    number of groups (e.g. 1 knockoff means 2 groups).
 #' @export
-BlockGroupGhostMatrix <- function(blocks=list(),
-                                  off.diagonals=list(),
-                                  diagonals=list(),
-                                  n.groups=c())
+BlockGroupGhostMatrix <- function(Sigma, D, n.groups)
 {
-    if (length(blocks) <= 0) {
-        # replicate value if only one provided.
-        if (length(n.groups) == 1) {
-            n.groups <- rep(n.groups, length(off.diagonals))
-        }
-        if ((length(off.diagonals) != length(diagonals)) ||
-            (length(diagonals) != length(n.groups))) {
-            stop("Length of off.diagonals, diagonals, and n.groups must be the same.")
-        }
-        if (length(off.diagonals) <= 0) {
-            stop("Length of off.diagonals, diagonals, and n.groups must be positive.")
-        }
-        for (i in 1:length(off.diagonals)) {
-            gmat <- GroupGhostMatrix(off.diagonals[[i]], diagonals[[i]], n.groups[i])
-            blocks <- append(blocks, list(gmat))
-        }
-    }
-
-    block.type <- class(blocks[[1]])
-    if (all(block.type != 'Rcpp_GroupGhostMatrix__')) {
-        stop("Every block must be of GroupGhostMatrix type.")
-    }
-    for (i in 1:length(blocks)) {
-        block.i <- blocks[[i]]
-        block.dim <- dim(block.i)
-        if (any(class(block.i) != block.type)) {
-            stop(paste("Block at index", i, 
-                       "has a different type from all previous blocks.",
-                       sep=' '))
-        }
-        if (block.dim[1] != block.dim[2]) {
-            stop(paste("Block at index", i, "is not square.", 
-                       sep=' '))
-        }
-        if ((block.dim[1] == 0) | 
-            (block.dim[2] == 0)) {
-            stop(paste("Block at index", i, "is empty.", 
-                       sep=' '))
-        }
-    }
-
-    out <- methods::new(BlockGroupGhostMatrix__, blocks) 
+    Sigma <- as.matrix(Sigma)
+    n.groups <- as.integer(n.groups)
     
+    if (all(class(D) != "Rcpp_BlockMatrix__")) {
+        stop("D must be a BlockMatrix.")
+    }
+
+    if (n.groups < 2) {
+        stop(paste("Number of groups must be at least 2.",
+             "If number of groups <= 1, use the usual matrix instead,",
+             "since GhostMatrix degenerates to the top-left corner matrix.",
+             sep=' '))
+    }
+    Sigma.dim <- dim(Sigma)
+    D.dim <- dim(D)
+    if (Sigma.dim[1] != Sigma.dim[2]) {
+        stop("Sigma is not square.")
+    }
+    if (Sigma.dim[1] == 0) {
+        stop("Sigma is empty.")
+    }
+    if (sum(Sigma.dim != D.dim) > 0) {
+        stop("Sigma must have both dimensions as the length of D.")
+    }
+
+    out <- methods::new(BlockGroupGhostMatrix__, Sigma, D, n.groups) 
+
     out
 }

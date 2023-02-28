@@ -27,11 +27,11 @@ namespace ghostbasil {
  *
  * @tparam  MatrixType  type of matrix that represents S.
  */
-template <class MatrixType>
+template <class MatrixType, class DType=BlockMatrix<MatrixType>>
 class BlockGroupGhostMatrix
 {
     using mat_t = std::decay_t<MatrixType>;
-    using bmat_t = BlockMatrix<mat_t>;
+    using bmat_t = DType;
     using value_t = typename mat_t::Scalar;
     using sp_mat_t = Eigen::SparseMatrix<value_t>;
 
@@ -247,6 +247,26 @@ public:
         const auto& S = get_S();
         const auto& D = get_D();
         return S(i_shift, j_shift) + ((i/group_size == j/group_size) ? D.coeff(i_shift, j_shift) : 0);
+    }
+    
+    inline auto to_dense() const
+    {
+        const auto p = rows_;
+        const auto gsize = compute_group_size();
+        const auto D_dense = D_.to_dense();
+        util::mat_type<value_t> dm(p, p); 
+        for (size_t i = 0; i < n_groups_; ++i) {
+            const auto si = gsize * i;
+            for (size_t j = 0; j < n_groups_; ++j) {
+                const auto sj = gsize * j;
+                auto curr_block = dm.block(si, sj, gsize, gsize);
+                curr_block = S_.to_dense();
+                if (i == j) {
+                    curr_block += D_dense;
+                }
+            }
+        }
+        return dm;
     }
 };
 

@@ -46,4 +46,5 @@ public:
     }
 };
 
+// MUST be in header since it needs to exist in every cpp file that includes class definition
 RCPP_EXPOSED_AS(GhostMatrixWrap)

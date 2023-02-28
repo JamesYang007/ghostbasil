@@ -17,12 +17,12 @@ basil_block_ghost__ <- function(A, r, alpha, penalty, user_lmdas, max_n_lambdas,
     .Call(`_ghostbasil_basil_block_ghost__`, A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoints)
 }
 
-basil_group_ghost__ <- function(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoint) {
-    .Call(`_ghostbasil_basil_group_ghost__`, A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoint)
+basil_block_group_ghost__ <- function(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoint) {
+    .Call(`_ghostbasil_basil_block_group_ghost__`, A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoint)
 }
 
-basil_block_group_ghost__ <- function(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoints) {
-    .Call(`_ghostbasil_basil_block_group_ghost__`, A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoints)
+basil_block_block_group_ghost__ <- function(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoints) {
+    .Call(`_ghostbasil_basil_block_block_group_ghost__`, A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoints)
 }
 
 objective_sparse__ <- function(A, r, penalty, alpha, lmda, beta) {

@@ -60,10 +60,10 @@ $\beta, r \in \R^{p}$, $p_i \geq 0$, and $0 \leq \alpha \leq 1$.
 
 - __`matrix`__: the usual dense matrix in `R`.
 - __`GhostMatrix`__: a matrix representing model-X knockoff-style structure. See `?GhostMatrix` for more detail.
-- __`GroupGhostMatrix`__: a matrix representing model-X group-knockoff-style structure. Unlike `GhostMatrix`, this matrix does not assume that the block to add `D` is not diagonal. See `?GroupGhostMatrix` for more detail.
+- __`BlockGroupGhostMatrix`__: a matrix representing model-X group-knockoff-style structure. Unlike `GhostMatrix`, this matrix does not assume that the block to add `D` is diagonal. Rather, `D` is assumed to be block-diagonal. See `?BlockGroupGhostMatrix` for more detail.
 - __`BlockMatrix`__: a block diagonal matrix where each block is of `matrix` type. See `?BlockMatrix` for more detail.
 - __`BlockGhostMatrix`__: a block diagonal matrix where each block is of `GhostMatrix` type. See `?BlockGhostMatrix` for more detail.
-- __`BlockGroupGhostMatrix`__: a block diagonal matrix where each block is of `GroupGhostMatrix` type. See `?BlockGroupGhostMatrix` for more detail.
+- __`BlockBlockGroupGhostMatrix`__: a block diagonal matrix where each block is of `BlockGroupGhostMatrix` type. See `?BlockBlockGroupGhostMatrix` for more detail.
 
 These matrices were introduced for the `A` matrix in the objective function.
 We will briefly describe each of the matrix types and their possible use-cases.
@@ -116,49 +116,6 @@ gmat
 
 __Note: this matrix only _views_ the inputs! It is the user's responsibility that the inputs remain allocated throughout the use of `GhostMatrix`.__
 
-## `GroupGhostMatrix`
-
-This matrix represents a large matrix of the form:
-
-\begin{align*}
-\begin{bmatrix}
-    S+D & S & \cdots & S \\
-    S   & S+D & \cdots & S \\
-    \vdots & \vdots & \ddots & \vdots \\
-    S & S & \cdots & S+D
-\end{bmatrix}
-\end{align*}
-
-__Note: `D` is not assumed to be diagonal.__
-This is the structure for a (multiple) model-X group-knockoff framework
-where $S \equiv \Sigma - D$, $\Sigma$ is the covariance matrix among the original features,
-and $D$ is the matrix obtained from solving the model-X group-knockoff optimization problem.
-Note that this slight formatting difference was done on purpose.
-`ghostbasil` can be significantly optimized with this format rather than the usual model-X knockoff format.
-
-If the `A` matrix is small-to-medium sized so that memory is not a concern
-and the user wishes to incorporate knockoff features,
-it is best to use this matrix in terms of performance.
-__There is almost no additional cost to using this matrix class even when $S$ is small and number of groups is small.__
-
-A `GroupGhostMatrix` can be constructed by calling `GroupGhostMatrix(S, D, n.groups)`,
-where `n.groups` is the number of _groups_ (i.e. one knockoff corresponds to two groups).
-An example construction is as follows:
-
-```{r}
-p <- 10
-X <- matrix(rnorm(p*p), p)
-Sigma <- (t(X) %*% X) / p
-D <- matrix(0, p, p)
-diag(D) <- 0.1
-S <- Sigma - D
-n.groups <- 2
-gmat <- GroupGhostMatrix(S, D, n.groups)
-gmat
-```
-
-__Note: this matrix only _views_ the inputs! It is the user's responsibility that the inputs remain allocated throughout the use of `GroupGhostMatrix`.__
-
 ## `BlockMatrix`
 
 This matrix represents a large block-diagonal matrix of the form:
@@ -190,6 +147,48 @@ bmat
 ```
 
 __Note: this matrix only _views_ the inputs! It is the user's responsibility that the inputs remain allocated throughout the use of `BlockMatrix`.__
+
+## `BlockGroupGhostMatrix`
+
+This matrix represents a large matrix of the form:
+
+\begin{align*}
+\begin{bmatrix}
+    S+D & S & \cdots & S \\
+    S   & S+D & \cdots & S \\
+    \vdots & \vdots & \ddots & \vdots \\
+    S & S & \cdots & S+D
+\end{bmatrix}
+\end{align*}
+
+__Note: `D` is not assumed to be diagonal, but rather block-diagonal.__
+This is the structure for a (multiple) model-X group-knockoff framework
+where $S \equiv \Sigma - D$, $\Sigma$ is the covariance matrix among the original features,
+and $D$ is the matrix obtained from solving the model-X group-knockoff optimization problem.
+Note that this slight formatting difference was done on purpose.
+`ghostbasil` can be significantly optimized with this format rather than the usual model-X knockoff format.
+
+If the `A` matrix is small-to-medium sized so that memory is not a concern
+and the user wishes to incorporate knockoff features,
+it is best to use this matrix in terms of performance.
+__There is almost no additional cost to using this matrix class even when $S$ is small and number of groups is small.__
+
+A `BlockGroupGhostMatrix` can be constructed by calling `BlockGroupGhostMatrix(S, D, n.groups)`,
+where `n.groups` is the number of _groups_ (i.e. one knockoff corresponds to two groups).
+An example construction is as follows:
+
+```{r}
+p <- 10
+X <- matrix(rnorm(p*p), p)
+Sigma <- (t(X) %*% X) / p
+D <- BlockMatrix(lapply(1:p, function(i) matrix(0.1, 1, 1)))
+S <- Sigma - diag(0.1, p, p)
+n.groups <- 2
+gmat <- BlockGroupGhostMatrix(S, D, n.groups)
+gmat
+```
+
+__Note: this matrix only _views_ the inputs! It is the user's responsibility that the inputs remain allocated throughout the use of `BlockGroupGhostMatrix`.__
 
 ## `BlockGhostMatrix`
 
@@ -228,45 +227,44 @@ bgmat.2
 
 __Note: this matrix only _views_ the inputs! It is the user's responsibility that the inputs remain allocated throughout the use of `BlockGhostMatrix`.__
 
-## `BlockGroupGhostMatrix`
+## `BlockBlockGroupGhostMatrix`
 
 This matrix represents a large block-diagonal matrix as in `BlockMatrix` 
-except that each block $A_i$ are `GroupGhostMatrix` objects.
+except that each block $A_i$ are `BlockGroupGhostMatrix` objects.
 If the `A` matrix contains any level of sparsity where groups of features are independent from others
 and the user wishes to add group-knockoff features as well,
 it is best to use this matrix class in terms of performance.
 
-A `BlockGroupGhostMatrix` can be constructed by calling 
-`BlockGroupGhostMatrix(blocks, off.diagonals, diagonals, n.groups)`.
+A `BlockBlockGroupGhostMatrix` can be constructed by calling 
+`BlockBlockGroupGhostMatrix(blocks, off.diagonals, diagonals, n.groups)`.
 An example construction is as follows:
 
 ```{r}
 p <- 10
 X <- matrix(rnorm(p*p), p)
 Sigma <- (t(X) %*% X) / p
-D <- matrix(0, p, p)
-diag(D) <- 0.1
-S <- Sigma - D
+D <- BlockMatrix(lapply(1:p, function(i) matrix(0.1, 1, 1)))
+S <- Sigma - diag(0.1, p, p)
 n.groups <- 2
 
 # Method 1
 off.diagonals <- list(S, S, S)
 diagonals <- list(D, D, D)
-bgmat <- BlockGroupGhostMatrix(
+bgmat <- BlockBlockGroupGhostMatrix(
           off.diagonals=off.diagonals,
           diagonals=diagonals,
           n.groups=n.groups)
 
 # Method 2
-block <- GroupGhostMatrix(S, D, n.groups)
+block <- BlockGroupGhostMatrix(S, D, n.groups)
 blocks <- list(block, block, block)
-bgmat.2 <- BlockGroupGhostMatrix(blocks=blocks)
+bgmat.2 <- BlockBlockGroupGhostMatrix(blocks=blocks)
 
 bgmat
 bgmat.2
 ```
 
-__Note: this matrix only _views_ the inputs! It is the user's responsibility that the inputs remain allocated throughout the use of `BlockGroupGhostMatrix`.__
+__Note: this matrix only _views_ the inputs! It is the user's responsibility that the inputs remain allocated throughout the use of `BlockBlockGroupGhostMatrix`.__
 
 # Calling `ghostbasil` 
 

@@ -11,7 +11,7 @@ class GhostMatrix;
 template <class MatrixType>
 class GroupGhostMatrix;
 
-template <class MatrixType>
+template <class MatrixType, class DType>
 class BlockGroupGhostMatrix;
 
 } // namespace ghostbasil

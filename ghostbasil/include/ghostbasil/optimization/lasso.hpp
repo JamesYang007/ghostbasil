@@ -638,12 +638,12 @@ void coordinate_descent(
     }
 }
 
-template <class MatType,
+template <class MatType, class DType,
           class PackType, class Iter, class ValueType,
           class AdditionalStepType=util::no_op>
 GHOSTBASIL_STRONG_INLINE
 void coordinate_descent(
-        const BlockGroupGhostMatrix<MatType>& A,
+        const BlockGroupGhostMatrix<MatType, DType>& A,
         PackType& pack,
         Iter begin,
         Iter end,
@@ -1152,11 +1152,11 @@ void lasso_active(
             check_user_interrupt);
 }
 
-template <class MatType, class PackType,
+template <class MatType, class DType, class PackType,
           class ABDiffOType, class CUIType = util::no_op>
 GHOSTBASIL_STRONG_INLINE 
 void lasso_active(
-    const BlockGroupGhostMatrix<MatType>& A,
+    const BlockGroupGhostMatrix<MatType, DType>& A,
     PackType& pack,
     size_t lmda_idx,
     ABDiffOType& active_beta_diff_ordered,
