@@ -1,6 +1,6 @@
 Package: ghostbasil
 Title: GhostKnockoff + BASIL Framework
-Version: 0.0.0.9000
+Version: 0.1.2
 Authors@R: 
     person("James", "Yang", email = "jy2816@stanford.com", role = c("aut", "cre"))
 Description: TODO.
