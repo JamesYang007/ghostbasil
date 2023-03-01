@@ -8,6 +8,7 @@
 #include <ghostbasil/util/type_traits.hpp>
 #include <ghostbasil/util/types.hpp>
 #include <ghostbasil/matrix/forward_decl.hpp>
+#include <ghostbasil/matrix/block_matrix.hpp>
 
 namespace ghostbasil {
 
@@ -20,21 +21,22 @@ namespace ghostbasil {
  *      S   .    ... S+D
  *
  * which is the typical form for the Gaussian covariance matrix
- * under multiple group-knockoffs framework where D is a full dense matrix (not diagonal).
- * We say that a GroupGhostMatrix has n groups if it is of size
+ * under multiple group-knockoffs framework where D is a block-diagonal matrix.
+ * We say that a BlockGroupGhostMatrix has n groups if it is of size
  * (n*p) x (n*p) where S and D are p x p.
  *
  * @tparam  MatrixType  type of matrix that represents S.
  */
-template <class MatrixType>
-class GroupGhostMatrix
+template <class MatrixType, class DType=BlockMatrix<MatrixType>>
+class BlockGroupGhostMatrix
 {
     using mat_t = std::decay_t<MatrixType>;
+    using bmat_t = DType;
     using value_t = typename mat_t::Scalar;
     using sp_mat_t = Eigen::SparseMatrix<value_t>;
 
     Eigen::Map<const mat_t> S_;  // matrix S
-    Eigen::Map<const mat_t> D_;  // matrix D
+    const bmat_t D_;  // matrix D 
     size_t n_groups_;       // number of groups
     Eigen::Index rows_; // number of total rows (same as total columns)
 
@@ -50,13 +52,13 @@ public:
     using Index = Eigen::Index;
     
     template <class MatType_>
-    GroupGhostMatrix(
+    BlockGroupGhostMatrix(
         const MatType_& S,
-        const MatType_& D,
+        const bmat_t& D,
         size_t n_groups
     )
         : S_(S.data(), S.rows(), S.cols()),
-          D_(D.data(), D.rows(), D.cols()),
+          D_(D),
           n_groups_(n_groups),
           rows_(S.rows() * n_groups),
           shift_(rows_)
@@ -123,7 +125,6 @@ public:
         const size_t k_block = shift_[k];
 
         // Get quantities for reuse.
-        const auto D_k = D.col(k_block);
         const auto S_k = S.col(k_block);
 
         // Compute the dot product.
@@ -133,7 +134,7 @@ public:
             const auto v_j = v.segment(v_j_begin, group_size);
             dp += v_j.dot(S_k);
         }
-        dp += D_k.dot(v.segment((k / group_size) * group_size, group_size));
+        dp += D.col_dot(k_block, v.segment((k / group_size) * group_size, group_size));
 
         return dp;
     }
@@ -154,7 +155,6 @@ public:
         const size_t k_block = shift_[k];
 
         // Get quantities for reuse.
-        const auto D_k = D.col(k_block);
         const auto S_k = S.col(k_block);
 
         // Compute the dot product.
@@ -173,13 +173,33 @@ public:
             v_begin = v_end;
         }
 
-        // add the D part now   
+        // Find the i(k) which is the closest index to k:
+        // n_cum_sum_[i(k)] <= k < n_cum_sum_[i(k)+1]
+        const auto& n_cum_sum = D.strides();
+        const auto ik_end = std::upper_bound(
+                n_cum_sum.begin(),
+                n_cum_sum.end(),
+                k_block);
+        const auto ik_begin = std::next(ik_end, -1);
+        const auto ik = std::distance(n_cum_sum.begin(), ik_begin);  
+        assert((ik+1) < n_cum_sum.size());
+
+        // Find i(k)th block matrix.
+        const auto& B = D.blocks()[ik];
+        const auto stride = n_cum_sum[ik];
+        const size_t k_shifted = k_block - stride;
+
+        // Find v_{i(k)}, i(k)th block of vector. 
         const auto k_block_begin = (k / group_size) * group_size;
-        v_begin = std::lower_bound(v_inner, v_inner+v_nnz, k_block_begin)-v_inner;
-        v_end = std::lower_bound(v_inner+v_begin, v_inner+v_nnz, k_block_begin+group_size)-v_inner; 
-        for (size_t l = v_begin; l < v_end; ++l) {
-            dp += v_value[l] * D_k[v_inner[l]-k_block_begin];
-        } 
+        const auto B_begin = k_block_begin + stride;
+        const auto B_end = k_block_begin+n_cum_sum[ik+1];
+        const auto begin = std::lower_bound(v_inner, v_inner+v_nnz, B_begin)-v_inner;
+        const auto end = std::lower_bound(v_inner+begin, v_inner+v_nnz, B_end)-v_inner;
+
+        // Compute dot-product
+        for (auto j = begin; j != end; ++j) {
+            dp += B.coeff(v_inner[j]-B_begin, k_shifted) * v_value[j]; 
+        }
 
         return dp;
     }
@@ -226,7 +246,27 @@ public:
         Index j_shift = shift_[j];
         const auto& S = get_S();
         const auto& D = get_D();
-        return S(i_shift, j_shift) + ((i/group_size == j/group_size) ? D(i_shift, j_shift) : 0);
+        return S(i_shift, j_shift) + ((i/group_size == j/group_size) ? D.coeff(i_shift, j_shift) : 0);
+    }
+    
+    inline auto to_dense() const
+    {
+        const auto p = rows_;
+        const auto gsize = compute_group_size();
+        const auto D_dense = D_.to_dense();
+        util::mat_type<value_t> dm(p, p); 
+        for (size_t i = 0; i < n_groups_; ++i) {
+            const auto si = gsize * i;
+            for (size_t j = 0; j < n_groups_; ++j) {
+                const auto sj = gsize * j;
+                auto curr_block = dm.block(si, sj, gsize, gsize);
+                curr_block = S_.to_dense();
+                if (i == j) {
+                    curr_block += D_dense;
+                }
+            }
+        }
+        return dm;
     }
 };
 

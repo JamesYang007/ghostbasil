@@ -4,27 +4,23 @@
 \alias{BlockGroupGhostMatrix}
 \title{Creates an instance of a BlockGroupGhostMatrix.}
 \usage{
-BlockGroupGhostMatrix(
-  blocks = list(),
-  off.diagonals = list(),
-  diagonals = list(),
-  n.groups = c()
-)
+BlockGroupGhostMatrix(Sigma, D, n.groups)
 }
 \arguments{
-\item{blocks}{list of matrices of the same type.
-If specified, the other arguments will be ignored.
-Otherwise, the other arguments will be used.}
+\item{Sigma}{covariance matrix of original features (dense matrix) minus D.}
 
-\item{off.diagonals}{list of dense off-diagonal blocks to construct each GroupGhostMatrix.}
+\item{D}{matrix to add to Sigma on the diagonal blocks (BlockMatrix).}
 
-\item{diagonals}{list of dense non-off-diagonal blocks to construct each GroupGhostMatrix.}
-
-\item{n.groups}{vector of the number of groups for each GroupGhostMatrix.
-If only one value is specified, it is assumed to be
-the same value for each GroupGhostMatrix.}
+\item{n.groups}{number of groups (e.g. 1 knockoff means 2 groups).}
 }
 \description{
-This matrix represents a block diagonal matrix where each
-block matrix is a GroupGhostMatrix.
+This matrix has the block-form of Sigma on the off-diagonal
+and Sigma + D on the diagonal with D begin block-diagonal.
+For example, if n.groups is 2, then GhostMatrix represents a matrix of the form
+\deqn{
+ \begin{bmatrix}
+     \Sigma+D & \Sigma \\
+     \Sigma & \Sigma+D
+ \end{bmatrix}
+}
 }

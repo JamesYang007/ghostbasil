@@ -3,11 +3,13 @@
 #include <ghostbasil/matrix/block_matrix.hpp>
 #include <ghostbasil/matrix/ghost_matrix.hpp>
 #include <ghostbasil/matrix/group_ghost_matrix.hpp>
+#include <ghostbasil/matrix/block_group_ghost_matrix.hpp>
 #include <tools/data_util.hpp>
 #include <tools/macros.hpp>
 #include <tools/matrix/block_matrix.hpp>
 #include <tools/matrix/ghost_matrix.hpp>
 #include <tools/matrix/group_ghost_matrix.hpp>
+#include <tools/matrix/block_group_ghost_matrix.hpp>
 
 namespace ghostbasil {
 namespace lasso {
@@ -439,6 +441,134 @@ INSTANTIATE_TEST_SUITE_P(
             std::make_tuple(9382,   10, 2),
             std::make_tuple(3,      20, 5),
             std::make_tuple(6,      4, 10)
+            )
+    );
+
+// ================================================================
+// TEST BlockGroupGhost<Dense> vs. Dense
+// ================================================================
+
+struct LassoBlockGroupGhostFixture
+    : LassoCompareFixture,
+      tools::BlockGroupGhostMatrixUtil,
+      ::testing::WithParamInterface<
+        std::tuple<size_t, size_t, size_t, size_t> >
+{
+    using gutil = tools::BlockGroupGhostMatrixUtil;
+    using value_t = double;
+    using mat_t = util::mat_type<value_t>;
+    using vec_t = util::vec_type<value_t>;
+    using gmat_t = BlockGroupGhostMatrix<mat_t>;
+    using bmat_t = BlockMatrix<mat_t>;
+
+    // Generates a block group ghost matrix and a corresponding dense matrix
+    // and other data that make_input needs.
+    auto generate(
+            size_t seed,
+            size_t p,
+            size_t n_blocks,
+            size_t n_groups)
+    {
+        auto&& out = gutil::generate_data(seed, p, n_blocks, n_groups, 0, true, false, 0.01);
+        auto&& S = std::get<0>(out);
+        auto&& dl = std::get<1>(out);
+        auto&& A_dense = std::get<4>(out);
+
+        bmat_t D(dl);
+        gmat_t A(S, D, n_groups); 
+
+        std::mt19937 gen(seed);
+        std::normal_distribution<> norm(0., 1.);
+        size_t n_cols = A.cols();
+        Eigen::VectorXd beta(n_cols); 
+        beta.setZero();
+        std::uniform_int_distribution<> unif(0, n_cols-1);
+        for (size_t k = 0; k < 10; ++k) {
+            beta[unif(gen)] = norm(gen);
+        }
+
+        Eigen::VectorXd r = A_dense * beta + Eigen::VectorXd::NullaryExpr(n_cols,
+                [&](auto) { return 0.2 * norm(gen); });
+
+        value_t alpha = 0.1;
+        
+        Eigen::VectorXd penalty(n_cols);
+        penalty.setOnes();
+
+        std::vector<int> strong_set(n_cols);
+        std::iota(strong_set.begin(), strong_set.end(), 0);
+
+        util::vec_type<value_t> lmdas(3);
+        lmdas[0] = r.array().abs().maxCoeff();
+        for (int i = 1; i < lmdas.size(); ++i) {
+            lmdas[i] = lmdas[i-1] * 0.7;
+        }
+
+        return std::make_tuple(
+                std::move(S), // must return also since A references it
+                std::move(dl), // must return also since A references it
+                std::move(A),
+                std::move(A_dense),
+                std::move(r),
+                std::move(alpha),
+                std::move(penalty),
+                std::move(strong_set),
+                std::move(lmdas)); 
+    }
+
+    template <class DatasetType>
+    auto generate_datasets(const DatasetType& dataset)
+    {
+        auto generate_actual_pack = [&]() {
+            return std::make_tuple(
+                std::get<2>(dataset), // A (block)
+                std::get<4>(dataset), // r
+                std::get<5>(dataset), // alpha
+                std::get<6>(dataset), // penalty
+                std::get<7>(dataset), // strong_set
+                std::get<8>(dataset), // lmdas
+                0, // dummy: expected_betas
+                0  // dummy: expected_objs
+                );
+        };
+        auto generate_expected_pack = [&]() {
+            return std::make_tuple(
+                std::get<3>(dataset), // A (block)
+                std::get<4>(dataset), // r
+                std::get<5>(dataset), // alpha
+                std::get<6>(dataset), // penalty
+                std::get<7>(dataset), // strong_set
+                std::get<8>(dataset), // lmdas
+                0, // dummy: expected_betas
+                0  // dummy: expected_objs
+                );
+        };
+        return std::make_tuple(generate_actual_pack, generate_expected_pack);
+    }
+};
+
+TEST_P(LassoBlockGroupGhostFixture, lasso_block_group_ghost)
+{
+    size_t seed;
+    size_t p;
+    size_t n_blocks;
+    size_t n_groups;
+    std::tie(seed, p, n_blocks, n_groups) = GetParam();
+    auto&& dataset = generate(seed, p, n_blocks, n_groups);
+    auto fs = generate_datasets(dataset);
+    test(std::get<0>(fs), std::get<1>(fs), false, 1e-12, 1e-12);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+        LassoBlockGroupGhostSuite,
+        LassoBlockGroupGhostFixture,
+        testing::Values(
+            std::make_tuple(0,      2,   1, 2),
+            std::make_tuple(124,    3,   3, 3),
+            std::make_tuple(321,    5,   3, 4),
+            std::make_tuple(9382,   10,  3, 2),
+            std::make_tuple(3,      20,  3, 5),
+            std::make_tuple(6,      6,  3, 10)
             )
     );
 

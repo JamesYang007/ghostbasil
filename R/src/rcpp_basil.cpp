@@ -3,6 +3,9 @@
 #include <ghostbasil/optimization/basil.hpp>
 #include <thread>
 #include "rcpp_block_matrix.hpp"
+#include "rcpp_ghost_matrix.hpp"
+#include "rcpp_block_group_ghost_matrix.hpp"
+#include "rcpp_block_other.hpp"
 
 using namespace Rcpp;
 using dgn_t = ghostbasil::lasso::BasilDiagnostic;
@@ -280,7 +283,7 @@ List basil_block_ghost__(
 }
 
 // [[Rcpp::export]]
-List basil_group_ghost__(
+List basil_block_group_ghost__(
         SEXP A,
         const Eigen::Map<Eigen::VectorXd> r,
         double alpha,
@@ -297,7 +300,7 @@ List basil_group_ghost__(
         size_t n_threads,
         List checkpoint)
 {
-    auto gmw = Rcpp::as<GroupGhostMatrixWrap>(A);
+    auto gmw = Rcpp::as<BlockGroupGhostMatrixWrap>(A);
 
     // gets the internal GroupGhostMatrix class
     const auto& gm = gmw.internal();
@@ -311,7 +314,7 @@ List basil_group_ghost__(
 }
 
 // [[Rcpp::export]]
-List basil_block_group_ghost__(
+List basil_block_block_group_ghost__(
         SEXP A,
         const Eigen::Map<Eigen::VectorXd> r,
         double alpha,
@@ -328,7 +331,7 @@ List basil_block_group_ghost__(
         size_t n_threads,
         ListOf<List> checkpoints)
 {
-    auto bgmw = Rcpp::as<BlockGroupGhostMatrixWrap>(A);
+    auto bgmw = Rcpp::as<BlockBlockGroupGhostMatrixWrap>(A);
 
     // gets the internal GhostMatrix class
     const auto& bgm = bgmw.internal();
