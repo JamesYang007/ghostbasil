@@ -84,7 +84,7 @@ struct BasilFixture
                 BasilCheckpoint<double, int, int> checkpoint;
                 // call basil with the first lambda
                 basil(A, r, alpha, penalty, expected_lmdas, 1, n_lambdas_iter,
-                      true, delta_strong_size, max_strong_size, max_cds, thr, 
+                      true, true, delta_strong_size, max_strong_size, max_cds, thr, 
                       min_ratio, n_threads,
                       betas, lmdas, rsqs, checkpoint);
                 auto tmp_betas = betas;
@@ -93,7 +93,7 @@ struct BasilFixture
                 const auto next_lmdas = expected_lmdas.tail(expected_lmdas.size()-1);
                 // call basil with the subsequent lambdas with the checkpoint
                 basil(A, r, alpha, penalty, next_lmdas, max_n_lambdas-1, n_lambdas_iter,
-                      true, delta_strong_size, max_strong_size, max_cds, thr, 
+                      true, true, delta_strong_size, max_strong_size, max_cds, thr, 
                       min_ratio, n_threads,
                       betas, lmdas, rsqs, checkpoint);
                 // concatenate the results
@@ -102,7 +102,7 @@ struct BasilFixture
                 rsqs.insert(rsqs.begin(), tmp_rsqs[0]);
             } else {
                 basil(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter,
-                      true, delta_strong_size, max_strong_size, max_cds, thr, 
+                      true, true, delta_strong_size, max_strong_size, max_cds, thr, 
                       min_ratio, n_threads,
                       betas, lmdas, rsqs);
             }
@@ -234,7 +234,7 @@ struct BasilCompareFixture
         auto rsqs = std::get<10>(dataset);
 
         basil(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter,
-              true, delta_strong_size, max_strong_size, max_cds, thr, 
+              true, true, delta_strong_size, max_strong_size, max_cds, thr, 
               min_ratio, n_threads,
               betas, lmdas, rsqs);
         return std::make_tuple(betas, lmdas, rsqs);
