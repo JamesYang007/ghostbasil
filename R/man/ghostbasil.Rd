@@ -13,6 +13,7 @@ ghostbasil(
   max.lambdas = 100,
   lambdas.iter = 5,
   use.strong.rule = T,
+  do.early.exit = T,
   delta.strong.size = 10,
   max.strong.size = 10000,
   max.cds = 1e+05,
@@ -50,6 +51,8 @@ Must be positive.}
 \item{use.strong.rule}{uses the strong rule with minimal dependence on fixed incremental rule if TRUE.
 Note that delta.strong.size is still used in tandem with strong rule.
 It is recommended to keep delta.strong.size small if strong rule is used.}
+
+\item{do.early.exit}{applies early exiting rule based on whether the relative R^2 values is changing too slowly.}
 
 \item{delta.strong.size}{number of strong set variables to include at every iteration of the BASIL algorithm.
 Internally, capped at number of non-strong variables at every iteration of BASIL.

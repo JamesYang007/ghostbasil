@@ -1,10 +1,12 @@
 library(devtools)
 load_all()
 
-p <- 10
-X <- matrix(rnorm(p * p), p)
-Sigma <- (t(X) %*% X) / p
-D <- BlockMatrix(lapply(1:p, function(i) matrix(0.1,1,1)))
-S <- Sigma - diag(0.1, p, p)
-n.groups <- 2
-gmat <- BlockGroupGhostMatrix(S, D, n.groups)
+n <- 10
+p <- 100
+X <- matrix(rnorm(n*p), n)
+y <- X %*% rnorm(p) + rnorm(n)
+A <- (t(X) %*% X) / p
+r <- t(X) %*% y / p
+out.1 <- ghostbasil(A, r, alpha=1, do.early.exit=T, min.ratio=1e-6)
+out.2 <- ghostbasil(A, r, alpha=1, do.early.exit=F, min.ratio=1e-6)
+print(length(out.1$lmdas) <= length(out.2$lmdas))

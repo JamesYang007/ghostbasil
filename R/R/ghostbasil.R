@@ -22,6 +22,7 @@
 #' @param   use.strong.rule     uses the strong rule with minimal dependence on fixed incremental rule if TRUE. 
 #'                              Note that delta.strong.size is still used in tandem with strong rule.
 #'                              It is recommended to keep delta.strong.size small if strong rule is used.
+#' @param   do.early.exit       applies early exiting rule based on whether the relative R^2 values is changing too slowly.
 #' @param   delta.strong.size   number of strong set variables to include at every iteration of the BASIL algorithm.
 #'                              Internally, capped at number of non-strong variables at every iteration of BASIL.
 #'                              Must be positive.
@@ -48,6 +49,7 @@ ghostbasil <- function(A, r, alpha=1,
                       max.lambdas=100,
                       lambdas.iter=5, 
                       use.strong.rule=T,
+                      do.early.exit=T,
                       delta.strong.size=10, 
                       max.strong.size=10000, 
                       max.cds=100000, 
@@ -62,6 +64,7 @@ ghostbasil <- function(A, r, alpha=1,
     max.lambdas <- as.integer(max.lambdas)
     lambdas.iter <- as.integer(lambdas.iter)
     use.strong.rule <- as.logical(use.strong.rule)
+    do.early.exit <- as.logical(do.early.exit)
     delta.strong.size <- as.integer(delta.strong.size)
     max.strong.size <- as.integer(max.strong.size)
     max.cds <- as.integer(max.cds)
@@ -70,6 +73,12 @@ ghostbasil <- function(A, r, alpha=1,
     n.threads <- as.integer(n.threads)
 
     # input checking
+    if (dim(A)[1] != dim(A)[2]) {
+        stop("A must be a square matrix.")
+    }
+    if (dim(A)[1] != length(r)) {
+        stop("Number of rows (and columns) of A must match the size of r.")
+    }
     if ((alpha < 0) | (alpha > 1)) {
         stop("alpha must be in [0,1].")
     }
@@ -143,6 +152,7 @@ ghostbasil <- function(A, r, alpha=1,
                     max_n_lambdas=max.lambdas,
                     n_lambdas_iter=lambdas.iter,
                     use_strong_rule=use.strong.rule,
+                    do_early_exit=do.early.exit,
                     delta_strong_size=delta.strong.size, 
                     max_strong_size=max.strong.size,
                     max_n_cds=max.cds, 
