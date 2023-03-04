@@ -73,6 +73,12 @@ ghostbasil <- function(A, r, alpha=1,
     n.threads <- as.integer(n.threads)
 
     # input checking
+    if (dim(A)[1] != dim(A)[2]) {
+        stop("A must be a square matrix.")
+    }
+    if (dim(A)[1] != length(r)) {
+        stop("Number of rows (and columns) of A must match the size of r.")
+    }
     if ((alpha < 0) | (alpha > 1)) {
         stop("alpha must be in [0,1].")
     }
