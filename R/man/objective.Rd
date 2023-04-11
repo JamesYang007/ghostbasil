@@ -4,16 +4,16 @@
 \alias{objective}
 \title{Computes the PGR objective that is minimized by ghostbasil.}
 \usage{
-objective(A, r, alpha, penalty, lmda, beta)
+objective(A, r, penalty, alpha, lmda, beta)
 }
 \arguments{
 \item{A}{covariance matrix. Currently, only supports dense and sparse matrices.}
 
 \item{r}{correlation vector.}
 
-\item{alpha}{elastic net proportion.}
-
 \item{penalty}{penalty vector p.}
+
+\item{alpha}{elastic net proportion.}
 
 \item{lmda}{lambda regularization value.}
 

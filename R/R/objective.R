@@ -8,12 +8,12 @@
 #'
 #' @param   A   covariance matrix. Currently, only supports dense and sparse matrices.
 #' @param   r   correlation vector.
-#' @param   alpha   elastic net proportion.
 #' @param   penalty penalty vector p.
+#' @param   alpha   elastic net proportion.
 #' @param   lmda    lambda regularization value.
 #' @param   beta    vector of coefficients
 #' @export
-objective <- function(A, r, alpha, penalty, lmda, beta)
+objective <- function(A, r, penalty, alpha, lmda, beta)
 {
     out <- NA
     if (any(class(beta) == 'dgCMatrix')) {

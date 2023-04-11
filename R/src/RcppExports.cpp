@@ -12,8 +12,8 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // basil_dense__
-List basil_dense__(const Eigen::Map<Eigen::MatrixXd> A, const Eigen::Map<Eigen::VectorXd> r, double alpha, const Eigen::Map<Eigen::VectorXd> penalty, const Eigen::Map<Eigen::VectorXd> user_lmdas, size_t max_n_lambdas, size_t n_lambdas_iter, bool use_strong_rule, size_t delta_strong_size, size_t max_strong_size, size_t max_n_cds, double thr, double min_ratio, size_t n_threads, List checkpoint);
-RcppExport SEXP _ghostbasil_basil_dense__(SEXP ASEXP, SEXP rSEXP, SEXP alphaSEXP, SEXP penaltySEXP, SEXP user_lmdasSEXP, SEXP max_n_lambdasSEXP, SEXP n_lambdas_iterSEXP, SEXP use_strong_ruleSEXP, SEXP delta_strong_sizeSEXP, SEXP max_strong_sizeSEXP, SEXP max_n_cdsSEXP, SEXP thrSEXP, SEXP min_ratioSEXP, SEXP n_threadsSEXP, SEXP checkpointSEXP) {
+List basil_dense__(const Eigen::Map<Eigen::MatrixXd> A, const Eigen::Map<Eigen::VectorXd> r, double alpha, const Eigen::Map<Eigen::VectorXd> penalty, const Eigen::Map<Eigen::VectorXd> user_lmdas, size_t max_n_lambdas, size_t n_lambdas_iter, bool use_strong_rule, bool do_early_exit, size_t delta_strong_size, size_t max_strong_size, size_t max_n_cds, double thr, double min_ratio, size_t n_threads, List checkpoint);
+RcppExport SEXP _ghostbasil_basil_dense__(SEXP ASEXP, SEXP rSEXP, SEXP alphaSEXP, SEXP penaltySEXP, SEXP user_lmdasSEXP, SEXP max_n_lambdasSEXP, SEXP n_lambdas_iterSEXP, SEXP use_strong_ruleSEXP, SEXP do_early_exitSEXP, SEXP delta_strong_sizeSEXP, SEXP max_strong_sizeSEXP, SEXP max_n_cdsSEXP, SEXP thrSEXP, SEXP min_ratioSEXP, SEXP n_threadsSEXP, SEXP checkpointSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -25,6 +25,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< size_t >::type max_n_lambdas(max_n_lambdasSEXP);
     Rcpp::traits::input_parameter< size_t >::type n_lambdas_iter(n_lambdas_iterSEXP);
     Rcpp::traits::input_parameter< bool >::type use_strong_rule(use_strong_ruleSEXP);
+    Rcpp::traits::input_parameter< bool >::type do_early_exit(do_early_exitSEXP);
     Rcpp::traits::input_parameter< size_t >::type delta_strong_size(delta_strong_sizeSEXP);
     Rcpp::traits::input_parameter< size_t >::type max_strong_size(max_strong_sizeSEXP);
     Rcpp::traits::input_parameter< size_t >::type max_n_cds(max_n_cdsSEXP);
@@ -32,13 +33,13 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type min_ratio(min_ratioSEXP);
     Rcpp::traits::input_parameter< size_t >::type n_threads(n_threadsSEXP);
     Rcpp::traits::input_parameter< List >::type checkpoint(checkpointSEXP);
-    rcpp_result_gen = Rcpp::wrap(basil_dense__(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoint));
+    rcpp_result_gen = Rcpp::wrap(basil_dense__(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, do_early_exit, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoint));
     return rcpp_result_gen;
 END_RCPP
 }
 // basil_block_dense__
-List basil_block_dense__(SEXP A, const Eigen::Map<Eigen::VectorXd> r, double alpha, const Eigen::Map<Eigen::VectorXd> penalty, const Eigen::Map<Eigen::VectorXd> user_lmdas, size_t max_n_lambdas, size_t n_lambdas_iter, bool use_strong_rule, size_t delta_strong_size, size_t max_strong_size, size_t max_n_cds, double thr, double min_ratio, size_t n_threads, ListOf<List> checkpoints);
-RcppExport SEXP _ghostbasil_basil_block_dense__(SEXP ASEXP, SEXP rSEXP, SEXP alphaSEXP, SEXP penaltySEXP, SEXP user_lmdasSEXP, SEXP max_n_lambdasSEXP, SEXP n_lambdas_iterSEXP, SEXP use_strong_ruleSEXP, SEXP delta_strong_sizeSEXP, SEXP max_strong_sizeSEXP, SEXP max_n_cdsSEXP, SEXP thrSEXP, SEXP min_ratioSEXP, SEXP n_threadsSEXP, SEXP checkpointsSEXP) {
+List basil_block_dense__(SEXP A, const Eigen::Map<Eigen::VectorXd> r, double alpha, const Eigen::Map<Eigen::VectorXd> penalty, const Eigen::Map<Eigen::VectorXd> user_lmdas, size_t max_n_lambdas, size_t n_lambdas_iter, bool use_strong_rule, bool do_early_exit, size_t delta_strong_size, size_t max_strong_size, size_t max_n_cds, double thr, double min_ratio, size_t n_threads, ListOf<List> checkpoints);
+RcppExport SEXP _ghostbasil_basil_block_dense__(SEXP ASEXP, SEXP rSEXP, SEXP alphaSEXP, SEXP penaltySEXP, SEXP user_lmdasSEXP, SEXP max_n_lambdasSEXP, SEXP n_lambdas_iterSEXP, SEXP use_strong_ruleSEXP, SEXP do_early_exitSEXP, SEXP delta_strong_sizeSEXP, SEXP max_strong_sizeSEXP, SEXP max_n_cdsSEXP, SEXP thrSEXP, SEXP min_ratioSEXP, SEXP n_threadsSEXP, SEXP checkpointsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -50,6 +51,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< size_t >::type max_n_lambdas(max_n_lambdasSEXP);
     Rcpp::traits::input_parameter< size_t >::type n_lambdas_iter(n_lambdas_iterSEXP);
     Rcpp::traits::input_parameter< bool >::type use_strong_rule(use_strong_ruleSEXP);
+    Rcpp::traits::input_parameter< bool >::type do_early_exit(do_early_exitSEXP);
     Rcpp::traits::input_parameter< size_t >::type delta_strong_size(delta_strong_sizeSEXP);
     Rcpp::traits::input_parameter< size_t >::type max_strong_size(max_strong_sizeSEXP);
     Rcpp::traits::input_parameter< size_t >::type max_n_cds(max_n_cdsSEXP);
@@ -57,13 +59,13 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type min_ratio(min_ratioSEXP);
     Rcpp::traits::input_parameter< size_t >::type n_threads(n_threadsSEXP);
     Rcpp::traits::input_parameter< ListOf<List> >::type checkpoints(checkpointsSEXP);
-    rcpp_result_gen = Rcpp::wrap(basil_block_dense__(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoints));
+    rcpp_result_gen = Rcpp::wrap(basil_block_dense__(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, do_early_exit, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoints));
     return rcpp_result_gen;
 END_RCPP
 }
 // basil_ghost__
-List basil_ghost__(SEXP A, const Eigen::Map<Eigen::VectorXd> r, double alpha, const Eigen::Map<Eigen::VectorXd> penalty, const Eigen::Map<Eigen::VectorXd> user_lmdas, size_t max_n_lambdas, size_t n_lambdas_iter, bool use_strong_rule, size_t delta_strong_size, size_t max_strong_size, size_t max_n_cds, double thr, double min_ratio, size_t n_threads, List checkpoint);
-RcppExport SEXP _ghostbasil_basil_ghost__(SEXP ASEXP, SEXP rSEXP, SEXP alphaSEXP, SEXP penaltySEXP, SEXP user_lmdasSEXP, SEXP max_n_lambdasSEXP, SEXP n_lambdas_iterSEXP, SEXP use_strong_ruleSEXP, SEXP delta_strong_sizeSEXP, SEXP max_strong_sizeSEXP, SEXP max_n_cdsSEXP, SEXP thrSEXP, SEXP min_ratioSEXP, SEXP n_threadsSEXP, SEXP checkpointSEXP) {
+List basil_ghost__(SEXP A, const Eigen::Map<Eigen::VectorXd> r, double alpha, const Eigen::Map<Eigen::VectorXd> penalty, const Eigen::Map<Eigen::VectorXd> user_lmdas, size_t max_n_lambdas, size_t n_lambdas_iter, bool use_strong_rule, bool do_early_exit, size_t delta_strong_size, size_t max_strong_size, size_t max_n_cds, double thr, double min_ratio, size_t n_threads, List checkpoint);
+RcppExport SEXP _ghostbasil_basil_ghost__(SEXP ASEXP, SEXP rSEXP, SEXP alphaSEXP, SEXP penaltySEXP, SEXP user_lmdasSEXP, SEXP max_n_lambdasSEXP, SEXP n_lambdas_iterSEXP, SEXP use_strong_ruleSEXP, SEXP do_early_exitSEXP, SEXP delta_strong_sizeSEXP, SEXP max_strong_sizeSEXP, SEXP max_n_cdsSEXP, SEXP thrSEXP, SEXP min_ratioSEXP, SEXP n_threadsSEXP, SEXP checkpointSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -75,6 +77,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< size_t >::type max_n_lambdas(max_n_lambdasSEXP);
     Rcpp::traits::input_parameter< size_t >::type n_lambdas_iter(n_lambdas_iterSEXP);
     Rcpp::traits::input_parameter< bool >::type use_strong_rule(use_strong_ruleSEXP);
+    Rcpp::traits::input_parameter< bool >::type do_early_exit(do_early_exitSEXP);
     Rcpp::traits::input_parameter< size_t >::type delta_strong_size(delta_strong_sizeSEXP);
     Rcpp::traits::input_parameter< size_t >::type max_strong_size(max_strong_sizeSEXP);
     Rcpp::traits::input_parameter< size_t >::type max_n_cds(max_n_cdsSEXP);
@@ -82,13 +85,13 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type min_ratio(min_ratioSEXP);
     Rcpp::traits::input_parameter< size_t >::type n_threads(n_threadsSEXP);
     Rcpp::traits::input_parameter< List >::type checkpoint(checkpointSEXP);
-    rcpp_result_gen = Rcpp::wrap(basil_ghost__(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoint));
+    rcpp_result_gen = Rcpp::wrap(basil_ghost__(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, do_early_exit, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoint));
     return rcpp_result_gen;
 END_RCPP
 }
 // basil_block_ghost__
-List basil_block_ghost__(SEXP A, const Eigen::Map<Eigen::VectorXd> r, double alpha, const Eigen::Map<Eigen::VectorXd> penalty, const Eigen::Map<Eigen::VectorXd> user_lmdas, size_t max_n_lambdas, size_t n_lambdas_iter, bool use_strong_rule, size_t delta_strong_size, size_t max_strong_size, size_t max_n_cds, double thr, double min_ratio, size_t n_threads, ListOf<List> checkpoints);
-RcppExport SEXP _ghostbasil_basil_block_ghost__(SEXP ASEXP, SEXP rSEXP, SEXP alphaSEXP, SEXP penaltySEXP, SEXP user_lmdasSEXP, SEXP max_n_lambdasSEXP, SEXP n_lambdas_iterSEXP, SEXP use_strong_ruleSEXP, SEXP delta_strong_sizeSEXP, SEXP max_strong_sizeSEXP, SEXP max_n_cdsSEXP, SEXP thrSEXP, SEXP min_ratioSEXP, SEXP n_threadsSEXP, SEXP checkpointsSEXP) {
+List basil_block_ghost__(SEXP A, const Eigen::Map<Eigen::VectorXd> r, double alpha, const Eigen::Map<Eigen::VectorXd> penalty, const Eigen::Map<Eigen::VectorXd> user_lmdas, size_t max_n_lambdas, size_t n_lambdas_iter, bool use_strong_rule, bool do_early_exit, size_t delta_strong_size, size_t max_strong_size, size_t max_n_cds, double thr, double min_ratio, size_t n_threads, ListOf<List> checkpoints);
+RcppExport SEXP _ghostbasil_basil_block_ghost__(SEXP ASEXP, SEXP rSEXP, SEXP alphaSEXP, SEXP penaltySEXP, SEXP user_lmdasSEXP, SEXP max_n_lambdasSEXP, SEXP n_lambdas_iterSEXP, SEXP use_strong_ruleSEXP, SEXP do_early_exitSEXP, SEXP delta_strong_sizeSEXP, SEXP max_strong_sizeSEXP, SEXP max_n_cdsSEXP, SEXP thrSEXP, SEXP min_ratioSEXP, SEXP n_threadsSEXP, SEXP checkpointsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -100,6 +103,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< size_t >::type max_n_lambdas(max_n_lambdasSEXP);
     Rcpp::traits::input_parameter< size_t >::type n_lambdas_iter(n_lambdas_iterSEXP);
     Rcpp::traits::input_parameter< bool >::type use_strong_rule(use_strong_ruleSEXP);
+    Rcpp::traits::input_parameter< bool >::type do_early_exit(do_early_exitSEXP);
     Rcpp::traits::input_parameter< size_t >::type delta_strong_size(delta_strong_sizeSEXP);
     Rcpp::traits::input_parameter< size_t >::type max_strong_size(max_strong_sizeSEXP);
     Rcpp::traits::input_parameter< size_t >::type max_n_cds(max_n_cdsSEXP);
@@ -107,13 +111,13 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type min_ratio(min_ratioSEXP);
     Rcpp::traits::input_parameter< size_t >::type n_threads(n_threadsSEXP);
     Rcpp::traits::input_parameter< ListOf<List> >::type checkpoints(checkpointsSEXP);
-    rcpp_result_gen = Rcpp::wrap(basil_block_ghost__(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoints));
+    rcpp_result_gen = Rcpp::wrap(basil_block_ghost__(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, do_early_exit, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoints));
     return rcpp_result_gen;
 END_RCPP
 }
-// basil_group_ghost__
-List basil_group_ghost__(SEXP A, const Eigen::Map<Eigen::VectorXd> r, double alpha, const Eigen::Map<Eigen::VectorXd> penalty, const Eigen::Map<Eigen::VectorXd> user_lmdas, size_t max_n_lambdas, size_t n_lambdas_iter, bool use_strong_rule, size_t delta_strong_size, size_t max_strong_size, size_t max_n_cds, double thr, double min_ratio, size_t n_threads, List checkpoint);
-RcppExport SEXP _ghostbasil_basil_group_ghost__(SEXP ASEXP, SEXP rSEXP, SEXP alphaSEXP, SEXP penaltySEXP, SEXP user_lmdasSEXP, SEXP max_n_lambdasSEXP, SEXP n_lambdas_iterSEXP, SEXP use_strong_ruleSEXP, SEXP delta_strong_sizeSEXP, SEXP max_strong_sizeSEXP, SEXP max_n_cdsSEXP, SEXP thrSEXP, SEXP min_ratioSEXP, SEXP n_threadsSEXP, SEXP checkpointSEXP) {
+// basil_block_group_ghost__
+List basil_block_group_ghost__(SEXP A, const Eigen::Map<Eigen::VectorXd> r, double alpha, const Eigen::Map<Eigen::VectorXd> penalty, const Eigen::Map<Eigen::VectorXd> user_lmdas, size_t max_n_lambdas, size_t n_lambdas_iter, bool use_strong_rule, bool do_early_exit, size_t delta_strong_size, size_t max_strong_size, size_t max_n_cds, double thr, double min_ratio, size_t n_threads, List checkpoint);
+RcppExport SEXP _ghostbasil_basil_block_group_ghost__(SEXP ASEXP, SEXP rSEXP, SEXP alphaSEXP, SEXP penaltySEXP, SEXP user_lmdasSEXP, SEXP max_n_lambdasSEXP, SEXP n_lambdas_iterSEXP, SEXP use_strong_ruleSEXP, SEXP do_early_exitSEXP, SEXP delta_strong_sizeSEXP, SEXP max_strong_sizeSEXP, SEXP max_n_cdsSEXP, SEXP thrSEXP, SEXP min_ratioSEXP, SEXP n_threadsSEXP, SEXP checkpointSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -125,6 +129,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< size_t >::type max_n_lambdas(max_n_lambdasSEXP);
     Rcpp::traits::input_parameter< size_t >::type n_lambdas_iter(n_lambdas_iterSEXP);
     Rcpp::traits::input_parameter< bool >::type use_strong_rule(use_strong_ruleSEXP);
+    Rcpp::traits::input_parameter< bool >::type do_early_exit(do_early_exitSEXP);
     Rcpp::traits::input_parameter< size_t >::type delta_strong_size(delta_strong_sizeSEXP);
     Rcpp::traits::input_parameter< size_t >::type max_strong_size(max_strong_sizeSEXP);
     Rcpp::traits::input_parameter< size_t >::type max_n_cds(max_n_cdsSEXP);
@@ -132,13 +137,13 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type min_ratio(min_ratioSEXP);
     Rcpp::traits::input_parameter< size_t >::type n_threads(n_threadsSEXP);
     Rcpp::traits::input_parameter< List >::type checkpoint(checkpointSEXP);
-    rcpp_result_gen = Rcpp::wrap(basil_group_ghost__(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoint));
+    rcpp_result_gen = Rcpp::wrap(basil_block_group_ghost__(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, do_early_exit, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoint));
     return rcpp_result_gen;
 END_RCPP
 }
-// basil_block_group_ghost__
-List basil_block_group_ghost__(SEXP A, const Eigen::Map<Eigen::VectorXd> r, double alpha, const Eigen::Map<Eigen::VectorXd> penalty, const Eigen::Map<Eigen::VectorXd> user_lmdas, size_t max_n_lambdas, size_t n_lambdas_iter, bool use_strong_rule, size_t delta_strong_size, size_t max_strong_size, size_t max_n_cds, double thr, double min_ratio, size_t n_threads, ListOf<List> checkpoints);
-RcppExport SEXP _ghostbasil_basil_block_group_ghost__(SEXP ASEXP, SEXP rSEXP, SEXP alphaSEXP, SEXP penaltySEXP, SEXP user_lmdasSEXP, SEXP max_n_lambdasSEXP, SEXP n_lambdas_iterSEXP, SEXP use_strong_ruleSEXP, SEXP delta_strong_sizeSEXP, SEXP max_strong_sizeSEXP, SEXP max_n_cdsSEXP, SEXP thrSEXP, SEXP min_ratioSEXP, SEXP n_threadsSEXP, SEXP checkpointsSEXP) {
+// basil_block_block_group_ghost__
+List basil_block_block_group_ghost__(SEXP A, const Eigen::Map<Eigen::VectorXd> r, double alpha, const Eigen::Map<Eigen::VectorXd> penalty, const Eigen::Map<Eigen::VectorXd> user_lmdas, size_t max_n_lambdas, size_t n_lambdas_iter, bool use_strong_rule, bool do_early_exit, size_t delta_strong_size, size_t max_strong_size, size_t max_n_cds, double thr, double min_ratio, size_t n_threads, ListOf<List> checkpoints);
+RcppExport SEXP _ghostbasil_basil_block_block_group_ghost__(SEXP ASEXP, SEXP rSEXP, SEXP alphaSEXP, SEXP penaltySEXP, SEXP user_lmdasSEXP, SEXP max_n_lambdasSEXP, SEXP n_lambdas_iterSEXP, SEXP use_strong_ruleSEXP, SEXP do_early_exitSEXP, SEXP delta_strong_sizeSEXP, SEXP max_strong_sizeSEXP, SEXP max_n_cdsSEXP, SEXP thrSEXP, SEXP min_ratioSEXP, SEXP n_threadsSEXP, SEXP checkpointsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -150,6 +155,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< size_t >::type max_n_lambdas(max_n_lambdasSEXP);
     Rcpp::traits::input_parameter< size_t >::type n_lambdas_iter(n_lambdas_iterSEXP);
     Rcpp::traits::input_parameter< bool >::type use_strong_rule(use_strong_ruleSEXP);
+    Rcpp::traits::input_parameter< bool >::type do_early_exit(do_early_exitSEXP);
     Rcpp::traits::input_parameter< size_t >::type delta_strong_size(delta_strong_sizeSEXP);
     Rcpp::traits::input_parameter< size_t >::type max_strong_size(max_strong_sizeSEXP);
     Rcpp::traits::input_parameter< size_t >::type max_n_cds(max_n_cdsSEXP);
@@ -157,7 +163,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type min_ratio(min_ratioSEXP);
     Rcpp::traits::input_parameter< size_t >::type n_threads(n_threadsSEXP);
     Rcpp::traits::input_parameter< ListOf<List> >::type checkpoints(checkpointsSEXP);
-    rcpp_result_gen = Rcpp::wrap(basil_block_group_ghost__(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoints));
+    rcpp_result_gen = Rcpp::wrap(basil_block_block_group_ghost__(A, r, alpha, penalty, user_lmdas, max_n_lambdas, n_lambdas_iter, use_strong_rule, do_early_exit, delta_strong_size, max_strong_size, max_n_cds, thr, min_ratio, n_threads, checkpoints));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -273,12 +279,12 @@ END_RCPP
 RcppExport SEXP _rcpp_module_boot_core_module();
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_ghostbasil_basil_dense__", (DL_FUNC) &_ghostbasil_basil_dense__, 15},
-    {"_ghostbasil_basil_block_dense__", (DL_FUNC) &_ghostbasil_basil_block_dense__, 15},
-    {"_ghostbasil_basil_ghost__", (DL_FUNC) &_ghostbasil_basil_ghost__, 15},
-    {"_ghostbasil_basil_block_ghost__", (DL_FUNC) &_ghostbasil_basil_block_ghost__, 15},
-    {"_ghostbasil_basil_group_ghost__", (DL_FUNC) &_ghostbasil_basil_group_ghost__, 15},
-    {"_ghostbasil_basil_block_group_ghost__", (DL_FUNC) &_ghostbasil_basil_block_group_ghost__, 15},
+    {"_ghostbasil_basil_dense__", (DL_FUNC) &_ghostbasil_basil_dense__, 16},
+    {"_ghostbasil_basil_block_dense__", (DL_FUNC) &_ghostbasil_basil_block_dense__, 16},
+    {"_ghostbasil_basil_ghost__", (DL_FUNC) &_ghostbasil_basil_ghost__, 16},
+    {"_ghostbasil_basil_block_ghost__", (DL_FUNC) &_ghostbasil_basil_block_ghost__, 16},
+    {"_ghostbasil_basil_block_group_ghost__", (DL_FUNC) &_ghostbasil_basil_block_group_ghost__, 16},
+    {"_ghostbasil_basil_block_block_group_ghost__", (DL_FUNC) &_ghostbasil_basil_block_block_group_ghost__, 16},
     {"_ghostbasil_objective_sparse__", (DL_FUNC) &_ghostbasil_objective_sparse__, 6},
     {"_ghostbasil_objective_dense__", (DL_FUNC) &_ghostbasil_objective_dense__, 6},
     {"_ghostbasil_update_group_coeffs__", (DL_FUNC) &_ghostbasil_update_group_coeffs__, 6},

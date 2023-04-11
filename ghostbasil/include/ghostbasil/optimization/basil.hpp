@@ -682,6 +682,7 @@ inline void basil(
         size_t max_n_lambdas,
         size_t n_lambdas_iter,
         bool use_strong_rule,
+        bool do_early_exit,
         size_t delta_strong_size,
         size_t max_strong_size,
         size_t max_n_cds,
@@ -806,7 +807,7 @@ inline void basil(
     while (1) 
     {
         // check early termination 
-        if (rsqs.size() >= 3) {
+        if (do_early_exit && (rsqs.size() >= 3)) {
             const auto rsq_u = rsqs[rsqs.size()-1];
             const auto rsq_m = rsqs[rsqs.size()-2];
             const auto rsq_l = rsqs[rsqs.size()-3];
@@ -909,6 +910,7 @@ inline void basil(
         size_t max_n_lambdas,
         size_t n_lambdas_iter,
         bool use_strong_rule,
+        bool do_early_exit,
         size_t delta_strong_size,
         size_t max_strong_size,
         size_t max_n_cds,
@@ -1116,7 +1118,7 @@ inline void basil(
     while (1) 
     {
         // check early termination 
-        if (rsqs_out.size() >= 3) {
+        if (do_early_exit && (rsqs_out.size() >= 3)) {
             const auto rsq_u = rsqs_out[rsqs_out.size()-1];
             const auto rsq_m = rsqs_out[rsqs_out.size()-2];
             const auto rsq_l = rsqs_out[rsqs_out.size()-3];
